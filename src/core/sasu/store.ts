@@ -2,9 +2,9 @@
 import { existsSync } from "node:fs";
 import { readJsonFile } from "../fsx.js";
 import { StoredFindingSchema, type StoredFinding } from "../findings/schema.js";
-import { findingsBatchPath, findingsPath, runPaths, sasuPlanPath, sasuWorkDir } from "../paths.js";
+import { findingsBatchPath, findingsPath, runPaths, sasuPlanPath, sasuResponsesPath, sasuWorkDir } from "../paths.js";
 import type { Run } from "../run.js";
-import { SasuPlanSchema, type SasuPlan } from "./types.js";
+import { ResponsesFileSchema, SasuPlanSchema, type Response, type SasuPlan } from "./types.js";
 
 /** 이 실행에서 분석용 사수가 지금 몇 번째로 도는지(1부터). */
 export const currentRound = (run: Run): number => (run.submissions.findings_analysis?.attempt ?? 0) + 1;
@@ -39,6 +39,14 @@ export function readBatchFindings(runDir: string, round: number, k: number): Sto
 export function readRoundFindings(runDir: string, round: number): StoredFinding[] {
   const file = findingsPath(runPaths(runDir), "analysis", round);
   return existsSync(file) ? parseStored(readJsonFile(file)) : [];
+}
+
+/** 그 회차의 지적에 낸 답변 목록. 파일이 없거나 읽을 수 없으면 빈 목록. */
+export function readResponses(runDir: string, round: number): Response[] {
+  const file = sasuResponsesPath(runPaths(runDir), "analysis", round);
+  if (!existsSync(file)) return [];
+  const parsed = ResponsesFileSchema.safeParse(readJsonFile(file));
+  return parsed.success ? parsed.data.responses : [];
 }
 
 function parseStored(doc: unknown): StoredFinding[] {

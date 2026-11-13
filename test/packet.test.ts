@@ -110,7 +110,7 @@ describe("패킷: 이번 일·읽을 것·쓰는 곳", () => {
 });
 
 describe("패킷: 반송과 답 반영", () => {
-  it("반송: 최신 findings 의 차단 issue(fix·drop)만 표로 싣는다", () => {
+  it("반송: 최신 findings 의 차단 issue(fix·ask·drop)만 표로 싣는다", () => {
     const { dir, run } = makeRun("collected", { rework: { analysis: 1, plan: 0 } });
     const p = runPaths(dir);
     const findings = (attempt: number, rows: unknown[]): void =>
@@ -121,7 +121,7 @@ describe("패킷: 반송과 답 반영", () => {
       { id: "F-2", work: "W3:U-4", verdict: "ok", claim: "" },
       { id: "F-3", work: "W9:Q-1", verdict: "issue", kind: "already_answered", claim: "이미 답이 있음", action: "drop", blocking: true },
       { id: "F-4", work: "W2:요구-2", verdict: "issue", kind: "unsupported", claim: "근거 없는 참고", action: "fix", blocking: false },
-      { id: "F-5", work: "W2:요구-3", verdict: "issue", kind: "unsupported", claim: "질문으로 바뀐 것", evidence: { quote: "x" }, action: "ask", blocking: true },
+      { id: "F-5", work: "W2:요구-3", verdict: "issue", kind: "unsupported", claim: "사람에게 물을 것", evidence: { quote: "x" }, action: "ask", blocking: true },
     ]);
     saveRun(dir, { ...run, submissions: { findings_analysis: { attempt: 2, at: "t", hash: "h" } } });
     const r = buildPacket({ runDir: dir, role: "technical-manager", purpose: "rework", env: env() });
@@ -131,8 +131,44 @@ describe("패킷: 반송과 답 반영", () => {
     expect(text).toContain("| F-3 | W9:Q-1 | already_answered | 이미 답이 있음 |  | drop |");
     expect(text).not.toContain("F-2");
     expect(text).not.toContain("F-4");
-    expect(text).not.toContain("F-5");
+    expect(text).toContain("| F-5 | W2:요구-3 | unsupported | 사람에게 물을 것 | x | ask |");
     expect(text).not.toContain("F-9");
+  });
+
+  it("반송: 종류·주장이 같은 지적은 한 줄로 묶고 id·대상을 한 칸에 모두 적는다", () => {
+    const { dir, run } = makeRun("collected", { rework: { analysis: 1, plan: 0 } });
+    const p = runPaths(dir);
+    const row = (id: string, work: string, claim: string, action: string) => ({ id, work, verdict: "issue", kind: "missing", claim, evidence: { quote: "q" }, action, blocking: true });
+    writeFileSync(
+      join(p.findingsDir, "analysis-1.json"),
+      JSON.stringify({ items: { findings: [row("F-1", "W3:U-27", "같은 문장 입니다", "ask"), row("F-2", "W3:U-29", "같은문장입니다", "ask"), row("F-3", "W3:U-30", "다른 문장", "fix"), row("F-4", "W3:U-32", "같은 문장입니다", "fix")] } }),
+    );
+    saveRun(dir, { ...run, submissions: { findings_analysis: { attempt: 1, at: "t", hash: "h" } } });
+    const text = read(buildPacket({ runDir: dir, role: "technical-manager", purpose: "rework", env: env() }).path);
+    expect(text).toContain("| F-1, F-2, F-4 | W3:U-27, W3:U-29, W3:U-32 | missing | 같은 문장 입니다 | q | ask, fix |");
+    expect(text).toContain("| F-3 | W3:U-30 | missing | 다른 문장 | q | fix |");
+  });
+
+  it("분석 반송 패킷은 지적 표 아래에 답변 안내와 명령 한 줄, 형식 예시를 싣는다", () => {
+    const { dir, run } = makeRun("collected", { rework: { analysis: 1, plan: 0 } });
+    const p = runPaths(dir);
+    writeFileSync(join(p.findingsDir, "analysis-1.json"), JSON.stringify({ items: { findings: [{ id: "F-1", work: "W2:요구-1", verdict: "issue", kind: "unsupported", claim: "c", action: "ask", blocking: true }] } }));
+    saveRun(dir, { ...run, submissions: { findings_analysis: { attempt: 1, at: "t", hash: "h" } } });
+    const r = buildPacket({ runDir: dir, role: "technical-manager", purpose: "rework", env: env() });
+    const text = read(r.path);
+    const [before, after] = text.split("`hew sasu respond`");
+    expect(before).toContain("| F-1 |");
+    expect(after).toContain("fixed");
+    expect(text).toContain(`${join(HEW_ROOT, "bin", "hew")} --json sasu respond --for analysis --run ${dir} --file ${join(p.work, "technical-manager-1", "responses.json")}`);
+    expect(text).toContain('"response": "rejected"');
+    expect(/```sh\n(.+)\n```/.exec(text)?.[1]).toContain("submit analysis");
+  });
+
+  it("분해안 반송 패킷에는 답변 안내가 없다", () => {
+    const { dir, run } = makeRun("answers_applied", { rework: { analysis: 0, plan: 1 } });
+    writeFileSync(join(runPaths(dir).findingsDir, "plan-1.json"), JSON.stringify({ items: { findings: [{ id: "F-1", work: "T1", verdict: "issue", claim: "c" }] } }));
+    saveRun(dir, { ...run, submissions: { findings_plan: { attempt: 1, at: "t", hash: "h" } } });
+    expect(read(buildPacket({ runDir: dir, role: "ticket-maker", env: env() }).path)).not.toContain("sasu respond");
   });
 
   it("ticket-maker 반송은 plan 용 findings 를 본다", () => {

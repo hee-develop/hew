@@ -1,6 +1,7 @@
 /** 사수 계획(doc/sasu/<대상>-<회차>.plan.json)과 묶음 파일의 형식. */
 import { z } from "zod";
 import { WORK_CODES } from "../findings/schema.js";
+import { ID_PATTERNS } from "../ids.js";
 
 export const SASU_TARGETS = ["analysis", "plan"] as const;
 export type SasuTarget = (typeof SASU_TARGETS)[number];
@@ -44,7 +45,27 @@ export const BatchFileSchema = z.object({
   units: z.array(z.object({ id: z.string(), target: z.string(), inputs: z.record(z.unknown()) })),
 });
 
+export const RESPONSE_KINDS = ["fixed", "rejected", "asked"] as const;
+
+export const ResponseSchema = z.object({
+  finding: z.string().regex(ID_PATTERNS.finding, "지적 id 는 F-n 형식이어야 합니다"),
+  response: z.enum(RESPONSE_KINDS),
+  reason: z.string().default(""),
+  evidence: z.object({ unit_id: z.string().min(1), quote: z.string() }).optional(),
+});
+
+export const ResponsesInputSchema = z.object({ responses: z.array(ResponseSchema) });
+
+/** 저장하는 답변 파일(doc/sasu/<대상>-<회차>.responses.json). */
+export const ResponsesFileSchema = z.object({
+  for: z.enum(SASU_TARGETS),
+  round: z.number().int().min(1),
+  responses: z.array(ResponseSchema),
+});
+
 export type PlanUnit = z.infer<typeof PlanUnitSchema>;
 export type PlanBatch = z.infer<typeof PlanBatchSchema>;
 export type SasuPlan = z.infer<typeof SasuPlanSchema>;
 export type BatchFile = z.infer<typeof BatchFileSchema>;
+export type Response = z.infer<typeof ResponseSchema>;
+export type ResponsesFile = z.infer<typeof ResponsesFileSchema>;

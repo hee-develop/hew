@@ -92,6 +92,11 @@ export function sasuPlanPath(paths: RunPaths, target: "analysis" | "plan", round
   return join(paths.doc, "sasu", `${target}-${round}.plan.json`);
 }
 
+/** 테크니컬 매니저가 사수의 지적에 낸 답변 파일 경로. 회차는 그 지적이 나온 회차다. */
+export function sasuResponsesPath(paths: RunPaths, target: "analysis" | "plan", round: number): string {
+  return join(paths.doc, "sasu", `${target}-${round}.responses.json`);
+}
+
 /** 사수 묶음 파일(에이전트가 읽는 입력)이 놓이는 작업 폴더. */
 export function sasuWorkDir(paths: RunPaths, target: "analysis" | "plan", round: number): string {
   return join(paths.work, `sasu-${target}-${round}`);

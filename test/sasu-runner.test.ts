@@ -204,6 +204,43 @@ describe("실행기: 사수 반송 한 바퀴", () => {
     expect(roleConfig("manager-sasu").model).toBe("claude-haiku-5-5");
   });
 
+  it("사수 ask 지적 -> 반송 -> TM 이 respond(rejected) 후 재제출 -> 사수 ok -> checked, 질문도 실수 기록도 없다", async () => {
+    const { dir } = setupQaDesigned();
+    const plan = {
+      "technical-manager": [{ mode: "tm_respond", response: "rejected", doc: writeItemsFile(dir, "tm-doc.json", buildAnalysis()) }],
+      "qa-designer": [{ mode: "submit", doc: writeItemsFile(dir, "qa-doc.json", buildScenarios()) }],
+      "manager-sasu": [{ mode: "sasu_issue_first", action: "ask" }, { mode: "sasu_ok" }],
+    };
+    const { env } = fakeEnv("by_role", { FAKE_CLAUDE_PLAN: JSON.stringify(plan) });
+    const questionsBefore = JSON.parse(readFileSync(runPaths(dir).analysis, "utf8")).items.questions.length;
+    const result = await runLoop({ runDir: dir, until: "checked", env });
+    expect(result).toMatchObject({ outcome: "until_reached", state: "checked" });
+    expect(result.steps.map((s) => s.role).filter((r) => r !== "manager-sasu")).toEqual(["technical-manager", "qa-designer"]);
+
+    const p = runPaths(dir);
+    // TM 패킷에 ask 지적이 실리고, 답변 파일이 회차 1 에 저장되었다.
+    const tmPacket = readFileSync(join(p.packets, "technical-manager-1.md"), "utf8");
+    expect(tmPacket).toContain("| F-1 | W2:요구-1 | unsupported | 가짜 사수가 낸 지적 |");
+    expect(tmPacket).toContain("| ask |");
+    expect(tmPacket).toContain("sasu respond --for analysis");
+    const responses = JSON.parse(readFileSync(join(p.doc, "sasu", "analysis-1.responses.json"), "utf8"));
+    expect(responses.responses).toEqual([{ finding: "F-1", response: "rejected", reason: "가짜 테크니컬 매니저가 낸 이유" }]);
+
+    // 다음 회차 묶음에 직전 지적과 답변이 실렸다.
+    const second = loadPlan(dir, 2)!;
+    const batch = JSON.parse(readFileSync(second.batches[0]!.path, "utf8"));
+    expect(batch.units[0]).toMatchObject({ id: "W2:요구-1", inputs: { previous: { claim: "가짜 사수가 낸 지적", kind: "unsupported", response: { response: "rejected" } } } });
+    expect(batch.question).toContain("답변이 근거를 들어 반박했고");
+
+    // 질문은 늘지 않았고, 사수의 오탐으로 기록되었다.
+    expect(JSON.parse(readFileSync(p.analysis, "utf8")).items.questions).toHaveLength(questionsBefore);
+    expect(existsSync(p.mistakes) ? lines(p.mistakes) : []).toEqual([]);
+    const events = readEvents(p.events);
+    expect(events.filter((e) => e.type === "sasu_false_positive")).toHaveLength(1);
+    expect(events.some((e) => e.type === "sasu_questions_added")).toBe(false);
+    expect(loadRun(dir)).toMatchObject({ state: "checked", rework: { analysis: 1, plan: 0 } });
+  });
+
   it("answers_complete 반송: 사수가 차단하면 technical-manager rework 를 띄우고 시나리오는 다시 만들지 않는다", async () => {
     const { dir } = setupQaDesigned();
     const raw = JSON.parse(readFileSync(runPaths(dir).runJson, "utf8"));

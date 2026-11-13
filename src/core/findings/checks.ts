@@ -56,11 +56,12 @@ function stringLeaves(value: unknown, into: string[] = []): string[] {
   return into;
 }
 
-/** 인용이 단위 inputs 에 실린 텍스트 어딘가에 있는가(공백·Markdown 강조 표시를 지우고 비교). */
+/** 인용이 단위 inputs 에 실린 원문 텍스트 어딘가에 있는가(공백·Markdown 강조 표시를 지우고 비교). 직전 지적·답변(previous)은 원문이 아니라 제외한다. */
 export function quoteInInputs(quote: string, inputs: Record<string, unknown>): boolean {
   const wanted = normalizeText(quote);
   if (wanted.length === 0) return false;
-  return stringLeaves(inputs).some((text) => normalizeText(text).includes(wanted));
+  const { previous: _previous, ...source } = inputs;
+  return stringLeaves(source).some((text) => normalizeText(text).includes(wanted));
 }
 
 function imageInInputs(image: string, inputs: Record<string, unknown>, runDir: string): boolean {

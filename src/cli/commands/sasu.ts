@@ -1,9 +1,11 @@
-/** hew sasu 명령 등록: 사수 작업 단위와 묶음을 만든다. */
+/** hew sasu 명령 등록: 사수 작업 단위와 묶음을 만들고, 지적에 대한 테크니컬 매니저의 답변을 받는다. */
+import { resolve } from "node:path";
 import type { Command } from "commander";
 import { producedByFromEnv } from "../../core/envelope.js";
 import { usageError } from "../../core/errors.js";
 import { resolveRunDir } from "../../core/paths.js";
 import { createPlan } from "../../core/sasu/plan.js";
+import { respondToFindings } from "../../core/sasu/respond.js";
 import { runAction } from "./run-action.js";
 
 export function register(program: Command): void {
@@ -24,6 +26,22 @@ export function register(program: Command): void {
         return {
           data: { created: result.created, plan, completed: result.completed },
           text: `${head}${tail}`,
+        };
+      }),
+    );
+  sasu
+    .command("respond")
+    .description("사수의 차단 지적마다 테크니컬 매니저의 답변(fixed|rejected|asked)을 저장한다(상태는 바꾸지 않는다)")
+    .requiredOption("--run <폴더|id>", "실행 폴더 경로 또는 run_id")
+    .requiredOption("--for <대상>", "analysis|plan")
+    .requiredOption("--file <경로>", "답변 JSON 파일({ responses: [...] })")
+    .action((options: { run: string; for: string; file: string }, command: Command) =>
+      runAction(command, () => {
+        if (options.for !== "analysis" && options.for !== "plan") throw usageError(`--for 는 analysis|plan 중 하나여야 합니다: ${options.for}`);
+        const r = respondToFindings({ runDir: resolveRunDir(options.run), target: options.for, file: resolve(options.file) });
+        return {
+          data: { for: options.for, round: r.round, path: r.path, saved: r.saved, total: r.total },
+          text: `회차 ${r.round} 지적에 대한 답변 ${r.saved}건을 저장했습니다(전체 ${r.total}건): ${r.path}`,
         };
       }),
     );

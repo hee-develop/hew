@@ -117,13 +117,13 @@ approval.json         승인 기록(잠근 revision)
 | `collected` | `analysis` 제출 통과 | — | `analyzed` | `technical-manager` 띄우기(처음 또는 반송) |
 | `analyzed` | `scenarios` 제출 통과 | — | `qa_designed` | `qa-designer` 띄우기 |
 | `qa_designed` | 분석용 `findings` 가 모두 들어옴 | 차단 지적 0건, 또는 반송 2회를 채움(남은 지적은 질문으로 바뀜) | `checked` | 매니저 사수 돌리기 |
-| `qa_designed` | 분석용 `findings` 가 모두 들어옴 | 차단 지적이 있고 반송이 2회 미만 | `collected`(반송 회차 +1) | 〃 |
+| `qa_designed` | 분석용 `findings` 가 모두 들어옴 | 차단 지적(`fix`·`ask`·`drop` 모두)이 있고 반송이 2회 미만 | `collected`(반송 회차 +1) | 〃 |
 | `checked` | 게이트 게시됨 | — | `gate_answering` | 게이트 게시하기(답변) |
 | `gate_answering` | 답 들여옴 | 열린 항목 0 | `answers_complete` | 사람의 답 기다리기 |
 | `gate_answering` | 답 들여옴 | 열린 항목이 남음 | `gate_answering` | 〃 |
 | `answers_complete` | 답 반영 `analysis`·`scenarios` 제출 통과와 사수 재확인이 모두 끝남 | 열린 항목 0 | `answers_applied` | 답 반영으로 `technical-manager`, `qa-designer`, 사수를 차례로 |
 | `answers_complete` | 〃 | 새 질문이 생겨 열린 항목이 있음 | `checked` | 〃 |
-| `answers_complete` | 분석용 `findings` 가 모두 들어옴 | 차단 지적이 있고 분석 반송이 2회 미만 | `answers_complete`(반송 회차 +1, 분석·사수 진행만 false) | `technical-manager` 를 반송으로 띄우기 |
+| `answers_complete` | 분석용 `findings` 가 모두 들어옴 | 차단 지적(`fix`·`ask`·`drop` 모두)이 있고 분석 반송이 2회 미만 | `answers_complete`(반송 회차 +1, 분석·사수 진행만 false) | `technical-manager` 를 반송으로 띄우기 |
 | `answers_applied` | `plan` 제출 통과 | — | `planned` | `ticket-maker` 띄우기 |
 | `planned` | 분해안용 `findings` 가 모두 들어옴 | 차단 지적 0건 또는 반송 2회를 채움 | `plan_checked` | 티켓 사수 돌리기 |
 | `planned` | 〃 | 차단 지적이 있고 반송이 2회 미만 | `answers_applied`(반송 회차 +1) | 〃 |
@@ -493,7 +493,7 @@ heka `hew-id-labels-korean` 을 따른다. 새 종류는 [가정]이다.
 | W4 | `confirmed` 요구 하나 | 요구, 근거 단위들, 같은 절의 이웃 단위들 | 원문에 미정·조건부·논의 필요 표시가 있는데 확정으로 적었는가 |
 | W5 | 요구 하나 | 사람용 칸과 `ai.notes` | AI용 문장에만 있는 동작·조건이 있는가 |
 | W6 | `actor` 가 빈 표 행 단위 | 행 전체 | 주체가 운영자·관리자인가 |
-| W7 | AS-IS·TO-BE 가 있는 화면 하나 | 두 이미지, 코어가 계산한 차이 상자, 그 화면의 변경 항목 | 변경 항목에 없는 시각 차이(아이콘·그래픽·컴포넌트 교체)가 있는가 |
+| W7 | AS-IS·TO-BE 가 있는 화면 또는 변형 하나 | 두 이미지, 코어가 계산한 차이 상자, 변경 항목(변형: 그 변형에 직접 걸린 것 `changes_for_variant` 과 부모 화면에 걸린 것 `changes_for_screen`. 화면: 그 화면에 걸린 것 `changes_for_screen` 과 모든 변형에 걸린 것 `changes_for_variants`) | 이 변형과 그 화면 전체에 걸린 변경 항목 어디에도 없는 시각 차이(아이콘·그래픽·컴포넌트 교체)가 있는가 |
 | W8 | 차이 하나 | 비교 행, 양쪽 인용 | 한 행에 놓인 짝이 같은 조건·같은 대상인가 |
 | W9 | 질문 하나 | 질문, 관련 단위들 | 원문에 이미 답이 있는가 |
 
@@ -515,12 +515,14 @@ heka `hew-id-labels-korean` 을 따른다. 새 종류는 [가정]이다.
 | `kind` | `unsupported`, `missing`, `wrong_disposition`, `false_confirmed`, `ai_only_behavior`, `operator_row`, `visual_unlisted`, `bad_pairing`, `already_answered` |
 | `claim` | 무엇이 문제인지 한 문장 |
 | `evidence` | §2.3 형식. 없으면 차단하지 않는다 |
-| `action` | `fix`(테크니컬 매니저가 고침), `ask`(질문으로 올림), `drop`(항목 삭제) |
+| `action` | `fix`(테크니컬 매니저가 고침), `ask`(원문만으로 정할 수 없어 사람에게 물어야 함), `drop`(항목 삭제). 차단 지적이면 셋 모두 먼저 테크니컬 매니저에게 반송한다 |
 
 - 모든 작업 단위에 판정이 하나씩 있어야 한다. 빠진 단위가 있으면 제출을 거부한다.
-- 차단 지적이 있으면 코어가 지적 목록을 패킷으로 만들어 테크니컬 매니저를 다시 띄운다. 상한은 2회다.
-- 상한에 닿고도 남은 차단 지적은 코어가 `origin: sasu` 질문으로 바꿔 게이트에 올린다. 통과로 치지 않는다.
+- 차단 지적이 있으면(`action` 이 `fix`·`ask`·`drop` 어느 것이든) 코어가 지적 목록을 패킷으로 만들어 테크니컬 매니저를 다시 띄운다. 상한은 2회다. 패킷의 표는 `kind` 가 같고 `claim` 의 공백을 지운 문자열이 같은 지적을 한 줄로 묶어 보이며, 줄마다 지적 id 를 모두 적는다.
+- 상한에 닿고도 남은 차단 지적은 코어가 `origin: sasu` 질문으로 바꿔 게이트에 올린다. 통과로 치지 않는다. 같은 `kind`·같은 `claim` 인 지적은 질문 하나로 합치고(`affects` 는 합집합, 본문 끝에 "같은 지적 n건: 대상…"), 같은 대상·같은 `kind` 의 sasu 질문이 이미 있으면 다시 만들지 않는다.
 - 반송 뒤 재확인은 바뀐 항목에 걸린 작업 단위만 다시 돌린다.
+- 테크니컬 매니저는 반송된 차단 지적마다 `hew sasu respond --run <폴더|id> --for analysis --file <JSON>` 으로 답한다. 형식은 `{ responses: [{ finding, response, reason, evidence? }] }` 이고 `response` 는 `fixed`(고쳤다), `rejected`(근거를 들어 그대로 둔다. `reason` 필수), `asked`(질문으로 올렸다)다. `evidence.quote` 는 `evidence.unit_id` 단위 본문에 있어야 한다. 답변은 `doc/sasu/analysis-<회차>.responses.json`(회차는 지적이 나온 회차)에 저장하고, 같은 지적에 다시 내면 덮어쓰며 상태는 바꾸지 않는다. 반송 중일 때만 받는다(아니면 종료 4).
+- 다음 회차에 다시 도는 단위 중 직전 회차에서 `issue` 였던 것의 `inputs.previous` 에 `{ claim, kind, response? }` 를 싣는다. `previous` 는 단위의 `hash` 계산에서 뺀다. 사수는 답변을 읽고 지적이 풀렸는지 다시 판정하며, 답변이 근거를 들어 반박했고 그 근거가 맞으면 `ok` 를 낸다.
 
 ---
 
@@ -656,6 +658,7 @@ PR 묶음(`prs[]`): `id`, `title`, `ticket_ids[]`, `base`(`develop` 또는 앞�
 | `hew submit <analysis\|scenarios\|plan\|findings> --file <경로> [--withdraw <id,…>]` | 검증하고 정본에 쓴다 | 단계별 |
 | `hew check --run <폴더> [--only <종류>]` | 결정적 검사만 다시 돌린다 | 없음 |
 | `hew sasu plan --run <폴더> --for <analysis\|plan>` | 사수 작업 단위와 묶음을 만든다 | 없음 |
+| `hew sasu respond --run <폴더\|id> --for analysis --file <JSON>` | 반송된 차단 지적에 대한 테크니컬 매니저의 답변을 저장한다(반송 중일 때만) | 없음 |
 | `hew packet --run <폴더> --role <역할>` | 그 역할의 패킷을 만든다(`hew run` 이 내부에서 쓴다) | 없음 |
 | `hew gate build --run <폴더> [--review-request]` | 게이트 페이지와 이미지 목록을 만든다 | 없음 |
 | `hew gate import --run <폴더> --file <db 내보내기>` | 답·결정·수정 요청을 들여온다 | → `answers_complete` 등 |
@@ -802,7 +805,7 @@ role: dev                        # dev(프롬프트를 고치며 본 사례) | h
 | `versions` | 그때의 역할 정의 git SHA, 모델, effort, 코어 버전 |
 | `case` | 이 실수를 회귀 사례로 만들었으면 그 id |
 
-- 사수의 차단 지적이 받아들여져 고쳐지면 코어가 자동으로 기록한다. 게이트에서 사람이 요구를 고치게 한 것, 리플레이 채점에서 나온 것도 자동으로 기록한다.
+- 사수의 차단 지적이 받아들여져 고쳐지면 코어가 자동으로 기록한다. 기록은 지적이 나온 회차가 아니라 다음 회차 완료 때 직전 지적과 이번 판정을 견주어 한다: 이번에 `ok` 이고 답변이 `fixed`·`asked`·없음이면 기록하고, 답변이 `rejected` 이면 사수의 오탐이라 기록하지 않고 `events.jsonl` 에 `sasu_false_positive` 를 남긴다. 상한에 닿아 질문이 된 지적은 사람의 답이 판정하므로 기록하지 않는다. 게이트에서 사람이 요구를 고치게 한 것, 리플레이 채점에서 나온 것도 자동으로 기록한다.
 - 역할 정의를 고쳐 규칙을 하나 넣을 때는 그 규칙을 낳은 실수의 `case` 가 있어야 한다.
 
 ---

@@ -1,8 +1,9 @@
-/** 차단 지적을 origin sasu 질문으로 바꿔 분석 정본에 더한다. */
+/** 차단 지적을 origin sasu 질문으로 바꿔(같은 지적은 하나로 합쳐) 분석 정본에 더한다. */
 import { existsSync } from "node:fs";
 import { AnalysisItemsSchema, type AnalysisItems, type Question } from "../analysis/schema.js";
 import { normalizeText } from "../analysis/checks.js";
 import { HewError } from "../errors.js";
+import { groupDuplicateFindings } from "../findings/group.js";
 import { splitWorkId, type StoredFinding } from "../findings/schema.js";
 import { readJsonFile, writeJsonAtomic } from "../fsx.js";
 import { isId } from "../ids.js";
@@ -68,7 +69,17 @@ function rationaleOf(f: StoredFinding, units: Map<string, Unit>): Question["rati
 
 const maxQuestionNumber = (ids: string[]): number => ids.reduce((max, id) => (isId("question", id) ? Math.max(max, Number(id.slice(2))) : max), 0);
 
-/** 지적마다 질문 하나를 더한다(같은 대상·같은 종류의 sasu 질문이 있으면 건너뜀). 정본을 다시 쓰고 열린 항목 목록을 돌려준다. */
+/** 이미 만든 sasu 질문이 이 대상·종류의 지적을 다루는가(본문 머리의 대상이나 "같은 지적" 목록에 대상이 있으면 다룬 것). */
+function coversFinding(text: string, work: string, kind: string): boolean {
+  const target = splitWorkId(work)?.target ?? work;
+  if (text.startsWith(textKey(work, kind))) return true;
+  const head = /^사수 확인\((\S+?), (\S+?)\)/.exec(text);
+  const list = /\(같은 지적 \d+건: ([^)]*)\)$/.exec(text);
+  if (head === null || list === null || head[2] !== kind) return false;
+  return (list[1] ?? "").split(", ").includes(target);
+}
+
+/** 같은 종류·같은 문장의 지적을 질문 하나로 합쳐 더한다(같은 대상·같은 종류의 sasu 질문이 있으면 건너뜀). 정본을 다시 쓰고 열린 항목 목록을 돌려준다. */
 export function convertFindingsToQuestions(runDir: string, findings: StoredFinding[]): ConvertResult {
   const p = runPaths(runDir);
   const doc = readJsonFile(p.analysis) as { items: unknown; open?: string[] };
@@ -85,23 +96,28 @@ export function convertFindingsToQuestions(runDir: string, findings: StoredFindi
   let next = maxQuestionNumber([...items.questions, ...scenarioQuestions].map((q) => q.id));
   const added: Question[] = [];
   const pended = new Set<string>();
-  for (const f of findings) {
-    const kind = f.kind ?? "";
-    const prefix = textKey(f.work, kind);
-    const exists = [...items.questions, ...added].some((q) => q.origin === "sasu" && q.text.startsWith(prefix));
-    if (exists) continue;
+  for (const group of groupDuplicateFindings(findings)) {
+    const kind = group[0]?.kind ?? "";
+    const fresh = group.filter((f) => ![...items.questions, ...added].some((q) => q.origin === "sasu" && coversFinding(q.text, f.work, kind)));
+    const first = fresh[0];
+    if (first === undefined) continue;
     next += 1;
-    const affects = affectedRequirements(items, f.work, scenarioItems);
+    const affects = [...new Set(fresh.flatMap((f) => affectedRequirements(items, f.work, scenarioItems)))];
+    const rationale = fresh
+      .flatMap((f) => rationaleOf(f, units))
+      .filter((r, i, all) => all.findIndex((x) => JSON.stringify(x) === JSON.stringify(r)) === i);
+    const targets = fresh.map((f) => splitWorkId(f.work)?.target ?? f.work);
+    const same = fresh.length > 1 ? ` (같은 지적 ${fresh.length}건: ${targets.join(", ")})` : "";
     added.push({
       id: `Q-${next}`,
-      text: `${prefix}: ${(f.claim ?? "").trim()} 어떻게 처리할까요?`,
+      text: `${textKey(first.work, kind)}: ${(first.claim ?? "").trim()} 어떻게 처리할까요?${same}`,
       origin: "sasu",
       blocking: true,
       options: [
         { key: "fix", label: "지적대로 고친다", consequence: "분석 문서를 지적에 맞게 고쳐 요구·인수 조건에 반영한다" },
         { key: "keep", label: "지금대로 둔다", consequence: "분석 문서를 그대로 두고 지적을 무시한다" },
       ],
-      rationale: rationaleOf(f, units),
+      rationale,
       affects,
       audience: [],
     });

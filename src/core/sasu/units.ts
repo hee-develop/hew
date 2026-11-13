@@ -25,10 +25,21 @@ export const CODE_QUESTIONS: Record<WorkCode, string> = {
   W4: "원문에 미정·조건부·논의 필요 같은 표시가 있는데 확정으로 적었는가",
   W5: "AI용 보충(ai_notes)에만 있는 동작이나 조건이 있는가",
   W6: "이 표 행의 주체가 운영자·관리자(사내 어드민 작업자)인가",
-  W7: "변경 항목에 없는 눈에 보이는 차이(아이콘·그래픽·컴포넌트 교체, 사라진 요소, 달라진 배치)가 있는가",
+  W7: "이 변형과 그 화면 전체에 걸린 변경 항목 어디에도 없는 눈에 보이는 차이(아이콘·그래픽·컴포넌트 교체, 사라진 요소, 달라진 배치)가 있는가. 변형은 changes_for_variant(그 변형에 직접 걸린 변경)와 changes_for_screen(부모 화면 전체에 걸린 변경)을, 화면은 changes_for_screen 과 changes_for_variants(그 화면의 모든 변형에 걸린 변경)를 함께 본다",
   W8: "한 행에 놓인 PRD 와 시안이 같은 조건·같은 대상인가",
   W9: "원문에 이미 답이 있는 질문인가",
 };
+
+/** 직전 지적과 테크니컬 매니저의 답변이 inputs.previous 에 실렸을 때 덧붙이는 질문. */
+export const PREVIOUS_QUESTION =
+  "직전 지적과 테크니컬 매니저의 답변이 previous 에 있으면, 답변을 읽고 지적이 풀렸는지 다시 판정한다. 답변이 근거를 들어 반박했고 그 근거가 맞으면 ok 다";
+
+/** 직전 회차의 지적과 그에 대한 테크니컬 매니저의 답변. */
+export interface PreviousInput {
+  claim: string;
+  kind: string;
+  response?: { response: string; reason: string; evidence?: { unit_id: string; quote: string } };
+}
 
 export interface WorkUnit {
   id: string;
@@ -178,16 +189,25 @@ function w6(src: Source): WorkUnit[] {
 
 function w7(src: Source): WorkUnit[] {
   const out: WorkUnit[] = [];
-  const consider = (id: string, images: { role: string; path: string }[]): void => {
-    const asIs = images.find((i) => i.role === "as_is");
-    const toBe = images.find((i) => i.role === "to_be");
-    if (asIs === undefined || toBe === undefined) return;
-    const changes = src.items.requirements.flatMap((r) => r.changes.filter((c) => c.screen_id === id).map((c) => c.text));
-    out.push(make("W7", id, { as_is: absolute(src.runDir, asIs.path), to_be: absolute(src.runDir, toBe.path), changes }));
+  const changes = src.items.requirements.flatMap((r) => r.changes.map((c) => ({ ...c, screenIds: r.screen_ids })));
+  /** 그 화면에 걸린 변경: screen_id 가 화면 id 이거나, screen_id 가 없고 요구의 screen_ids 에 화면이 있는 것. */
+  const forScreen = (screenId: string): string[] =>
+    changes.filter((c) => c.screen_id === screenId || (c.screen_id === undefined && c.screenIds.includes(screenId))).map((c) => c.text);
+  const forId = (id: string): string[] => changes.filter((c) => c.screen_id === id).map((c) => c.text);
+  const images = (list: { role: string; path: string }[]): { as_is: string; to_be: string } | null => {
+    const asIs = list.find((i) => i.role === "as_is");
+    const toBe = list.find((i) => i.role === "to_be");
+    return asIs === undefined || toBe === undefined ? null : { as_is: absolute(src.runDir, asIs.path), to_be: absolute(src.runDir, toBe.path) };
   };
   for (const s of src.items.screens) {
-    consider(s.id, s.images);
-    for (const v of s.variants) consider(v.id, v.images);
+    const own = images(s.images);
+    if (own !== null) {
+      out.push(make("W7", s.id, { ...own, changes_for_screen: forScreen(s.id), changes_for_variants: s.variants.flatMap((v) => forId(v.id)) }));
+    }
+    for (const v of s.variants) {
+      const mine = images(v.images);
+      if (mine !== null) out.push(make("W7", v.id, { ...mine, changes_for_variant: forId(v.id), changes_for_screen: forScreen(s.id) }));
+    }
   }
   return out;
 }
@@ -231,6 +251,11 @@ function w9(src: Source): WorkUnit[] {
 function make(code: WorkCode, target: string, inputs: Record<string, unknown>): WorkUnit {
   const clean = JSON.parse(JSON.stringify(inputs)) as Record<string, unknown>;
   return { id: `${code}:${target}`, code, target, question: CODE_QUESTIONS[code], inputs: clean, hash: hashJson(clean) };
+}
+
+/** 작업 단위의 inputs 에 직전 지적·답변을 더한다. hash 는 더하기 전 inputs 로 계산한 값 그대로 둔다. */
+export function withPrevious(unit: WorkUnit, previous: PreviousInput): WorkUnit {
+  return { ...unit, inputs: { ...unit.inputs, previous: JSON.parse(JSON.stringify(previous)) as PreviousInput } };
 }
 
 const BUILDERS: Record<WorkCode, (src: Source) => WorkUnit[]> = { W2: w2, W3: w3, W4: w4, W5: w5, W6: w6, W7: w7, W8: w8, W9: w9 };

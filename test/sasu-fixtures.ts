@@ -6,7 +6,9 @@ import "../src/core/scenarios/index.js";
 import { submitFindingsBatch, type SubmitBatchResult } from "../src/core/findings/submit.js";
 import type { Finding } from "../src/core/findings/schema.js";
 import { runPaths } from "../src/core/paths.js";
-import { loadRun } from "../src/core/run.js";
+import { loadRun, saveRun } from "../src/core/run.js";
+import { respondToFindings, type RespondResult } from "../src/core/sasu/respond.js";
+import type { Response } from "../src/core/sasu/types.js";
 import { createPlan } from "../src/core/sasu/plan.js";
 import { currentRound, loadPlan } from "../src/core/sasu/store.js";
 import type { BatchFile, SasuPlan } from "../src/core/sasu/types.js";
@@ -66,3 +68,14 @@ export const roundOf = (dir: string): number => currentRound(loadRun(dir));
 export const findingsRound = (dir: string, round: number): Record<string, any>[] =>
   (JSON.parse(readFileSync(join(runPaths(dir).findingsDir, `analysis-${round}.json`), "utf8")) as { items: { findings: Record<string, any>[] } }).items.findings;
 export { clone, loadPlan };
+
+/** 답변 JSON 을 작업 파일로 쓰고 hew sasu respond 의 코어 함수를 부른다. */
+export function respond(dir: string, responses: Partial<Response>[], name = "responses.json"): RespondResult {
+  return respondToFindings({ runDir: dir, target: "analysis", file: writeItemsFile(dir, name, { responses }) });
+}
+
+/** 반송을 마친 것으로 보고 상태를 qa_designed 로 되돌려 다음 회차 사수 계획을 만든다(분석·시나리오 정본은 그대로). */
+export function startNextRound(dir: string): SasuPlan {
+  saveRun(dir, { ...loadRun(dir), state: "qa_designed" });
+  return createPlan(dir, "analysis").plan;
+}
