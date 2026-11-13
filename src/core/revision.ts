@@ -33,6 +33,13 @@ export function normalizeForRevision(value: unknown): unknown {
   return value;
 }
 
+/** 승인 기록은 revision 을 잠그는 것이라 revision 계산에서 뺀다. */
+function withoutApprovals(answers: unknown): unknown {
+  if (answers === null || typeof answers !== "object" || Array.isArray(answers)) return answers;
+  const { approvals: _approvals, ...rest } = answers as Record<string, unknown>;
+  return rest;
+}
+
 const itemsOf = (envelope: unknown): unknown =>
   envelope !== null && typeof envelope === "object" ? (envelope as Record<string, unknown>).items : undefined;
 
@@ -48,7 +55,7 @@ export function computeRevision(runDir: string): string {
   for (const [name, file] of itemsFiles) {
     if (existsSync(file)) parts[name] = itemsOf(readJsonFile(file));
   }
-  if (existsSync(p.answers)) parts.answers = readJsonFile(p.answers);
+  if (existsSync(p.answers)) parts.answers = withoutApprovals(readJsonFile(p.answers));
   if (existsSync(p.manifest)) parts.manifest = readJsonFile(p.manifest);
   if (Object.keys(parts).length === 0) return NO_REVISION;
   return hashJson(normalizeForRevision(parts));

@@ -44,6 +44,9 @@ export interface RunPaths {
   findingsDir: string;
   gate: string;
   gateAssets: string;
+  gatePage: string;
+  gatePath: string;
+  gateImports: string;
   approval: string;
 }
 
@@ -72,6 +75,9 @@ export function runPaths(dir: string): RunPaths {
     findingsDir: join(doc, "findings"),
     gate,
     gateAssets: join(gate, "assets"),
+    gatePage: join(gate, "page.html"),
+    gatePath: join(gate, "path.txt"),
+    gateImports: join(gate, "imports"),
     approval: join(dir, "approval.json"),
   };
 }

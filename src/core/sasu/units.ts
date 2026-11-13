@@ -50,7 +50,7 @@ interface Source {
   scenarios: ScenarioItems | null;
   units: Unit[];
   byId: Map<string, Unit>;
-  answered: (q: Pick<Question, "id">) => boolean;
+  answered: (q: Pick<Question, "id" | "text" | "options">) => boolean;
 }
 
 function readItems(file: string): unknown {

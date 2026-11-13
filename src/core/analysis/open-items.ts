@@ -1,4 +1,5 @@
 /** 열린 항목 계산: 답 없는 질문, 결정 없는(또는 종류에 맞지 않는 값의) 차이, 확인 안 된 가정. */
+import { hashJson } from "../hash.js";
 import type { AnswersFile } from "./answers.js";
 import { isDecisionAllowed } from "./delta-decision.js";
 import type { AnalysisItems, Delta, Question } from "./schema.js";
@@ -9,11 +10,26 @@ export interface OpenItems {
   assumptions: string[];
 }
 
-/** 질문에 사람의 답(선택지 또는 자유 답)이 있는가. */
-export function isQuestionAnswered(question: Pick<Question, "id">, answers: AnswersFile): boolean {
+type QuestionRef = Pick<Question, "id"> & Partial<Pick<Question, "text" | "options">>;
+
+/** 질문 본문(text·options)의 해시. 답이 어느 본문에 대한 것인지 가린다. */
+export function questionHash(question: Pick<Question, "text" | "options">): string {
+  return hashJson({ text: question.text, options: question.options });
+}
+
+const hasAnswerContent = (entry: AnswersFile["answers"][string] | undefined): boolean =>
+  entry !== undefined && ((entry.option ?? "").length > 0 || (entry.text ?? "").trim().length > 0);
+
+/** 답이 있는 질문의 본문이 답한 뒤에 바뀌었는가. 답에 본문 해시가 없으면 바뀌지 않은 것으로 본다. */
+export function isQuestionSuperseded(question: QuestionRef, answers: AnswersFile): boolean {
   const entry = answers.answers[question.id];
-  if (entry === undefined) return false;
-  return (entry.option ?? "").length > 0 || (entry.text ?? "").trim().length > 0;
+  if (!hasAnswerContent(entry) || entry?.question_hash === undefined || question.text === undefined) return false;
+  return entry.question_hash !== questionHash({ text: question.text, options: question.options ?? [] });
+}
+
+/** 질문에 사람의 답(선택지 또는 자유 답)이 있고 그 답이 지금의 질문 본문에 대한 것인가. */
+export function isQuestionAnswered(question: QuestionRef, answers: AnswersFile): boolean {
+  return hasAnswerContent(answers.answers[question.id]) && !isQuestionSuperseded(question, answers);
 }
 
 /** 차이에 유효한 사람의 결정이 있는가. `hold` 도 결정이다. */
