@@ -55,7 +55,7 @@ function respondThenSubmit(response, doc) {
   submitFromPacket(doc);
 }
 
-const KIND_BY_CODE = { W2: "unsupported", W3: "missing", W4: "false_confirmed", W5: "ai_only_behavior", W6: "operator_row", W7: "visual_unlisted", W8: "bad_pairing", W9: "already_answered" };
+const KIND_BY_CODE = { W2: "unsupported", W3: "missing", W4: "false_confirmed", W5: "ai_only_behavior", W6: "operator_row", W7: "visual_unlisted", W8: "bad_pairing", W9: "already_answered", T1: "ticket_missing_context" };
 
 function firstLeaf(value) {
   if (typeof value === "string") return value.trim().length >= 2 ? value : null;

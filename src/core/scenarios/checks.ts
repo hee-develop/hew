@@ -32,7 +32,8 @@ function effectiveBackend(s: Scenario, answers: AnswersFile): Backend {
   return human !== undefined && isBackend(human) ? human : s.backend;
 }
 
-function loadAnalysis(runDir: string): AnalysisItems | null {
+/** 정본 분석 문서의 본문. 없거나 스키마가 맞지 않으면 null. */
+export function loadAnalysis(runDir: string): AnalysisItems | null {
   const file = runPaths(runDir).analysis;
   if (!existsSync(file)) return null;
   const doc = readJsonFile(file) as { items?: unknown } | null;

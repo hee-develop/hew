@@ -7,11 +7,12 @@ import { usageError, type Issue } from "./errors.js";
 import { groupDuplicateFindings } from "./findings/group.js";
 import { readJsonFile } from "./fsx.js";
 import { HEW_ROOT, findingsPath, resolveRunDir, runPaths } from "./paths.js";
+import { loadAnswers } from "./analysis/answers.js";
 import { nextAction } from "./next.js";
 import { loadRun, type Run } from "./run.js";
 import { isRoleName, roleConfig, type RoleName } from "./roles.js";
 import { currentRound, isBatchSubmitted, loadPlan } from "./sasu/store.js";
-import { BatchFileSchema, type BatchFile } from "./sasu/types.js";
+import { BatchFileSchema, type BatchFile, type SasuTarget } from "./sasu/types.js";
 
 export const PURPOSES = ["first", "rework", "apply_answers"] as const;
 export type Purpose = (typeof PURPOSES)[number];
@@ -43,7 +44,7 @@ export interface PacketOptions {
   role: string;
   purpose?: string;
   env?: NodeJS.ProcessEnv;
-  /** manager-sasu 패킷이 다룰 묶음 번호. 생략하면 이번 회차에서 아직 제출되지 않은 첫 묶음. */
+  /** 사수 패킷(manager-sasu·ticket-sasu)이 다룰 묶음 번호. 생략하면 이번 회차에서 아직 제출되지 않은 첫 묶음. */
   batch?: number;
 }
 
@@ -170,13 +171,13 @@ function submitFor(role: RoleName, hew: string, runDir: string, workDir: string,
     file: join(workDir, name),
     line: `${hew} --json ${args} --run ${runDir} --file ${join(workDir, name)}`,
   });
-  if (role === "manager-sasu" && batch === undefined) throw usageError("manager-sasu 패킷에는 묶음 번호가 필요합니다");
+  if ((role === "manager-sasu" || role === "ticket-sasu") && batch === undefined) throw usageError(`${role} 패킷에는 묶음 번호가 필요합니다`);
   switch (role) {
     case "technical-manager": return { ...make("analysis.json", "submit analysis") };
     case "qa-designer": return { ...make("scenarios.json", "submit scenarios") };
     case "ticket-maker": return { ...make("plan.json", "submit plan") };
     case "manager-sasu": return { ...make("findings.json", `submit findings --for analysis --batch ${batch}`) };
-    case "ticket-sasu": return { ...make("findings.json", "submit findings --for plan") };
+    case "ticket-sasu": return { ...make("findings.json", `submit findings --for plan --batch ${batch}`) };
     case "collector": return null;
   }
 }
@@ -236,22 +237,30 @@ function issueRows(file: string): unknown[][] {
   });
 }
 
-/** 반송 패킷에서 지적 표 아래에 두는 답변 안내(분석 반송 전용). */
-function respondGuide(runDir: string, workDir: string, hew: string): string[] {
+/** 반송 패킷에서 지적 표 아래에 두는 답변 안내. */
+function respondGuide(runDir: string, workDir: string, hew: string, target: SasuTarget): string[] {
   const file = join(workDir, "responses.json");
+  const plan = target === "plan";
   const example = {
     responses: [
       { finding: "F-n", response: "fixed", reason: "무엇을 어떻게 고쳤는지" },
-      { finding: "F-n", response: "rejected", reason: "왜 지적이 틀렸는지", evidence: { unit_id: "U-n", quote: "원문에서 글자 그대로 옮긴 문장" } },
-      { finding: "F-n", response: "asked", reason: "원문만으로 정할 수 없어 질문으로 올렸다" },
+      {
+        finding: "F-n",
+        response: "rejected",
+        reason: "왜 지적이 틀렸는지",
+        evidence: { unit_id: plan ? "Tn" : "U-n", quote: plan ? "티켓 본문이나 요구 문장에서 글자 그대로 옮긴 문장" : "원문에서 글자 그대로 옮긴 문장" },
+      },
+      { finding: "F-n", response: "asked", reason: plan ? "요구만으로 정할 수 없어 사람의 확인이 필요하다" : "원문만으로 정할 수 없어 질문으로 올렸다" },
     ],
   };
   return [
-    "지적마다 고쳤는지(`fixed`), 근거를 들어 그대로 두는지(`rejected`), 사람에게 물을 질문으로 올렸는지(`asked`)를 `hew sasu respond` 로 낸 뒤 분석 문서를 다시 제출한다. `finding` 에는 표의 지적 id(`F-n`)를 쓰고, 한 줄에 id 가 여럿이면 각각에 답을 낸다.",
+    `지적마다 고쳤는지(\`fixed\`), 근거를 들어 그대로 두는지(\`rejected\`), ${plan ? "사람의 확인이 필요하다고 남기는지" : "사람에게 물을 질문으로 올렸는지"}(\`asked\`)를 \`hew sasu respond\` 로 낸 뒤 ${plan ? "분해안을" : "분석 문서를"} 다시 제출한다. \`finding\` 에는 표의 지적 id(\`F-n\`)를 쓰고, 한 줄에 id 가 여럿이면 각각에 답을 낸다.`,
     "",
-    `답변 명령: \`${hew} --json sasu respond --for analysis --run ${runDir} --file ${file}\``,
+    `답변 명령: \`${hew} --json sasu respond --for ${target} --run ${runDir} --file ${file}\``,
     "",
-    "- `rejected` 는 `reason` 이 필수다. `evidence.quote` 는 `evidence.unit_id` 원문 단위 본문에서 글자 그대로 옮긴다(원문에 없으면 거부된다).",
+    plan
+      ? "- `rejected` 는 `reason` 이 필수다. `evidence.quote` 는 그 지적 단위(티켓)의 제목·본문과 요구 문장에서 글자 그대로 옮긴다(없으면 거부된다). `evidence.unit_id` 에는 티켓 id 를 쓰되 대조에는 쓰이지 않는다."
+      : "- `rejected` 는 `reason` 이 필수다. `evidence.quote` 는 `evidence.unit_id` 원문 단위 본문에서 글자 그대로 옮긴다(원문에 없으면 거부된다).",
     "- 답변은 다음 회차 사수가 읽고 지적이 풀렸는지 다시 판정한다. 같은 지적에 다시 내면 덮어쓴다.",
     "",
     "```json",
@@ -268,6 +277,11 @@ function answerRows(file: string): unknown[][] {
   for (const [id, a] of Object.entries(doc?.scope ?? {})) rows.push(["차이 결정", id, a.decision ?? "", a.note ?? ""]);
   for (const [id, a] of Object.entries(doc?.assumptions ?? {})) rows.push(["가정 확인", id, a.status ?? "", a.note ?? ""]);
   return rows;
+}
+
+/** 사람이 낸 분해안 수정 요청이 있는가. */
+function hasPlanRequests(runDir: string): boolean {
+  return loadAnswers(runDir).plan_requests.length > 0;
 }
 
 function hasFiles(dir: string, predicate: (name: string) => boolean = () => true): boolean {
@@ -293,40 +307,43 @@ function readList(runDir: string, role: RoleName, purpose: Purpose, run: Run, re
   }
   const prior: [string, string, string][] = [];
   if (role === "qa-designer" || role === "ticket-maker") prior.push([p.analysis, "분석 정본", "analysis"]);
-  if (role === "ticket-maker") prior.push([p.scenarios, "시나리오 정본", "scenarios"]);
+  if (role === "ticket-maker") prior.push([p.scenarios, "시나리오 정본", "scenarios"], [p.answers, "사람의 답과 결정(차이 결정, 수정 요청 포함)", "answers"]);
   if (role === "technical-manager" && purpose !== "first") prior.push([p.analysis, "지금의 분석 정본(고칠 대상)", "analysis"]);
   if (role === "qa-designer" && purpose === "apply_answers") prior.push([p.scenarios, "지금의 시나리오 정본(고칠 대상)", "scenarios"]);
-  if (role === "ticket-maker" && purpose === "rework") prior.push([p.plan, "지금의 분해안 정본(고칠 대상)", "plan"]);
+  if (role === "ticket-maker" && (purpose === "rework" || hasPlanRequests(runDir))) prior.push([p.plan, "지금의 분해안 정본(고칠 대상)", "plan"]);
   for (const [path, note] of prior) if (existsSync(path)) add(path, note);
-  const rulesPlan = join(HEW_ROOT, "rules", "plan.yaml");
-  if (role === "ticket-maker" && existsSync(rulesPlan)) add(rulesPlan, "분해 규칙");
-  for (const ref of refs) add(join(HEW_ROOT, ref), "형식 안내");
+  for (const ref of refs) add(join(HEW_ROOT, ref), ref.startsWith("rules/") ? "분해 규칙" : "형식 안내");
   return out;
 }
 
-/** manager-sasu 패킷이 다룰 묶음을 정한다. */
-function sasuBatch(runDir: string, run: Run, wanted: number | undefined): { k: number; path: string; file: BatchFile } {
-  const round = currentRound(run);
-  const plan = loadPlan(runDir, round);
-  if (plan === null) throw usageError("이 회차의 사수 계획이 없습니다. 먼저 hew sasu plan --for analysis 를 실행하세요");
-  const entry = wanted !== undefined ? plan.batches.find((b) => b.k === wanted) : plan.batches.find((b) => !isBatchSubmitted(runDir, round, b.k));
+/** 사수 패킷이 다룰 묶음을 정한다. */
+function sasuBatch(runDir: string, run: Run, wanted: number | undefined, target: SasuTarget): { k: number; path: string; file: BatchFile } {
+  const round = currentRound(run, target);
+  const plan = loadPlan(runDir, round, target);
+  if (plan === null) throw usageError(`이 회차의 사수 계획이 없습니다. 먼저 hew sasu plan --for ${target} 을 실행하세요`);
+  const entry = wanted !== undefined ? plan.batches.find((b) => b.k === wanted) : plan.batches.find((b) => !isBatchSubmitted(runDir, round, b.k, target));
   if (entry === undefined) throw usageError(wanted !== undefined ? `계획에 묶음 ${wanted} 이(가) 없습니다` : "제출되지 않은 묶음이 없습니다");
   return { k: entry.k, path: entry.path, file: BatchFileSchema.parse(readJsonFile(entry.path)) };
 }
 
-function renderSasuPacket(opts: PacketOptions & { plan: PacketPlan }, run: Run): { text: string; purpose: Purpose; role: RoleName; warnings: Issue[] } {
+function renderSasuPacket(
+  opts: PacketOptions & { plan: PacketPlan },
+  run: Run,
+  role: "manager-sasu" | "ticket-sasu",
+): { text: string; purpose: Purpose; role: RoleName; warnings: Issue[] } {
   const env = opts.env ?? process.env;
-  const config = roleConfig("manager-sasu", env);
+  const config = roleConfig(role, env);
   const hew = hewBinPath();
   const warnings: Issue[] = [];
-  const batch = sasuBatch(opts.runDir, run, opts.batch);
+  const target: SasuTarget = role === "manager-sasu" ? "analysis" : "plan";
+  const batch = sasuBatch(opts.runDir, run, opts.batch, target);
   const lines: string[] = [];
-  lines.push(`# 패킷: manager-sasu ${opts.plan.n}번째`, "");
+  lines.push(`# 패킷: ${role} ${opts.plan.n}번째`, "");
   lines.push("## 이번 일", "");
   lines.push(
-    "- 역할: manager-sasu",
+    `- 역할: ${role}`,
     `- 목적: first — 작업 묶음 파일의 단위마다 판정을 하나씩 내어 지적(findings)으로 제출한다.`,
-    `- 대상: 분석 문서, 회차 ${batch.file.round}, 묶음 ${batch.k} (종류 ${batch.file.code}, 단위 ${batch.file.units.length}개)`,
+    `- 대상: ${target === "analysis" ? "분석 문서" : "분해안"}, 회차 ${batch.file.round}, 묶음 ${batch.k} (종류 ${batch.file.code}, 단위 ${batch.file.units.length}개)`,
     `- 이 종류가 묻는 것: ${batch.file.question}`,
     `- 실행 모드: ${MODE_TEXT[run.mode]}`,
     `- 실행 id: ${run.run_id}`,
@@ -342,12 +359,12 @@ function renderSasuPacket(opts: PacketOptions & { plan: PacketPlan }, run: Run):
   lines.push("## 쓰는 곳과 제출", "");
   lines.push(`- 작업 폴더(여기에만 쓸 수 있다): \`${opts.plan.workDir}\``);
   lines.push(`- hew 실행 파일: \`${hew}\``);
-  const submit = submitFor("manager-sasu", hew, opts.runDir, opts.plan.workDir, batch.k) as Submit;
+  const submit = submitFor(role, hew, opts.runDir, opts.plan.workDir, batch.k) as Submit;
   lines.push(`- 초안 파일: \`${submit.file}\``, "", "제출 명령:", "", "```sh", submit.line, "```", "");
   lines.push("제출이 거부되면(종료 3) 출력된 오류를 읽고 초안을 고쳐 같은 명령으로 다시 낸다. 통과할 때까지 반복한다.", "");
   lines.push("쓸 수 있는 Bash 명령:", "", ...BASH_ALLOWED.map((c) => `- ${c}`), "");
   lines.push("파이프(`|`), `&&`, `||`, `;` 로 이은 명령은 조각마다 위 목록에 있어야 한다. 쉘 치환(`$(...)`, 백틱), 변수 참조, 목록에 없는 명령은 거부된다.", "");
-  return { text: `${lines.join("\n")}\n`, purpose: "first", role: "manager-sasu", warnings };
+  return { text: `${lines.join("\n")}\n`, purpose: "first", role, warnings };
 }
 
 /** 패킷 본문과 경고를 만든다. 파일은 쓰지 않는다. */
@@ -356,7 +373,7 @@ export function renderPacket(opts: PacketOptions & { plan: PacketPlan }): { text
   const role = opts.role;
   const env = opts.env ?? process.env;
   const run = loadRun(opts.runDir);
-  if (role === "manager-sasu") return renderSasuPacket(opts, run);
+  if (role === "manager-sasu" || role === "ticket-sasu") return renderSasuPacket(opts, run, role);
   const purpose = ((): Purpose => {
     if (opts.purpose === undefined) return defaultPurpose(run, role);
     if (!(PURPOSES as readonly string[]).includes(opts.purpose)) throw usageError(`--purpose 는 ${PURPOSES.join("|")} 중 하나여야 합니다: ${opts.purpose}`);
@@ -383,7 +400,14 @@ export function renderPacket(opts: PacketOptions & { plan: PacketPlan }): { text
       lines.push("지적 파일이 아직 없습니다.", "");
     } else {
       lines.push(`지적 파일: \`${file}\``, "", ...table(["id", "대상", "종류", "주장", "근거", "처리"], issueRows(file)), "");
-      if (target === "analysis") lines.push(...respondGuide(opts.runDir, opts.plan.workDir, hew));
+      lines.push(...respondGuide(opts.runDir, opts.plan.workDir, hew, target));
+    }
+  }
+  if (role === "ticket-maker" && existsSync(p.answers)) {
+    const requests = loadAnswers(opts.runDir).plan_requests;
+    if (requests.length > 0) {
+      lines.push("## 사람의 수정 요청", "", "게이트에서 사람이 분해안에 낸 요청이다. 대상(`Tn`·`PR-n`·`전체`)마다 요청대로 고친다. 요구는 바꾸지 않는다.", "");
+      lines.push(...table(["대상", "요청", "시각"], requests.map((r) => [r.target, r.text, r.at])), "");
     }
   }
   if (purpose === "apply_answers") {

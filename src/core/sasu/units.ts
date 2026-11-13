@@ -6,35 +6,44 @@ import { isQuestionAnswered } from "../analysis/open-items.js";
 import {
   AnalysisItemsSchema,
   type AnalysisItems,
+  type Delta,
   type Evidence,
   type Question,
   type Requirement,
 } from "../analysis/schema.js";
 import { HewError, stateError } from "../errors.js";
-import { WORK_CODES, type WorkCode } from "../findings/schema.js";
+import { ANALYSIS_WORK_CODES, type WorkCode } from "../findings/schema.js";
 import { readJsonFile } from "../fsx.js";
 import { hashJson } from "../hash.js";
 import { runPaths } from "../paths.js";
 import { ScenarioItemsSchema, type ScenarioItems } from "../scenarios/schema.js";
 import type { DocLocator, Unit } from "../units/types.js";
 
+/** W2·W3 질문 끝에 덧붙이는, 이미 차이·질문으로 올라간 어긋남은 지적하지 않는다는 안내. */
+const LINKED_NOTE = "원문과의 어긋남이 `linked` 의 차이나 질문으로 이미 올라가 있으면 그것은 사람이 정할 일이므로 지적하지 않는다. `linked` 에 없는 어긋남만 지적한다.";
+
 /** 종류마다 사수가 답할 한 문장. */
 export const CODE_QUESTIONS: Record<WorkCode, string> = {
-  W2: "변경 항목 각각이 근거로 든 원문으로 뒷받침되는가. 원문보다 넓거나 다르게 적은 것이 있는가",
-  W3: "이 원문 단위가 말하는 것이 빠짐없이 요구에 있는가. 범위 장부의 처리(범위 밖, 앱 작업 아님, 배경)가 맞는가",
+  W2: `변경 항목 각각이 근거로 든 원문으로 뒷받침되는가. 원문보다 넓거나 다르게 적은 것이 있는가. ${LINKED_NOTE}`,
+  W3: `이 원문 단위가 말하는 것이 빠짐없이 요구에 있는가. 범위 장부의 처리(범위 밖, 앱 작업 아님, 배경)가 맞는가. ${LINKED_NOTE}`,
   W4: "원문에 미정·조건부·논의 필요 같은 표시가 있는데 확정으로 적었는가",
   W5: "AI용 보충(ai_notes)에만 있는 동작이나 조건이 있는가",
   W6: "이 표 행의 주체가 운영자·관리자(사내 어드민 작업자)인가",
   W7: "이 변형과 그 화면 전체에 걸린 변경 항목 어디에도 없는 눈에 보이는 차이(아이콘·그래픽·컴포넌트 교체, 사라진 요소, 달라진 배치)가 있는가. 변형은 changes_for_variant(그 변형에 직접 걸린 변경)와 changes_for_screen(부모 화면 전체에 걸린 변경)을, 화면은 changes_for_screen 과 changes_for_variants(그 화면의 모든 변형에 걸린 변경)를 함께 본다",
   W8: "한 행에 놓인 PRD 와 시안이 같은 조건·같은 대상인가",
   W9: "원문에 이미 답이 있는 질문인가",
+  T1: "이 티켓이 요구와 모순되거나 요구에 없는 일을 시키는가(ticket_contradicts), 맡았다고 한 변경 항목이 본문에 빠졌는가(ticket_missing_change), 티켓만 읽은 사람이 무엇을 해야 하는지 알 수 있는가(ticket_missing_context)",
 };
 
 /** 직전 지적과 테크니컬 매니저의 답변이 inputs.previous 에 실렸을 때 덧붙이는 질문. */
 export const PREVIOUS_QUESTION =
   "직전 지적과 테크니컬 매니저의 답변이 previous 에 있으면, 답변을 읽고 지적이 풀렸는지 다시 판정한다. 답변이 근거를 들어 반박했고 그 근거가 맞으면 ok 다";
 
-/** 직전 회차의 지적과 그에 대한 테크니컬 매니저의 답변. */
+/** 티켓 사수용: 직전 지적과 티켓 메이커의 답변이 inputs.previous 에 실렸을 때 덧붙이는 질문. */
+export const PREVIOUS_QUESTION_PLAN =
+  "직전 지적과 티켓 메이커의 답변이 previous 에 있으면, 답변을 읽고 지적이 풀렸는지 다시 판정한다. 답변이 근거를 들어 반박했고 그 근거가 맞으면 ok 다";
+
+/** 직전 회차의 지적과 그에 대한 테크니컬 매니저(분해안은 티켓 메이커)의 답변. */
 export interface PreviousInput {
   claim: string;
   kind: string;
@@ -110,10 +119,24 @@ function citedUnitIds(r: Requirement): string[] {
 
 const unitText = (src: Source, id: string): { id: string; text: string } => ({ id, text: src.byId.get(id)?.text ?? "" });
 
+const deltaLink = (d: Delta): Record<string, unknown> => ({ id: d.id, kind: d.kind, title: d.title, rows: d.comparison?.rows ?? [] });
+
+/** 요구에 걸린 차이·질문(분석과 시나리오 모두)·가정. */
+function requirementLinks(src: Source, id: string): Record<string, unknown> {
+  const questions = [...src.items.questions, ...(src.scenarios?.questions ?? [])];
+  return {
+    deltas: src.items.deltas.filter((d) => d.requirement_ids.includes(id)).map(deltaLink),
+    questions: questions.filter((q) => q.affects.includes(id)).map((q) => ({ id: q.id, text: q.text })),
+    assumptions: src.items.assumptions.filter((a) => a.requirement_ids.includes(id)).map((a) => ({ id: a.id, text: a.text })),
+  };
+}
+
 function w2(src: Source): WorkUnit[] {
   return src.items.requirements.map((r) =>
     make("W2", r.id, {
       title: r.title,
+      status: r.status,
+      linked: requirementLinks(src, r.id),
       changes: r.changes.map((c) => ({
         text: c.text,
         screen_id: c.screen_id,
@@ -137,6 +160,13 @@ function w3(src: Source): WorkUnit[] {
         actor: u.actor,
         coverage: rows.map((row) => ({ id: row.id, disposition: row.disposition, reason: row.reason, quote: row.quote })),
         requirements: reqs.map((r) => ({ id: r.id, title: r.title, changes: r.changes.map((c) => c.text) })),
+        linked: {
+          deltas: src.items.deltas.filter((d) => [...d.prd_evidence, ...d.figma_evidence].some((ev) => ev.unit_id === u.id)).map(deltaLink),
+          questions: [...src.items.questions, ...(src.scenarios?.questions ?? [])]
+            .filter((q) => q.rationale.some((ev) => ev.unit_id === u.id))
+            .map((q) => ({ id: q.id, text: q.text })),
+          requirements: reqs.map((r) => ({ id: r.id, status: r.status })),
+        },
       }),
     );
   }
@@ -248,7 +278,8 @@ function w9(src: Source): WorkUnit[] {
   });
 }
 
-function make(code: WorkCode, target: string, inputs: Record<string, unknown>): WorkUnit {
+/** 작업 단위 하나를 만든다. id 는 `<code>:<target>`, hash 는 inputs 로 계산한다. */
+export function make(code: WorkCode, target: string, inputs: Record<string, unknown>): WorkUnit {
   const clean = JSON.parse(JSON.stringify(inputs)) as Record<string, unknown>;
   return { id: `${code}:${target}`, code, target, question: CODE_QUESTIONS[code], inputs: clean, hash: hashJson(clean) };
 }
@@ -258,10 +289,10 @@ export function withPrevious(unit: WorkUnit, previous: PreviousInput): WorkUnit 
   return { ...unit, inputs: { ...unit.inputs, previous: JSON.parse(JSON.stringify(previous)) as PreviousInput } };
 }
 
-const BUILDERS: Record<WorkCode, (src: Source) => WorkUnit[]> = { W2: w2, W3: w3, W4: w4, W5: w5, W6: w6, W7: w7, W8: w8, W9: w9 };
+const BUILDERS: Record<(typeof ANALYSIS_WORK_CODES)[number], (src: Source) => WorkUnit[]> = { W2: w2, W3: w3, W4: w4, W5: w5, W6: w6, W7: w7, W8: w8, W9: w9 };
 
 /** 분석 정본·원문 단위·범위 장부·답에서 작업 단위 전체를 코드 순서(W2~W9)로 만든다. */
 export function buildWorkUnits(runDir: string): WorkUnit[] {
   const src = loadSource(runDir);
-  return WORK_CODES.flatMap((code) => BUILDERS[code](src));
+  return ANALYSIS_WORK_CODES.flatMap((code) => BUILDERS[code](src));
 }

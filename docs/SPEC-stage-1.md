@@ -538,15 +538,17 @@ heka `hew-id-labels-korean` 을 따른다. 새 종류는 [가정]이다.
 |---|---|
 | `id` | `Tn` |
 | `title` | `[MO] {일감명} / {작업 요약}` (heka `jira-ticket-title-format`) |
-| `body` | `배경`, `작업 내용`, 필요하면 `확인 사항`·`선행 의존`, `참고` 순서(heka `jira-mo-ticket-body-format`). 코드 경로와 구현 방법은 쓰지 않는다 |
-| `requirement_ids[]`, `changes[]` | 덮는 요구와, 요구의 일부만 덮을 때 그 변경 항목 |
+| `body` | `{ background, work[], checks[], depends_note, refs[], tracker_events[{ name, when, properties[] }] }`. `배경`, `작업 내용`(글머리표, 1개 이상), 필요하면 `확인 사항`·`선행 의존`, `참고` 순서(heka `jira-mo-ticket-body-format`). 코드 경로와 구현 방법은 쓰지 않는다 |
+| `requirement_ids[]`, `changes[]` | 덮는 요구와, 요구의 일부만 덮을 때 그 변경 항목 `{ requirement_id, index }`(`index` 는 그 요구 `changes` 배열의 0부터 위치) |
 | `sp` | Story Points. 1SP 는 1시간이다 |
 | `depends_on[]` | 먼저 끝나야 하는 티켓 |
 | `pr` | 속한 PR 묶음 |
 
 PR 묶음(`prs[]`): `id`, `title`, `ticket_ids[]`, `base`(`develop` 또는 앞선 `PR-n`), `order`.
 
-그 밖: `parent`(티켓을 달 스토리 키), `feature_flag{ used, name, removal_ticket }`, `excluded[]`(보류 결정으로 빠진 항목과 사유).
+그 밖: `epic_name`(일감명, 모든 티켓 제목의 `{일감명}` 과 같다), `parent`(티켓을 달 스토리 키), `feature_flag{ used, name, removal_ticket }`, `excluded[]`(`{ kind: delta|requirement|change, ref, reason }` — 보류·구현 안 함으로 빠진 항목과 사유. `change` 의 ref 는 `요구-n#<index>`).
+
+범위 안 변경 항목의 계산: 사람이 `drop`·`hold` 로 결정한 차이의 `requirement_ids` 에 든 요구는 요구 전체를 범위 밖으로 본다. 나머지 요구의 변경 항목이 범위 안이다. 티켓이 `changes` 없이 요구를 적으면 그 요구의 변경 전부를 맡은 것이다.
 
 ### 7.2 분해 규칙
 
@@ -570,6 +572,12 @@ PR 묶음(`prs[]`): `id`, `title`, `ticket_ids[]`, `base`(`develop` 또는 앞�
 | `pr_base_order` | PR 의 base 와 순서가 티켓 의존과 어긋난다 | 거부 |
 | `flag_removal_last` | 플래그를 쓰는데 제거 티켓이 없거나 마지막이 아니다 | 거부 |
 | `sp_range` | 2~4SP 를 벗어난 티켓 | 경고 |
+| `pr_too_large` | PR 하나의 티켓 수가 `rules/plan.yaml` 의 상한을 넘었다 | 경고 |
+| `excluded_missing` | 범위 밖 요구가 `excluded` 에 없다 | 경고 |
+| `plan_ref_missing` | 없는 요구·티켓·PR 을 가리킨다 | 거부 |
+| `ticket_without_pr`, `pr_ticket_mismatch` | 티켓의 `pr` 과 PR 의 `ticket_ids` 가 맞지 않는다 | 거부 |
+| `id_format`, `id_duplicate` | 티켓·PR id 형식과 중복 | 거부 |
+| `plan_change_unaddressed` | 사람의 수정 요청이 들어와 있다(수만 알림, 반영 여부는 사람이 본다) | 정보 |
 | `requirement_dependency_broken` | 요구의 의존 순서가 티켓 순서에서 뒤집혔다 | 거부 |
 
 ### 7.4 티켓 사수
@@ -579,7 +587,9 @@ PR 묶음(`prs[]`): `id`, `title`, `ticket_ids[]`, `base`(`develop` 또는 앞�
 - 티켓이 요구와 모순되거나 요구에 없는 일을 시키는가.
 - 티켓만 읽은 사람이 무엇을 해야 하는지 알 수 있는가(맥락 누락).
 
-지적 형식과 반송(상한 2회)은 §6.4 와 같다. 반송은 티켓 메이커에게 간다.
+지적 형식과 반송(상한 2회)은 §6.4 와 같다. 반송은 티켓 메이커에게 간다. 작업 단위 코드는 `T1`(id `T1:<티켓 id>`), 지적 `kind` 는 `ticket_contradicts`·`ticket_missing_change`·`ticket_missing_context`, `action` 은 `fix`·`ask` 다. 묶음은 10개 이하로 나눈다. 답변(`hew sasu respond --for plan`)의 인용 대조는 그 지적 단위의 `inputs` 텍스트로 한다.
+
+반송 상한(2회)을 채우고도 남은 차단 지적은 질문으로 바꾸지 않는다(분해안은 사람이 승인 단계에서 어차피 본다). `doc/findings/plan-<회차>.json` 의 그 지적에 `to_gate: true` 를 붙이고, 게이트의 승인 단계 "확인 필요" 에 "티켓 사수 지적(미해결): <claim> (대상 Tn)" 으로 싣는다. 분해안 정본의 `verdict.reasons` 에는 넣지 않는다.
 
 ---
 

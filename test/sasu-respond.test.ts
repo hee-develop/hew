@@ -120,9 +120,10 @@ describe("hew sasu respond: 검증", () => {
     expect(codes(() => respond(dir, [{ finding: fixId, response: "fixed" }, { finding: fixId, response: "asked" }]))).toEqual(["response_duplicate"]);
   });
 
-  it("--for plan 은 사용법 오류(종료 2), 파일이 없어도 종료 2", () => {
+  it("알 수 없는 --for 와 없는 파일은 종료 2, 분해안 반송 중이 아닐 때 --for plan 은 종료 4", () => {
     const { dir } = setupReturned();
-    expect(exit(() => respondToFindings({ runDir: dir, target: "plan", file: join(dir, "x.json") }))).toBe(2);
+    expect(exit(() => respondToFindings({ runDir: dir, target: "x", file: join(dir, "x.json") }))).toBe(2);
+    expect(exit(() => respondToFindings({ runDir: dir, target: "plan", file: writeItemsFile(dir, "r.json", { responses: [] }) }))).toBe(4);
     expect(exit(() => respondToFindings({ runDir: dir, target: "analysis", file: join(dir, "없는.json") }))).toBe(2);
   });
 });

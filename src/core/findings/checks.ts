@@ -39,6 +39,9 @@ export function checkBatchFindings(findings: Finding[], batch: BatchFile): Issue
         ),
       );
     }
+    if (batch.code === "T1" && f.action === "drop") {
+      out.push(issue("finding_action_mismatch", "reject", f.id, `${f.id} 의 action 'drop' 은 T1 에 맞지 않습니다(허용: fix, ask)`));
+    }
   }
   for (const [work, count] of seenWork) {
     if (count > 1) out.push(issue("finding_duplicate", "reject", work, `작업 단위 ${work} 에 판정이 ${count}개 있습니다. 하나여야 합니다`));

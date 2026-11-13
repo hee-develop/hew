@@ -8,6 +8,8 @@ export type SasuTarget = (typeof SASU_TARGETS)[number];
 
 /** 묶음 하나의 단위 수 상한. */
 export const BATCH_UNIT_LIMIT = 20;
+/** 티켓(T1) 묶음의 단위 수 상한. */
+export const BATCH_TICKET_UNIT_LIMIT = 10;
 /** W7(이미지) 묶음의 단위 수 상한. */
 export const BATCH_IMAGE_UNIT_LIMIT = 4;
 /** 묶음 하나의 inputs JSON 글자 수 합 상한. */

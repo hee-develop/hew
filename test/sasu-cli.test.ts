@@ -29,10 +29,10 @@ describe("hew sasu plan", () => {
     expect(text.stdout).toContain("이미 만들어 둔 사수 계획");
   });
 
-  it("--for plan 은 사용법 오류(종료 2), 알 수 없는 값도 종료 2", () => {
+  it("--for plan 은 분해안 차례가 아니면 종료 4, 알 수 없는 값은 종료 2", () => {
     const { dir } = setupQaDesigned();
     const run = loadRun(dir).run_id;
-    expect(hew(["--json", "sasu", "plan", "--run", run, "--for", "plan"]).status).toBe(2);
+    expect(hew(["--json", "sasu", "plan", "--run", run, "--for", "plan"]).status).toBe(4);
     expect(hew(["--json", "sasu", "plan", "--run", run, "--for", "x"]).status).toBe(2);
   });
 

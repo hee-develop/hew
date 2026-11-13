@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { readEvents } from "../src/core/events.js";
@@ -269,9 +269,9 @@ describe("사수 계획: 저장", () => {
     expect(second.plan).toEqual(first.plan);
   });
 
-  it("--for plan 은 아직 지원하지 않는다", () => {
+  it("분해안 차례가 아닌 상태에서 --for plan 은 종료 4", () => {
     const { dir } = setupQaDesigned();
-    expect(() => createPlan(dir, "plan")).toThrow(/아직 지원하지 않습니다/);
+    expect(() => createPlan(dir, "plan")).toThrow(/분해안용 사수 계획을 만들 수 없습니다/);
   });
 
   it("사수 차례가 아닌 상태에서는 종료 4", () => {
@@ -372,5 +372,56 @@ describe("사수 계획: 바뀐 것만 다시", () => {
     expect(result.completed).toMatchObject({ round: 2, state: "checked", blocking: 0 });
     expect(existsSync(join(p.findingsDir, "analysis-2.json"))).toBe(true);
     expect(loadRun(dir).state).toBe("checked");
+  });
+});
+
+describe("사수 입력: W2·W3 의 linked 와 status", () => {
+  const unitOf = (dir: string, id: string): Record<string, any> => buildWorkUnits(dir).find((u) => u.id === id)?.inputs as Record<string, any>;
+
+  it("W2 는 status 와, 요구에 걸린 차이·질문·가정을 linked 로 싣는다", () => {
+    const { dir } = setupQaDesigned();
+    const w1 = unitOf(dir, "W2:요구-1");
+    expect(w1.status).toBe("pending");
+    expect(w1.linked.deltas).toEqual([{ id: "D-2", kind: "figma_only", title: "빈 상태는 시안에만 있다", rows: [{ aspect: "빈 상태", figma: "문구 노출" }] }]);
+    expect(w1.linked.questions).toEqual([{ id: "Q-1", text: "배너를 탭하면 어디로 이동하나요" }]);
+    expect(w1.linked.assumptions).toEqual([]);
+    const w2 = unitOf(dir, "W2:요구-2");
+    expect(w2.linked.deltas.map((d: Doc) => d.id)).toEqual(["D-1"]);
+    expect(w2.linked.assumptions).toEqual([{ id: "A-1", text: "배너는 서버가 정렬해 준다" }]);
+    expect(unitOf(dir, "W2:요구-3")).toMatchObject({ status: "confirmed", linked: { deltas: [], questions: [], assumptions: [] } });
+  });
+
+  it("시나리오 질문도 affects 에 요구가 있으면 싣는다", () => {
+    const { dir } = setupQaDesigned();
+    const doc = JSON.parse(readFileSync(runPaths(dir).scenarios, "utf8"));
+    doc.items.questions[0].affects = ["요구-3"];
+    writeFileSync(runPaths(dir).scenarios, JSON.stringify(doc));
+    expect(unitOf(dir, "W2:요구-3").linked.questions.map((q: Doc) => q.id)).toEqual(["Q-3"]);
+  });
+
+  it("W3 는 그 단위를 근거로 든 차이·질문과 요구들의 status 를 linked 로 싣는다", () => {
+    const { dir } = setupQaDesigned();
+    const u4 = unitOf(dir, "W3:U-4");
+    expect(u4.linked.deltas.map((d: Doc) => d.id)).toEqual(["D-1"]);
+    expect(u4.linked.requirements).toEqual([{ id: "요구-1", status: "pending" }, { id: "요구-2", status: "pending" }]);
+    const u3 = unitOf(dir, "W3:U-3");
+    expect(u3.linked.questions).toEqual([{ id: "Q-1", text: "배너를 탭하면 어디로 이동하나요" }]);
+    expect(u3.linked.requirements).toEqual([{ id: "요구-3", status: "confirmed" }]);
+    expect(unitOf(dir, "W3:U-7").linked.deltas.map((d: Doc) => d.id)).toEqual(["D-1", "D-2"]);
+  });
+
+  it("묶음의 W2·W3 질문 끝에 linked 안내가 붙고, linked 가 바뀌면 hash 가 달라진다", () => {
+    const { dir } = setupQaDesigned();
+    const plan = planNow(dir);
+    for (const code of ["W2", "W3"]) {
+      const b = plan.batches.find((x) => x.code === code);
+      expect(readBatch(b?.path ?? "").question).toContain("`linked` 에 없는 어긋남만 지적한다.");
+    }
+    expect(readBatch(plan.batches.find((x) => x.code === "W4")?.path ?? "").question).not.toContain("linked");
+    const before = buildWorkUnits(dir).find((u) => u.id === "W2:요구-3")?.hash;
+    const doc = JSON.parse(readFileSync(runPaths(dir).analysis, "utf8"));
+    doc.items.assumptions.push({ id: "A-2", text: "새 가정", basis: "b", requirement_ids: ["요구-3"] });
+    writeFileSync(runPaths(dir).analysis, JSON.stringify(doc));
+    expect(buildWorkUnits(dir).find((u) => u.id === "W2:요구-3")?.hash).not.toBe(before);
   });
 });

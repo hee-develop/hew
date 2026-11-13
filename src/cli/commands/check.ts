@@ -8,7 +8,7 @@ import { loadRun } from "../../core/run.js";
 import { getKindSpec } from "../../core/submit.js";
 import { runAction } from "./run-action.js";
 
-const CHECK_KINDS = ["analysis", "scenarios"] as const;
+const CHECK_KINDS = ["analysis", "scenarios", "plan"] as const;
 type CheckKind = (typeof CHECK_KINDS)[number];
 
 export function register(program: Command): void {
@@ -16,7 +16,7 @@ export function register(program: Command): void {
     .command("check")
     .description("정본에 결정적 검사만 다시 돌려 지적 목록을 낸다(거부 지적이 있으면 종료 3)")
     .requiredOption("--run <폴더|id>", "실행 폴더 경로 또는 run_id")
-    .option("--only <종류>", "검사할 정본: analysis|scenarios (없으면 있는 정본을 모두)")
+    .option("--only <종류>", "검사할 정본: analysis|scenarios|plan (없으면 있는 정본을 모두)")
     .action((options: { run: string; only?: string }, command: Command) =>
       runAction(command, () => {
         if (options.only !== undefined && !(CHECK_KINDS as readonly string[]).includes(options.only)) {
@@ -25,9 +25,9 @@ export function register(program: Command): void {
         const runDir = resolveRunDir(options.run);
         const run = loadRun(runDir);
         const paths = runPaths(runDir);
-        const fileOf = (kind: CheckKind): string => (kind === "analysis" ? paths.analysis : paths.scenarios);
+        const fileOf = (kind: CheckKind): string => (kind === "analysis" ? paths.analysis : kind === "scenarios" ? paths.scenarios : paths.plan);
         const kinds: CheckKind[] = options.only !== undefined ? [options.only as CheckKind] : CHECK_KINDS.filter((k) => existsSync(fileOf(k)));
-        if (kinds.length === 0) throw stateError("검사할 정본(doc/analysis.json, doc/scenarios.json)이 없습니다. 먼저 analysis 를 제출하세요");
+        if (kinds.length === 0) throw stateError("검사할 정본(doc/analysis.json, doc/scenarios.json, doc/plan.json)이 없습니다. 먼저 analysis 를 제출하세요");
         const issues: Issue[] = [];
         for (const kind of kinds) {
           const file = fileOf(kind);

@@ -133,12 +133,10 @@ describe("실행기: 사수 단계(qa_designed -> checked)", () => {
     expect(existsSync(log) ? readdirSync(log) : []).toEqual([]);
   });
 
-  it("분해안(plan) 사수는 아직 지원하지 않는다며 멈춘다", async () => {
+  it("분해안 정본이 없는 planned 에서는 종료 4 로 멈추고 아무것도 띄우지 않는다", async () => {
     const { dir } = makeRun("planned");
     const { env, log } = fakeEnv("sasu_ok");
-    const result = await runLoop({ runDir: dir, env });
-    expect(result).toMatchObject({ outcome: "stopped", state: "planned", launches: 0 });
-    expect(result.message).toContain("아직 지원하지 않습니다");
+    await expect(runLoop({ runDir: dir, env })).rejects.toMatchObject({ exitCode: 4 });
     expect(existsSync(log) ? readdirSync(log) : []).toEqual([]);
   });
 
