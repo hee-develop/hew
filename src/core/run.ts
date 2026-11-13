@@ -26,6 +26,8 @@ export const RunSchema = z.object({
   input: z.object({ kind: z.enum(INPUT_KINDS), url: z.string().min(1) }),
   repo: z.object({ path: z.string().nullable(), base: z.string().nullable() }),
   case: z.string().nullable(),
+  /** 리플레이에서 사례 시점까지의 지식만 쓰기 위한 기준 시점(날짜 또는 ISO 시각). */
+  known_at: z.string().nullable().optional(),
   state: z.enum(RUN_STATES),
   revision: z.string(),
   rework: z.object({ analysis: z.number().int().min(0), plan: z.number().int().min(0) }),

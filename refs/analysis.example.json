@@ -1,0 +1,419 @@
+{
+  "screens": [
+    {
+      "id": "화면-1",
+      "name": "홈",
+      "figma": {
+        "file_key": "FigK",
+        "node_id": "1:2",
+        "url": "https://www.figma.com/design/FigK?node-id=1-2"
+      },
+      "images": [
+        {
+          "role": "both",
+          "path": "sources/figma/s1.png",
+          "hash": "abc"
+        }
+      ],
+      "variants": [
+        {
+          "id": "화면-1.1",
+          "name": "빈 상태",
+          "images": []
+        }
+      ],
+      "change": "changed"
+    },
+    {
+      "id": "화면-2",
+      "name": "상세",
+      "images": [
+        {
+          "role": "to_be",
+          "path": "sources/figma/s1.png"
+        }
+      ],
+      "variants": [],
+      "change": "new"
+    }
+  ],
+  "requirements": [
+    {
+      "id": "요구-1",
+      "title": "홈에 배너를 노출한다",
+      "screen_ids": [
+        "화면-1"
+      ],
+      "changes": [
+        {
+          "text": "홈 상단에 배너를 노출한다",
+          "screen_id": "화면-1",
+          "evidence": [
+            {
+              "unit_id": "U-1",
+              "quote": "배너를 노출한다"
+            }
+          ]
+        },
+        {
+          "text": "배너가 없으면 빈 상태를 보인다",
+          "screen_id": "화면-1.1",
+          "evidence": [
+            {
+              "unit_id": "U-6",
+              "image": "sources/figma/s1.png"
+            }
+          ]
+        }
+      ],
+      "status": "pending",
+      "acceptance": [
+        {
+          "id": "요구-1/AC-1",
+          "when": "홈에 진입한다",
+          "then": "배너가 보인다",
+          "verify": {
+            "method": "unit_test",
+            "detail": "test/home.test.ts"
+          }
+        }
+      ],
+      "ai": {
+        "code": [
+          {
+            "path": "app/Home.tsx",
+            "symbol": "Home",
+            "role": "reference"
+          }
+        ],
+        "verify": [
+          {
+            "ac_id": "요구-1/AC-1",
+            "detail": "test/home.test.ts 의 배너 케이스"
+          }
+        ],
+        "rules": [
+          "heka-1"
+        ],
+        "notes": [
+          {
+            "text": "배너는 최대 5개",
+            "evidence": [
+              {
+                "unit_id": "U-4",
+                "quote": "최대 5개"
+              }
+            ]
+          }
+        ]
+      },
+      "depends_on": []
+    },
+    {
+      "id": "요구-2",
+      "title": "배너는 최대 5개",
+      "screen_ids": [
+        "화면-1"
+      ],
+      "changes": [
+        {
+          "text": "6번째부터는 그리지 않는다",
+          "screen_id": "화면-1",
+          "evidence": [
+            {
+              "unit_id": "U-4",
+              "quote": "최대 5개까지"
+            }
+          ]
+        }
+      ],
+      "status": "pending",
+      "acceptance": [
+        {
+          "id": "요구-2/AC-1",
+          "given": "배너가 6개",
+          "when": "홈에 진입한다",
+          "then": "5개만 보인다",
+          "verify": {
+            "method": "visual_compare"
+          }
+        }
+      ],
+      "ai": {
+        "code": [],
+        "verify": [],
+        "rules": [],
+        "notes": []
+      },
+      "depends_on": [
+        "요구-1"
+      ]
+    },
+    {
+      "id": "요구-3",
+      "title": "원가 없는 팩은 판매가만",
+      "screen_ids": [
+        "화면-2"
+      ],
+      "changes": [
+        {
+          "text": "원가가 없으면 판매가만 그린다",
+          "screen_id": "화면-2",
+          "evidence": [
+            {
+              "unit_id": "U-3",
+              "quote": "판매가만 노출한다"
+            }
+          ]
+        }
+      ],
+      "status": "confirmed",
+      "acceptance": [
+        {
+          "id": "요구-3/AC-1",
+          "when": "원가가 없다",
+          "then": "판매가만 보인다",
+          "verify": {
+            "method": "qa_scenario"
+          }
+        }
+      ],
+      "ai": {
+        "code": [],
+        "verify": [],
+        "rules": [],
+        "notes": []
+      },
+      "depends_on": []
+    }
+  ],
+  "deltas": [
+    {
+      "id": "D-1",
+      "title": "배너 개수 상한이 다르다",
+      "kind": "mismatch",
+      "requirement_ids": [
+        "요구-2"
+      ],
+      "comparison": {
+        "prd_source": "S-1",
+        "figma_source": "S-2",
+        "rows": [
+          {
+            "aspect": "최대 개수",
+            "prd": "5개",
+            "figma": "3개"
+          }
+        ]
+      },
+      "prd_evidence": [
+        {
+          "unit_id": "U-4",
+          "quote": "최대 5개"
+        }
+      ],
+      "figma_evidence": [
+        {
+          "unit_id": "U-7",
+          "quote": "최대 5개"
+        }
+      ],
+      "audience": [
+        "po",
+        "designer"
+      ],
+      "recommendation": {
+        "decision": "follow_figma",
+        "reason": "시안이 최신"
+      }
+    },
+    {
+      "id": "D-2",
+      "title": "빈 상태는 시안에만 있다",
+      "kind": "figma_only",
+      "requirement_ids": [
+        "요구-1"
+      ],
+      "comparison": {
+        "rows": [
+          {
+            "aspect": "빈 상태",
+            "figma": "문구 노출"
+          }
+        ]
+      },
+      "prd_evidence": [],
+      "figma_evidence": [
+        {
+          "unit_id": "U-7",
+          "quote": "배너 영역"
+        }
+      ],
+      "audience": [
+        "dev"
+      ],
+      "recommendation": {
+        "decision": "follow_figma"
+      }
+    }
+  ],
+  "questions": [
+    {
+      "id": "Q-1",
+      "text": "배너를 탭하면 어디로 이동하나요",
+      "origin": "analysis",
+      "blocking": true,
+      "options": [
+        {
+          "key": "a",
+          "label": "상세",
+          "consequence": "상세 화면으로 라우팅을 추가한다"
+        },
+        {
+          "key": "b",
+          "label": "외부",
+          "consequence": "외부 링크 처리를 추가한다"
+        }
+      ],
+      "recommended": "a",
+      "rationale": [
+        {
+          "unit_id": "U-3",
+          "quote": "판매가만 노출한다"
+        }
+      ],
+      "affects": [
+        "요구-1"
+      ],
+      "audience": [
+        "po"
+      ]
+    },
+    {
+      "id": "Q-2",
+      "text": "배너 아이콘 에셋을 받을 수 있나요",
+      "origin": "impact",
+      "blocking": false,
+      "options": [
+        {
+          "key": "a",
+          "label": "받는다",
+          "consequence": "에셋을 추가한다"
+        }
+      ],
+      "rationale": [],
+      "affects": [],
+      "audience": [
+        "designer"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "A-1",
+      "text": "배너는 서버가 정렬해 준다",
+      "basis": "원문에 정렬 언급이 없어 추정",
+      "requirement_ids": [
+        "요구-2"
+      ]
+    }
+  ],
+  "coverage": [
+    {
+      "id": "C-1",
+      "unit_ids": [
+        "U-1",
+        "U-3",
+        "U-4"
+      ],
+      "disposition": "covered",
+      "requirement_ids": [
+        "요구-1",
+        "요구-2",
+        "요구-3"
+      ],
+      "screen_ids": []
+    },
+    {
+      "id": "C-2",
+      "unit_ids": [
+        "U-2"
+      ],
+      "disposition": "not_app",
+      "requirement_ids": [],
+      "screen_ids": [],
+      "reason": "운영자 어드민 입력"
+    },
+    {
+      "id": "C-3",
+      "unit_ids": [
+        "U-5",
+        "U-9"
+      ],
+      "disposition": "context",
+      "requirement_ids": [],
+      "screen_ids": []
+    },
+    {
+      "id": "C-4",
+      "unit_ids": [
+        "U-6",
+        "U-7"
+      ],
+      "disposition": "covered",
+      "requirement_ids": [],
+      "screen_ids": [
+        "화면-1"
+      ]
+    }
+  ],
+  "impact": {
+    "areas": [
+      {
+        "id": "I-1",
+        "screen_ids": [
+          "화면-1"
+        ],
+        "paths": [
+          "app/Home.tsx"
+        ],
+        "components": [
+          "BannerList"
+        ],
+        "feature_flag": "FF_BANNER"
+      }
+    ],
+    "apis": [
+      {
+        "method": "GET",
+        "path": "/v1/banners",
+        "fields": [
+          "id",
+          "image"
+        ],
+        "presence": {
+          "dev": true,
+          "prod": false
+        }
+      }
+    ],
+    "assets": [
+      {
+        "name": "banner-empty.svg",
+        "exists": false
+      }
+    ],
+    "blockers": [
+      {
+        "id": "B-1",
+        "kind": "missing_asset",
+        "detail": "빈 상태 아이콘이 저장소에 없다",
+        "question_id": "Q-2"
+      }
+    ],
+    "environment": {
+      "name": "dev",
+      "basis": "prod 에 API 가 아직 없다"
+    }
+  }
+}

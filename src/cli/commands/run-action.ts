@@ -12,3 +12,13 @@ export function runAction(command: Command, body: () => CommandResult): void {
     process.exitCode = emitFailure(json, error);
   }
 }
+
+/** 비동기 명령 본문을 실행하고 결과·오류를 출력 규약대로 내보낸다. */
+export async function runActionAsync(command: Command, body: () => Promise<CommandResult>): Promise<void> {
+  const json = isJson(command);
+  try {
+    emitSuccess(json, await body());
+  } catch (error) {
+    process.exitCode = emitFailure(json, error);
+  }
+}

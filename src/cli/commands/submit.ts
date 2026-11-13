@@ -1,6 +1,7 @@
 /** hew submit 명령 등록. */
 import { resolve } from "node:path";
 import type { Command } from "commander";
+import { producedByFromEnv } from "../../core/envelope.js";
 import { usageError } from "../../core/errors.js";
 import { resolveRunDir } from "../../core/paths.js";
 import { SUBMIT_KINDS, submitArtifact, type SubmitKind } from "../../core/submit.js";
@@ -28,6 +29,7 @@ export function register(program: Command): void {
           file: resolve(options.file),
           for: options.for,
           withdraw: options.withdraw?.split(",").map((s) => s.trim()).filter(Boolean),
+          producedBy: producedByFromEnv(),
         });
         const label = result.for ? `${result.kind}(${result.for})` : result.kind;
         return {
