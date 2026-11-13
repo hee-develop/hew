@@ -25,6 +25,8 @@ export interface CheckContext {
   for: FindingsTarget | null;
   run: Run;
   runDir: string;
+  /** 이번 제출에서 명시적으로 철회한 항목 id. */
+  withdraw?: string[];
 }
 
 /** 검증된 items 를 받아 지적 목록을 돌려주는 결정적 검사. */
@@ -33,8 +35,12 @@ export type Check = (items: Record<string, unknown>, ctx: CheckContext) => Issue
 export interface KindSpec {
   schema: z.ZodType<Record<string, unknown>>;
   checks: Check[];
-  /** 본문에서 아직 닫히지 않은 항목 id 를 뽑는다. */
-  collectOpen: (items: Record<string, unknown>) => string[];
+  /** 본문과 실행 폴더(사람의 답)에서 아직 닫히지 않은 항목 id 를 뽑는다. */
+  collectOpen: (items: Record<string, unknown>, runDir: string) => string[];
+  /** 스키마 검증 전에 제출 원문을 손질하고(칸 버리기 등) 경고를 낸다. */
+  sanitize?: (raw: unknown) => { raw: unknown; issues: Issue[] };
+  /** 이 종류가 --withdraw 를 처리하는가. 처리하지 않으면 무시한다는 경고를 낸다. */
+  supportsWithdraw?: boolean;
 }
 
 const placeholderSpec = (): KindSpec => ({
@@ -121,7 +127,7 @@ function eventFor(kind: SubmitKind, target: FindingsTarget | null, items: Record
   return { type: "findings_complete", for: target ?? "analysis", blocking: countBlocking(items) };
 }
 
-function parseItems(text: string, spec: KindSpec): { items: Record<string, unknown> } | { issues: Issue[] } {
+function parseItems(text: string, spec: KindSpec): { items: Record<string, unknown>; notes: Issue[] } | { issues: Issue[] } {
   let raw: unknown;
   try {
     raw = JSON.parse(text);
@@ -129,7 +135,8 @@ function parseItems(text: string, spec: KindSpec): { items: Record<string, unkno
     const detail = error instanceof Error ? error.message : String(error);
     return { issues: [{ code: "json_parse", severity: "reject", ref: null, message: `JSON 으로 읽을 수 없습니다: ${detail}` }] };
   }
-  const parsed = spec.schema.safeParse(raw);
+  const sanitized = spec.sanitize ? spec.sanitize(raw) : { raw, issues: [] };
+  const parsed = spec.schema.safeParse(sanitized.raw);
   if (!parsed.success) {
     const issues: Issue[] = parsed.error.issues.map((issue) => ({
       code: "schema_invalid",
@@ -139,7 +146,7 @@ function parseItems(text: string, spec: KindSpec): { items: Record<string, unkno
     }));
     return { issues };
   }
-  return { items: parsed.data };
+  return { items: parsed.data, notes: sanitized.issues };
 }
 
 /** 제출 흐름: 상태 확인(4) → 스키마·검사(3) → 정본 쓰기 → 전이 → revision 반영 → 이벤트. */
@@ -164,7 +171,8 @@ export function submitArtifact(opts: SubmitOptions): SubmitResult {
   if ("issues" in parsed) {
     issues.push(...parsed.issues);
   } else {
-    const checkCtx: CheckContext = { kind: opts.kind, for: target, run, runDir: opts.runDir };
+    const checkCtx: CheckContext = { kind: opts.kind, for: target, run, runDir: opts.runDir, withdraw: opts.withdraw };
+    issues.push(...parsed.notes);
     for (const check of spec.checks) issues.push(...check(parsed.items, checkCtx));
   }
   const rejects = issues.filter((issue) => issue.severity === "reject");
@@ -174,14 +182,14 @@ export function submitArtifact(opts: SubmitOptions): SubmitResult {
   }
 
   const warnings: Issue[] = issues.filter((issue) => issue.severity !== "reject");
-  if (opts.withdraw !== undefined && opts.withdraw.length > 0) {
+  if (opts.withdraw !== undefined && opts.withdraw.length > 0 && spec.supportsWithdraw !== true) {
     warnings.push({ code: "withdraw_unsupported", severity: "warn", ref: null, message: "--withdraw 는 아직 지원하지 않아 무시했습니다" });
   }
 
   const items = parsed.items;
   const key: SubmissionKey = stageOf(opts.kind, target);
   const attempt = (run.submissions[key]?.attempt ?? 0) + 1;
-  const openIds = spec.collectOpen(items);
+  const openIds = spec.collectOpen(items, opts.runDir);
   const result = transition(run.state, eventFor(opts.kind, target, items, openIds.length), contextOf(run, currentRevision));
 
   const envelope = wrapEnvelope({

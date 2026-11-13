@@ -1,0 +1,43 @@
+/** hew check 명령 등록: 정본에 결정적 검사만 다시 돌린다. 아무것도 바꾸지 않는다. */
+import { existsSync } from "node:fs";
+import type { Command } from "commander";
+import { rejectedError, stateError, usageError } from "../../core/errors.js";
+import { readJsonFile } from "../../core/fsx.js";
+import { resolveRunDir, runPaths } from "../../core/paths.js";
+import { loadRun } from "../../core/run.js";
+import { getKindSpec } from "../../core/submit.js";
+import { runAction } from "./run-action.js";
+
+const CHECK_KINDS = ["analysis"] as const;
+
+export function register(program: Command): void {
+  program
+    .command("check")
+    .description("정본에 결정적 검사만 다시 돌려 지적 목록을 낸다(거부 지적이 있으면 종료 3)")
+    .requiredOption("--run <폴더|id>", "실행 폴더 경로 또는 run_id")
+    .option("--only <종류>", "검사할 정본: analysis", "analysis")
+    .action((options: { run: string; only: string }, command: Command) =>
+      runAction(command, () => {
+        if (!(CHECK_KINDS as readonly string[]).includes(options.only)) {
+          throw usageError(`--only 는 ${CHECK_KINDS.join("|")} 중 하나여야 합니다: ${options.only}`);
+        }
+        const runDir = resolveRunDir(options.run);
+        const run = loadRun(runDir);
+        const file = runPaths(runDir).analysis;
+        if (!existsSync(file)) throw stateError("정본(doc/analysis.json)이 없습니다. 먼저 analysis 를 제출하세요");
+        const items = (readJsonFile(file) as { items: Record<string, unknown> }).items;
+        const spec = getKindSpec("analysis");
+        const issues = spec.checks.flatMap((check) => check(items, { kind: "analysis", for: null, run, runDir }));
+        const rejects = issues.filter((i) => i.severity === "reject");
+        if (rejects.length > 0) {
+          throw rejectedError(`결정적 검사에서 거부 지적이 ${rejects.length}건 나왔습니다`, issues);
+        }
+        const others = issues.filter((i) => i.severity !== "reject");
+        return {
+          data: { kind: "analysis", rejects: 0, warnings: others.filter((i) => i.severity === "warn").length, issues: others },
+          warnings: others,
+          text: `결정적 검사를 통과했습니다(경고·정보 ${others.length}건)`,
+        };
+      }),
+    );
+}

@@ -74,15 +74,15 @@ describe("CLI 계약(자식 프로세스)", () => {
   });
 
   it("submit 통과는 종료 0, 상태에 맞지 않으면 종료 4", () => {
-    const { dir } = makeRun("collected", {}, "sub-1");
+    const { dir } = makeRun("analyzed", {}, "sub-1");
     const file = writeItemsFile(dir, "in.json", { a: 1 });
-    const ok = hew(["--json", "submit", "analysis", "--run", "sub-1", "--file", file]);
+    const ok = hew(["--json", "submit", "scenarios", "--run", "sub-1", "--file", file]);
     expect(ok.code).toBe(0);
-    expect(parse(ok.stdout).data).toMatchObject({ kind: "analysis", attempt: 1, previous_state: "collected", state: "analyzed" });
-    const bad = hew(["--json", "submit", "analysis", "--run", "sub-1", "--file", file]);
+    expect(parse(ok.stdout).data).toMatchObject({ kind: "scenarios", attempt: 1, previous_state: "analyzed", state: "qa_designed" });
+    const bad = hew(["--json", "submit", "scenarios", "--run", "sub-1", "--file", file]);
     expect(bad.code).toBe(4);
     expect(parse(bad.stdout).errors[0].code).toBe("state");
-    expect(loadRun(dir).state).toBe("analyzed");
+    expect(loadRun(dir).state).toBe("qa_designed");
   });
 
   it("submit 의 잘못된 JSON 은 종료 3", () => {
@@ -94,9 +94,9 @@ describe("CLI 계약(자식 프로세스)", () => {
   });
 
   it("submit --withdraw 는 경고를 낸다", () => {
-    const { dir } = makeRun("collected", {}, "sub-3");
+    const { dir } = makeRun("analyzed", {}, "sub-3");
     const file = writeItemsFile(dir, "in.json", {});
-    const r = hew(["--json", "submit", "analysis", "--run", "sub-3", "--file", file, "--withdraw", "Q-1,Q-2"]);
+    const r = hew(["--json", "submit", "scenarios", "--run", "sub-3", "--file", file, "--withdraw", "Q-1,Q-2"]);
     expect(r.code).toBe(0);
     expect(parse(r.stdout).warnings.map((w: any) => w.code)).toEqual(["withdraw_unsupported"]);
   });
