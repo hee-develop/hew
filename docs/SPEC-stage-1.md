@@ -80,6 +80,7 @@ doc/                  검증을 통과한 정본
   analysis.json  scenarios.json  plan.json
   findings/<단계>-<회차>.json
   answers.json        게이트에서 들여온 답·결정
+eval/                 결함 주입 실행만(§11.5): injection.json  findings.json  result.json
 gate/                 page.html  assets/  url.txt  db-export.json
 approval.json         승인 기록(잠근 revision)
 ```
@@ -679,7 +680,11 @@ PR 묶음(`prs[]`): `id`, `title`, `ticket_ids[]`, `base`(`develop` 또는 앞�
 | `hew gate import --run <폴더> --file <db 내보내기>` | 답·결정·수정 요청을 들여온다 | → `answers_complete` 등 |
 | `hew approve --run <폴더> --revision <해시>` | revision 이 같으면 잠근다 | → `approved` |
 | `hew mistake add --run <폴더> …` | 실수 기록을 덧붙인다 | 없음 |
-| `hew replay prepare\|answer\|judge`, `hew eval inject` | §11 | — |
+| `hew replay prepare\|answer\|judge` | §11 | — |
+| `hew eval inject --run <원본> --kind <종류> [--seed <n>] [--out-id <run_id>]` | 원본 실행을 새 실행 폴더로 복사하고 분석 문서에 결함 하나를 심는다(§11.5). 후보가 없으면 종료 3 | 없음(새 실행은 `qa_designed`) |
+| `hew eval inject-all --run <원본> [--per-kind <n=3>] [--seed <시작=1>]` | 종류 6개 × n 개의 주입 실행을 한꺼번에 만든다. 같은 대상이 다시 뽑히거나 후보가 없으면 건너뛴다 | 없음 |
+| `hew eval sasu --run <주입 실행> [--codes W3,W2] [--max-steps <n>]` | 주입 실행에서 사수 1회차만 돌리고 `eval/result.json` 을 쓴다. 회차 완료 처리는 하지 않는다 | 없음 |
+| `hew eval score --runs <id,…>\|--source <원본> [--out <파일>]` | `eval/result.json` 들을 모아 종류별 포착률 표를 낸다 | 없음 |
 
 - 패킷은 역할이 읽어야 할 파일 경로, 이번 일의 범위(처음인지, 반송인지, 답 반영인지), 따를 규칙 id, 제출 방법만 담는다. 앞 단계 에이전트의 추론이나 대화는 담지 않는다.
 - 따를 규칙의 본문은 코어가 패킷에 싣는다. [가정] `rules/heka.<역할>.yaml` 에 역할별 규칙 id 를 두고(출발점은 설계 §16), 코어가 heka 명령줄 도구(`node ~/heka/bin/heka.js expand <id>`)로 제목과 "적용" 절을 읽어 넣는다. 시점으로 거르지 않고 사례의 차단 heka id 만 뺀다(§11.2). [사실: 옛 hew 의 기준선 주입 훅이 이 방식으로 동작했다]
@@ -772,18 +777,25 @@ role: dev                        # dev(프롬프트를 고치며 본 사례) | h
 
 ### 11.5 결함 주입
 
-`hew eval inject` 가 통과한 정본을 복사해 결함을 심고, 사수만 다시 돌린다.
+`hew eval inject` 가 통과한 정본을 새 실행 폴더로 복사해 결함 하나를 심고, `hew eval sasu` 가 사수 1회차만 돌려 잡았는지 잰다. `hew eval inject-all` 은 종류 6개 × n 개를 한 번에 만들고, `hew eval score` 가 결과를 종류별 표로 모은다.
 
-| 주입 | 잡아야 하는 작업 단위 |
-|---|---|
-| 요구 하나를 지우고 범위 장부 행을 `context` 로 바꾼다 | W3 |
-| 변경 항목 하나를 원문과 다르게 바꾼다(숫자, 조건) | W2 |
-| 미정 표시가 있는 요구를 `confirmed` 로 바꾼다 | W4 |
-| `ai.notes` 에 사람용 문장에 없는 조건을 넣는다 | W5 |
-| 아이콘이 바뀐 화면에서 그 변경 항목을 지운다 | W7 |
-| 다른 조건의 두 문장을 한 비교 행에 놓는다 | W8 |
+| `--kind` | 변형 | 잡아야 하는 단위(`expected`) |
+|---|---|---|
+| `w3_delete` | 인용 근거가 있는 변경 항목 하나를 지운다. 후보는 그 변경의 근거 문서 단위(`table_row`·`bullet`·`paragraph`, 인용 근거의 단위가 하나뿐인 변경)를 다른 어떤 변경·`ai.notes` 도 인용하지 않는 것. 요구의 변경이 하나뿐이면 그 요구는 제외 | `W3:<그 단위 id>` |
+| `w2_alter` | 인용 근거가 있는 변경 항목 하나의 `text` 를 원문과 어긋나게 바꾼다. (a) 숫자가 있으면 첫 숫자를 `n` → `n+2`(`%`·`px` 앞 숫자 우선), (b) 없으면 '이내'↔'이후', '이전'↔'이후', '추가한다'↔'없앤다', '위'↔'아래', '보인다'↔'숨긴다' 중 처음 맞는 낱말. 둘 다 안 되면 후보가 아니다 | `W2:<요구 id>` |
+| `w4_confirm` | `pending` 요구 중 근거 단위나 같은 절의 이웃 단위(W4 단위 입력에 실리는 앞 12개)에 `미정`·`논의`·`TBD`·`확인 필요`·`명확화`·`검토 중` 이 있는 것을 `confirmed` 로 바꾸고, 그 요구를 차이·가정의 `requirement_ids` 와 질문의 `affects` 에서 뺀다(질문·차이·가정은 남긴다) | `W4:<요구 id>` |
+| `w5_ainote` | 요구 하나의 `ai.notes` 에 사람용 문장에 없는 조건 `단, <화면 이름 또는 '이 화면'>에 처음 들어온 사용자에게만 적용하고 두 번째부터는 보이지 않는다`(근거: 그 요구의 기존 인용 하나)를 넣는다 | `W5:<요구 id>` |
+| `w7_drop_visual` | AS-IS·TO-BE 이미지가 모두 있는 화면(또는 변형)에 걸린 변경 중 이미지 근거만 가진 것 하나를 지운다. 요구의 변경이 하나뿐이면 제외 | `W7:<변경의 screen_id, 없으면 요구의 대표 화면>` |
+| `w8_pair` | 짝지어진(`prd`·`figma` 모두 있는) 비교 행이 둘 이상이고 그 `figma` 칸이 서로 다른 차이에서 두 행의 `figma` 칸을 맞바꾼다 | `W8:<차이 id>` |
 
-지표는 포착률(심은 결함 중 잡은 비율)과 오탐률(결함을 심지 않은 원본에서 낸 차단 지적 중 사람이 틀렸다고 본 비율)이다. 주입 한 건에 결함 하나만 심는다.
+- 변형은 시드로 결정적이다. 후보를 id 순(숫자는 크기순)으로 늘어놓고 `seed % 개수` 번째를 고른다. 후보가 없으면 종료 3 이다.
+- 새 실행: `sources/` 전체, `doc/analysis.json`, `doc/scenarios.json`, `doc/answers.json`(있으면)만 복사한다. 모드는 `shadow`, 상태는 `qa_designed`, 반송 0, 제출 기록은 analysis·scenarios 를 attempt 1 로 둔다. `repo`·`input`·`case_info` 는 원본 그대로이고, `eval: { source_run, kind, seed }` 가 붙는다. revision·열린 항목은 다시 계산한다. 외부에 아무것도 쓰지 않는다.
+- 변형 뒤 분석 문서는 스키마를 통과해야 한다. 결정적 검사(§4.6)는 통과하지 않아도 되며, 거부 코드는 `eval/injection.json` 의 `checks_after` 에 적기만 한다.
+- `eval/injection.json`: `{ source_run, kind, seed, target, before, after, expected, candidates, checks_after }`.
+- `hew eval sasu` 는 `--codes`(없으면 `expected` 의 코드)의 단위만 계획에 넣고 묶음마다 `manager-sasu` 를 띄운다. `run.eval` 이 있는 실행은 마지막 묶음이 들어와도 회차 완료 처리(상태 전이, 질문 전환, 실수 기록)를 하지 않으므로 상태는 `qa_designed` 로 남는다. 묶음별 지적은 `eval/findings.json` 에 모으고 `eval/result.json` 에 `{ expected, caught, caught_any, other_issues, units, cost_usd, duration_ms }` 를 쓴다. `caught` 는 `expected` 단위에 차단 `issue`(근거가 묶음 본문과 맞는 것)가 있는가, `caught_any` 는 근거 없는 `issue` 까지 센 것이다.
+- `hew eval score` 의 표: 종류별 주입 수, 잡은 수, 근거 없이 잡은 수(`caught_any` 이지만 `caught` 아님), 포착률, `expected` 가 아닌 단위에 난 지적 수의 평균, 비용 합. `--out` 이면 Markdown 표로 저장한다.
+
+지표는 포착률(심은 결함 중 잡은 비율)과 오탐률(결함을 심지 않은 원본에서 낸 차단 지적 중 사람이 틀렸다고 본 비율)이다. 오탐률은 이 명령이 재지 않는다(`other_issues` 는 사람이 판정할 목록일 뿐이다). 주입 한 건에 결함 하나만 심는다.
 
 ### 11.6 완료 기준
 

@@ -113,3 +113,16 @@ export function findingsBatchDir(paths: RunPaths, target: "analysis" | "plan", r
 export function findingsBatchPath(paths: RunPaths, target: "analysis" | "plan", round: number, batch: number): string {
   return join(findingsBatchDir(paths, target, round), `batch-${batch}.json`);
 }
+
+export interface EvalPaths {
+  dir: string;
+  injection: string;
+  findings: string;
+  result: string;
+}
+
+/** 결함 주입 평가 산출물(eval/) 경로. */
+export function evalPaths(runDir: string): EvalPaths {
+  const dir = join(runDir, "eval");
+  return { dir, injection: join(dir, "injection.json"), findings: join(dir, "findings.json"), result: join(dir, "result.json") };
+}

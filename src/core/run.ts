@@ -1,6 +1,7 @@
 /** run.json 의 zod 스키마와 원자적 읽기·쓰기. */
 import { existsSync } from "node:fs";
 import { z } from "zod";
+import { EVAL_KINDS } from "./eval/kinds.js";
 import { HewError, usageError } from "./errors.js";
 import { readJsonFile, writeJsonAtomic } from "./fsx.js";
 import { runPaths } from "./paths.js";
@@ -33,6 +34,15 @@ export const CaseInfoSchema = z.object({
 
 export type CaseInfo = z.infer<typeof CaseInfoSchema>;
 
+/** 결함 주입 실행(§11.5)이 가리키는 원본 실행·주입 종류·시드. */
+export const EvalInfoSchema = z.object({
+  source_run: z.string().min(1),
+  kind: z.enum(EVAL_KINDS),
+  seed: z.number().int().min(0),
+});
+
+export type EvalInfo = z.infer<typeof EvalInfoSchema>;
+
 /** 수집 중 필수가 아니라 넘어간 일(실패한 항목, 건너뛴 링크). */
 export const CollectWarningSchema = z.object({
   code: z.string(),
@@ -52,6 +62,8 @@ export const RunSchema = z.object({
   known_at: z.string().nullable().optional(),
   /** 사례 파일에서 읽은 정보(replay). */
   case_info: CaseInfoSchema.optional(),
+  /** 결함 주입 실행이면 그 정보. 있으면 사수 회차 완료 처리를 하지 않는다. */
+  eval: EvalInfoSchema.optional(),
   /** hew source done 이 통과하면서 남긴 선택 항목 경고. */
   collect_warnings: z.array(CollectWarningSchema).optional(),
   state: z.enum(RUN_STATES),

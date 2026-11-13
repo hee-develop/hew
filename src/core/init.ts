@@ -25,7 +25,7 @@ export interface InitOptions {
   now?: Date;
 }
 
-const RUN_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
+export const RUN_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
 function validateUrl(url: string): void {
   let parsed: URL;

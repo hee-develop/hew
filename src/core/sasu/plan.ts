@@ -95,8 +95,19 @@ function assertSasuTurn(run: Run, target: SasuTarget): void {
   }
 }
 
-/** 이 회차의 계획과 묶음 파일을 만든다. 이미 있으면 그대로 돌려주고, 묶음이 0개면 곧바로 회차를 완료 처리한다. */
-export function createPlan(runDir: string, target: SasuTarget, now: Date = new Date(), producedBy: Parameters<typeof completeRound>[3] = null): PlanResult {
+export interface PlanOptions {
+  /** 지정하면 그 종류의 작업 단위만 계획에 넣는다. */
+  codes?: readonly WorkCode[];
+}
+
+/** 이 회차의 계획과 묶음 파일을 만든다. 이미 있으면 그대로 돌려주고, 묶음이 0개면 곧바로 회차를 완료 처리한다(평가 실행은 완료 처리를 하지 않는다). */
+export function createPlan(
+  runDir: string,
+  target: SasuTarget,
+  now: Date = new Date(),
+  producedBy: Parameters<typeof completeRound>[3] = null,
+  options: PlanOptions = {},
+): PlanResult {
   const run = loadRun(runDir);
   assertSasuTurn(run, target);
   const round = currentRound(run, target);
@@ -104,7 +115,9 @@ export function createPlan(runDir: string, target: SasuTarget, now: Date = new D
   if (existing !== null) return { plan: existing, created: false, completed: null };
 
   const previous = previousInputs(runDir, round, target);
-  const units = (target === "analysis" ? buildWorkUnits(runDir) : buildTicketUnits(runDir)).map((u) => {
+  const wanted = options.codes;
+  const built = (target === "analysis" ? buildWorkUnits(runDir) : buildTicketUnits(runDir)).filter((u) => wanted === undefined || wanted.includes(u.code));
+  const units = built.map((u) => {
     const before = previous.get(u.id);
     return before === undefined ? u : withPrevious(u, before);
   });
@@ -153,6 +166,6 @@ export function createPlan(runDir: string, target: SasuTarget, now: Date = new D
     batches: batches.length,
     path: planFile,
   }, now);
-  const completed = batches.length === 0 ? completeRound(runDir, plan, now, producedBy) : null;
+  const completed = batches.length === 0 && run.eval === undefined ? completeRound(runDir, plan, now, producedBy) : null;
   return { plan, created: true, completed };
 }

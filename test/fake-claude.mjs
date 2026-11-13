@@ -1,4 +1,5 @@
-// 테스트용 가짜 claude. FAKE_CLAUDE_MODE: submit | noop | fail_once | timeout | sasu_ok | sasu_issue_first | tm_respond | collect | by_role
+// 테스트용 가짜 claude. FAKE_CLAUDE_MODE: submit | noop | fail_once | timeout | sasu_ok | sasu_issue_first | sasu_issue_units | tm_respond | collect | by_role
+// sasu_issue_units 는 FAKE_CLAUDE_ISSUE_UNITS(쉼표로 이은 작업 단위 id)에 든 단위에만 issue 를 낸다. FAKE_CLAUDE_ISSUE_EVIDENCE=none 이면 근거를 싣지 않는다.
 // collect 는 패킷의 수집 계획대로 hew source add(--from-call 또는 --file)·fail·done 을 부른다. FAKE_CLAUDE_CALLS(JSON: { <kind>: <호출 번호> })에 없는 kind 는 두 번 실패로 남긴다.
 // tm_respond 는 반송 패킷 표의 모든 지적 id 에 response(기본 rejected)로 답한 뒤 doc 을 제출한다.
 // by_role 은 FAKE_CLAUDE_PLAN(JSON: { <역할>: [{ mode, doc?, action?, response? }, ...] })에서 그 역할의 몇 번째 호출인지에 따라 동작을 고른다.
@@ -103,16 +104,18 @@ function firstLeaf(value) {
   return null;
 }
 
-/** 묶음 파일을 읽어 모든 단위에 ok 를 내고, issueFirst 면 1번 묶음의 첫 단위에는 근거 있는 issue 를 낸다. */
-function submitSasu(issueFirst, action) {
+/** 묶음 파일을 읽어 모든 단위에 ok 를 내고, issueFirst 면 1번 묶음의 첫 단위에는 근거 있는 issue 를 낸다. issueUnits 에 든 단위는 어느 묶음에서든 issue 를 낸다. */
+function submitSasu(issueFirst, action, issueUnits = null, withEvidence = true) {
   const { packet, command, file } = readPacket();
   const batchPath = /`([^`]*batch-\d+\.json)`/.exec(packet)?.[1];
   if (!batchPath) throw new Error("패킷에 묶음 파일 경로가 없습니다");
   const batch = JSON.parse(readFileSync(batchPath, "utf8"));
   const findings = batch.units.map((u, i) => {
     const id = `F-${i + 1}`;
-    if (!(issueFirst && i === 0 && batch.batch === 1)) return { id, work: u.id, verdict: "ok" };
+    const chosen = issueUnits !== null ? issueUnits.has(u.id) : issueFirst && i === 0 && batch.batch === 1;
+    if (!chosen) return { id, work: u.id, verdict: "ok" };
     const quote = batch.code === "W7" ? null : firstLeaf(u.inputs);
+    if (!withEvidence) return { id, work: u.id, verdict: "issue", kind: KIND_BY_CODE[batch.code], claim: "가짜 사수가 낸 지적", action: action ?? "fix" };
     return {
       id,
       work: u.id,
@@ -147,6 +150,7 @@ if (behavior.mode === "timeout") {
 } else {
   if (behavior.mode === "sasu_ok") submitSasu(false);
   else if (behavior.mode === "sasu_issue_first") submitSasu(true, behavior.action);
+  else if (behavior.mode === "sasu_issue_units") submitSasu(false, behavior.action, new Set((process.env.FAKE_CLAUDE_ISSUE_UNITS ?? "").split(",").filter(Boolean)), process.env.FAKE_CLAUDE_ISSUE_EVIDENCE !== "none");
   else if (behavior.mode === "collect") collectFromPacket();
   else if (behavior.mode === "tm_respond") respondThenSubmit(behavior.response ?? "rejected", behavior.doc);
   else submitFromPacket(behavior.doc);
