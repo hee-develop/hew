@@ -43,10 +43,13 @@ roles:
   manager-sasu:
     model: claude-haiku-5-5
     isolated: true
-    allowed_tools: [Read, Bash]
+    allowed_tools: [Read, Write, Bash]
     timeout_minutes: 20
     heka: []
-    refs: []
+    refs:
+      - refs/findings-format.md
+      - refs/findings.example.json
+      - refs/sasu-batch.example.json
   ticket-sasu:
     model: claude-haiku-5-5
     isolated: true

@@ -4,7 +4,7 @@ import { HewError } from "../src/core/errors.js";
 import { readEvents } from "../src/core/events.js";
 import { findingsPath, runPaths } from "../src/core/paths.js";
 import { computeRevision } from "../src/core/revision.js";
-import { loadRun } from "../src/core/run.js";
+import { loadRun, saveRun } from "../src/core/run.js";
 import {
   countBlocking,
   getKindSpec,
@@ -94,13 +94,7 @@ describe("submit: 통과", () => {
     const { dir } = makeRun("collected");
     submitArtifact({ runDir: dir, kind: "analysis", file: writeItemsFile(dir, "a.json", { a: 1 }) });
     submitArtifact({ runDir: dir, kind: "scenarios", file: writeItemsFile(dir, "s.json", { s: 1 }) });
-    submitArtifact({
-      runDir: dir,
-      kind: "findings",
-      for: "analysis",
-      file: writeItemsFile(dir, "f.json", { findings: [{ verdict: "issue", evidence: "x" }] }),
-    });
-    expect(loadRun(dir)).toMatchObject({ state: "collected", rework: { analysis: 1, plan: 0 } });
+    saveRun(dir, { ...loadRun(dir), state: "collected", rework: { analysis: 1, plan: 0 } });
 
     const again = submitArtifact({ runDir: dir, kind: "analysis", file: writeItemsFile(dir, "a2.json", { a: 2 }) });
     expect(again.attempt).toBe(2);
@@ -108,14 +102,13 @@ describe("submit: 통과", () => {
     expect(loadRun(dir).submissions.analysis?.attempt).toBe(2);
   });
 
-  it("findings 는 doc/findings/<대상>-<회차>.json 에 쓰고 차단 지적 수로 전이한다", () => {
+  it("분석용 findings 는 submitArtifact 로 낼 수 없고 묶음 제출(--batch)을 쓰라고 알린다(종료 2)", () => {
     const { dir } = makeRun("qa_designed");
-    const clean = writeItemsFile(dir, "f.json", { findings: [{ verdict: "ok" }, { verdict: "issue" }] });
-    const result = submitArtifact({ runDir: dir, kind: "findings", for: "analysis", file: clean });
-    expect(result.state).toBe("checked");
-    expect(result.path).toBe(findingsPath(runPaths(dir), "analysis", 1));
-    expect(existsSync(result.path)).toBe(true);
-    expect(JSON.parse(readFileSync(result.path, "utf8"))).toMatchObject({ stage: "findings_analysis", schema: "hew.findings/1" });
+    const clean = writeItemsFile(dir, "f.json", { findings: [{ verdict: "ok" }] });
+    const err = fail(() => submitArtifact({ runDir: dir, kind: "findings", for: "analysis", file: clean }));
+    expect(err.exitCode).toBe(2);
+    expect(err.message).toContain("--batch");
+    expect(loadRun(dir).state).toBe("qa_designed");
   });
 
   it("분해안 findings 는 plan-<회차>.json 에 쓴다", () => {
@@ -161,25 +154,20 @@ describe("submit: 통과", () => {
     expect(result.warnings.map((w) => w.code)).toContain("withdraw_unsupported");
   });
 
-  it("answers_complete 에서 분석·시나리오·사수가 모두 끝나면 한 번에 전이한다", () => {
+  it("answers_complete 에서 분석·시나리오 재제출은 진행만 기록하고 상태는 그대로다", () => {
     const { dir } = makeRun("answers_complete");
     const a = submitArtifact({ runDir: dir, kind: "analysis", file: writeItemsFile(dir, "a.json", { a: 1 }) });
     expect(a.state).toBe("answers_complete");
     const s = submitArtifact({ runDir: dir, kind: "scenarios", file: writeItemsFile(dir, "s.json", { s: 1 }) });
     expect(s.state).toBe("answers_complete");
     expect(loadRun(dir).progress).toEqual({ analysis: true, scenarios: true, sasu: false });
-    const f = submitArtifact({ runDir: dir, kind: "findings", for: "analysis", file: writeItemsFile(dir, "f.json", { findings: [] }) });
-    expect(f.state).toBe("answers_applied");
-    expect(loadRun(dir).progress).toEqual({ analysis: false, scenarios: false, sasu: false });
   });
 
-  it("재제출에서 새 열린 항목이 생기면 checked 로 간다(collectOpen 교체)", () => {
+  it("재제출에서 새 열린 항목이 생기면 run.open 과 정본의 open 에 반영된다(collectOpen 교체)", () => {
     registerKind("analysis", { ...getKindSpec("analysis"), collectOpen: () => ["Q-9"] });
     const { dir } = makeRun("answers_complete");
     submitArtifact({ runDir: dir, kind: "analysis", file: writeItemsFile(dir, "a.json", { a: 1 }) });
     submitArtifact({ runDir: dir, kind: "scenarios", file: writeItemsFile(dir, "s.json", { s: 1 }) });
-    const f = submitArtifact({ runDir: dir, kind: "findings", for: "analysis", file: writeItemsFile(dir, "f.json", { findings: [] }) });
-    expect(f.state).toBe("checked");
     expect(loadRun(dir).open).toBe(1);
     expect(JSON.parse(readFileSync(runPaths(dir).analysis, "utf8")).open).toEqual(["Q-9"]);
   });

@@ -106,6 +106,36 @@ describe("전이 표의 각 줄", () => {
       expect(r).toMatchObject({ state: "checked", row: 10, changes: { progress: emptyProgress(), open: 2 } });
     });
 
+    it("18줄: 차단 지적이 있고 반송이 상한 미만 -> answers_complete 그대로, 반송 +1, 분석·사수 진행만 false", () => {
+      const r = transition("answers_complete", { type: "findings_complete", for: "analysis", blocking: 2 }, ctx({ progress: done, rework: { analysis: 1, plan: 1 }, open: 3 }));
+      expect(r).toEqual({
+        state: "answers_complete",
+        row: 18,
+        changes: { rework: { analysis: 2, plan: 1 }, progress: { analysis: false, scenarios: true, sasu: false }, open: 3 },
+      });
+    });
+
+    it("18줄: 반송이 0회여도 차단 1건이면 반송 1회가 된다", () => {
+      const r = transition("answers_complete", { type: "findings_complete", for: "analysis", blocking: 1 }, ctx({ progress: done }));
+      expect(r).toMatchObject({ state: "answers_complete", row: 18, changes: { rework: { analysis: 1, plan: 0 } } });
+    });
+
+    it("9줄: 차단이 있어도 반송 상한(2회)을 채웠고 열린 항목이 없으면 answers_applied", () => {
+      const r = transition("answers_complete", { type: "findings_complete", for: "analysis", blocking: 3 }, ctx({ progress: done, rework: { analysis: 2, plan: 0 } }));
+      expect(r).toMatchObject({ state: "answers_applied", row: 9, changes: { progress: emptyProgress(), open: 0 } });
+    });
+
+    it("10줄: 차단이 있고 상한을 채웠으면 열린 항목이 있으므로 checked", () => {
+      const r = transition("answers_complete", { type: "findings_complete", for: "analysis", blocking: 3 }, ctx({ progress: done, rework: { analysis: 2, plan: 0 }, open: 2 }));
+      expect(r).toMatchObject({ state: "checked", row: 10, changes: { progress: emptyProgress(), open: 2 } });
+    });
+
+    it("18줄 뒤 분석을 다시 내면 사수 재확인 차례(시나리오 진행은 유지)", () => {
+      const back = transition("answers_complete", { type: "findings_complete", for: "analysis", blocking: 1 }, ctx({ progress: done }));
+      const r = transition("answers_complete", { type: "analysis_accepted", open: 1 }, ctx({ progress: back.changes.progress ?? emptyProgress(), rework: back.changes.rework ?? { analysis: 0, plan: 0 } }));
+      expect(r.changes.progress).toEqual({ analysis: true, scenarios: true, sasu: false });
+    });
+
     it("분석을 다시 내면 사수 재확인을 다시 해야 한다", () => {
       const r = transition("answers_complete", { type: "analysis_accepted", open: 0 }, ctx({ progress: { analysis: true, scenarios: true, sasu: true } }));
       expect(r.changes.progress?.sasu).toBe(false);

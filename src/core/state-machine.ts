@@ -88,6 +88,17 @@ function transitionAnswersComplete(event: TransitionEvent, ctx: TransitionContex
     if (!progress.analysis || !progress.scenarios) {
       throw stateError("분석과 시나리오 재제출이 끝나기 전에는 사수 재확인을 받을 수 없습니다");
     }
+    if (event.blocking > 0 && ctx.rework.analysis < REWORK_LIMIT) {
+      return {
+        state: "answers_complete",
+        changes: {
+          rework: { ...ctx.rework, analysis: ctx.rework.analysis + 1 },
+          progress: { ...progress, analysis: false, sasu: false },
+          open,
+        },
+        row: 18,
+      };
+    }
     progress.sasu = true;
   } else {
     return rejectEvent("answers_complete", event);

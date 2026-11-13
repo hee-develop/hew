@@ -110,24 +110,28 @@ describe("패킷: 이번 일·읽을 것·쓰는 곳", () => {
 });
 
 describe("패킷: 반송과 답 반영", () => {
-  it("반송: 최신 findings 의 issue 만 표로 싣는다", () => {
+  it("반송: 최신 findings 의 차단 issue(fix·drop)만 표로 싣는다", () => {
     const { dir, run } = makeRun("collected", { rework: { analysis: 1, plan: 0 } });
     const p = runPaths(dir);
     const findings = (attempt: number, rows: unknown[]): void =>
       writeFileSync(join(p.findingsDir, `analysis-${attempt}.json`), JSON.stringify({ items: { findings: rows } }));
     findings(1, [{ id: "F-9", work: "W2:요구-9", verdict: "issue", claim: "옛 지적" }]);
     findings(2, [
-      { id: "F-1", work: "W2:요구-1", verdict: "issue", claim: "근거에 없는 변경|파이프" },
+      { id: "F-1", work: "W2:요구-1", verdict: "issue", kind: "unsupported", claim: "근거에 없는 변경|파이프", evidence: { unit_id: "U-4", quote: "최대 5개" }, action: "fix", blocking: true },
       { id: "F-2", work: "W3:U-4", verdict: "ok", claim: "" },
-      { id: "F-3", work: "W9:Q-1", verdict: "issue", claim: "이미 답이 있음" },
+      { id: "F-3", work: "W9:Q-1", verdict: "issue", kind: "already_answered", claim: "이미 답이 있음", action: "drop", blocking: true },
+      { id: "F-4", work: "W2:요구-2", verdict: "issue", kind: "unsupported", claim: "근거 없는 참고", action: "fix", blocking: false },
+      { id: "F-5", work: "W2:요구-3", verdict: "issue", kind: "unsupported", claim: "질문으로 바뀐 것", evidence: { quote: "x" }, action: "ask", blocking: true },
     ]);
     saveRun(dir, { ...run, submissions: { findings_analysis: { attempt: 2, at: "t", hash: "h" } } });
     const r = buildPacket({ runDir: dir, role: "technical-manager", purpose: "rework", env: env() });
     const text = read(r.path);
     expect(text).toContain(join(p.findingsDir, "analysis-2.json"));
-    expect(text).toContain("| F-1 | W2:요구-1 | 근거에 없는 변경\\|파이프 |");
-    expect(text).toContain("| F-3 | W9:Q-1 | 이미 답이 있음 |");
+    expect(text).toContain("| F-1 | W2:요구-1 | unsupported | 근거에 없는 변경\\|파이프 | U-4: 최대 5개 | fix |");
+    expect(text).toContain("| F-3 | W9:Q-1 | already_answered | 이미 답이 있음 |  | drop |");
     expect(text).not.toContain("F-2");
+    expect(text).not.toContain("F-4");
+    expect(text).not.toContain("F-5");
     expect(text).not.toContain("F-9");
   });
 
