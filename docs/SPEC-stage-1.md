@@ -109,6 +109,31 @@ approval.json         승인 기록(잠근 revision)
 - 상태는 제출·검사·들여오기 명령의 결과로만 바뀐다. 에이전트의 완료 선언은 상태를 바꾸지 않는다.
 - 어느 상태에서든 실행이 죽으면 `hew run` 을 다시 부르면 같은 상태에서 이어 간다.
 
+전이 표(구현 기준). 표에 없는 (상태, 사건) 조합은 종료 4 로 거부한다. [가정]
+
+| 지금 상태 | 사건 | 조건 | 다음 상태 | `hew next` 가 알려 주는 일 |
+|---|---|---|---|---|
+| `init` | 필수 원천이 모두 등록됨 | — | `collected` | `collector` 띄우기 |
+| `collected` | `analysis` 제출 통과 | — | `analyzed` | `technical-manager` 띄우기(처음 또는 반송) |
+| `analyzed` | `scenarios` 제출 통과 | — | `qa_designed` | `qa-designer` 띄우기 |
+| `qa_designed` | 분석용 `findings` 가 모두 들어옴 | 차단 지적 0건, 또는 반송 2회를 채움(남은 지적은 질문으로 바뀜) | `checked` | 매니저 사수 돌리기 |
+| `qa_designed` | 분석용 `findings` 가 모두 들어옴 | 차단 지적이 있고 반송이 2회 미만 | `collected`(반송 회차 +1) | 〃 |
+| `checked` | 게이트 게시됨 | — | `gate_answering` | 게이트 게시하기(답변) |
+| `gate_answering` | 답 들여옴 | 열린 항목 0 | `answers_complete` | 사람의 답 기다리기 |
+| `gate_answering` | 답 들여옴 | 열린 항목이 남음 | `gate_answering` | 〃 |
+| `answers_complete` | 답 반영 `analysis`·`scenarios` 제출 통과와 사수 재확인이 모두 끝남 | 열린 항목 0 | `answers_applied` | 답 반영으로 `technical-manager`, `qa-designer`, 사수를 차례로 |
+| `answers_complete` | 〃 | 새 질문이 생겨 열린 항목이 있음 | `checked` | 〃 |
+| `answers_applied` | `plan` 제출 통과 | — | `planned` | `ticket-maker` 띄우기 |
+| `planned` | 분해안용 `findings` 가 모두 들어옴 | 차단 지적 0건 또는 반송 2회를 채움 | `plan_checked` | 티켓 사수 돌리기 |
+| `planned` | 〃 | 차단 지적이 있고 반송이 2회 미만 | `answers_applied`(반송 회차 +1) | 〃 |
+| `plan_checked` | 게이트 게시됨 | — | `gate_plan_review` | 게이트 게시하기(승인) |
+| `gate_plan_review` | 분해안 수정 요청 들여옴 | — | `answers_applied`(반송 회차 0) | 사람의 승인 기다리기 |
+| `gate_plan_review` | 승인 요청 | revision 이 현재 값과 같고 열린 항목 0 | `approved` | 〃 |
+| `approved` | — | — | — | 끝 |
+
+- 승인 요청의 revision 이 현재 값과 다르면 종료 3 으로 거부하고 상태는 그대로다.
+- 반송 회차와 `answers_complete` 안의 진행(분석·시나리오·사수 중 어디까지 끝났는지)은 `run.json` 에 적는다.
+
 ### 1.4 에이전트 실행기
 
 코어의 `hew run` 이 상태를 보고 다음 역할을 새 세션으로 띄운다.
