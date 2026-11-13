@@ -4,11 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <style>:root{color-scheme:light}body{margin:0;font:14px system-ui,-apple-system,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
-<title>hew 1번 단계 명세</title>
+<title>hew 1번 단계 구현 명세 v0 — 입력에서 승인까지</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
 <style>
-/* 레이아웃: 설계 페이지와 같은 시각 체계. 머리 → 범례·필터 → 흐름 그림 → (넓은 화면: 고정 절 목차 + 본문 / 좁은 화면: 접힌 절 목차 → 본문) §0~§15. 표·코드는 각자 가로 스크롤. */
+/* 레이아웃: 머리 → 표기 필터 → (넓은 화면: 고정 절 목차 + 본문 / 좁은 화면: 접힌 절 목차 → 본문). 표·코드는 각자 가로 스크롤. */
 :root {
   --bg: #f3f6f7;
   --surface: #ffffff;
@@ -107,35 +107,12 @@ li > ul, li > ol { margin-top: .3em; margin-bottom: 0; }
 
 /* 범례·필터 */
 .panel { margin-top: 1.6rem; padding-block: 1rem; border-block: 1px solid var(--line); }
-.panel h2, .figh { font-size: .78rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; margin: 0 0 .7rem; }
+.panel h2 { font-size: .78rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; margin: 0 0 .7rem; }
 .filters { display: flex; flex-wrap: wrap; gap: .4rem; }
 .filters button { font: inherit; font-size: .85rem; background: var(--surface); color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: .35rem .7rem; cursor: pointer; display: inline-flex; gap: .45rem; align-items: baseline; }
 .filters button .n { font-family: var(--font-mono); font-size: .75rem; color: var(--muted); font-variant-numeric: tabular-nums; }
 .filters button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .filters button[aria-pressed="true"] .n { color: var(--on-accent); }
-
-/* 단계 표식 */
-.stg { display: inline-block; font-family: var(--font-mono); font-size: .76rem; font-weight: 500; line-height: 1; padding: .3em .5em; border: 1.5px solid var(--fg); border-radius: 3px; background: var(--surface); color: var(--fg); white-space: nowrap; text-align: center; }
-.stg.h { border-radius: 999px; background: var(--accent); border-color: var(--accent); color: var(--on-accent); padding-inline: .8em; }
-.stg.o { border-style: dashed; }
-.stg.none { visibility: hidden; }
-
-/* 흐름 그림 */
-.fig { margin: 2rem 0 0; }
-.zones { display: flex; flex-direction: column; gap: 1.5rem; }
-.zone { background: var(--zone); border: 1px solid var(--line); border-radius: 8px; padding: .9rem 1rem 1.1rem; position: relative; }
-.zone + .zone::before { content: "↓"; position: absolute; top: -1.45rem; left: 2.2rem; transform: translateX(-50%); color: var(--muted); font-size: 1.1rem; line-height: 1.2; }
-.hflow { list-style: none; margin: 0; padding: 0; display: flex; gap: 1.5rem; }
-.hflow > li { position: relative; flex: 1 1 0; min-width: 0; margin: 0; display: flex; flex-direction: column; align-items: stretch; gap: .45rem; }
-.hflow > li + li::before { content: "→"; position: absolute; left: -.75rem; top: 2.25rem; transform: translateX(-50%); color: var(--muted); font-size: 1rem; line-height: 1; }
-.hflow > li > .stg { align-self: flex-start; min-width: 3.4rem; }
-.hflow .box { background: var(--surface); border: 1px solid var(--line); border-radius: 4px; padding: .45rem .6rem; min-width: 0; flex: 1; font-size: .9rem; line-height: 1.45; overflow-wrap: anywhere; }
-.hflow .box.human { border: 2px solid var(--accent); border-radius: 18px; padding-inline: .8rem; }
-.hflow .box b { font-weight: 600; }
-.figkey { margin: .9rem 0 .6rem; font-size: .85rem; color: var(--muted); display: flex; flex-wrap: wrap; gap: .4rem 1rem; align-items: center; }
-.figkey span.k { display: inline-flex; gap: .45rem; align-items: center; }
-.figcap { margin: 1.2rem 0 0; }
-.figcap h3 { font-size: .95rem; margin: 0 0 .4rem; }
 
 /* 절 목차 */
 .toc summary { cursor: pointer; font-size: .9rem; font-weight: 600; padding: .55rem .8rem; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); list-style: none; }
@@ -165,9 +142,15 @@ tr:last-child td { border-bottom: 0; }
 td.num, th.num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
 table.codecol td:first-child { min-width: 11rem; }
 pre.code { margin: .3rem 0 1rem; padding: .8rem 1rem; background: var(--zone); border: 1px solid var(--line); border-radius: 6px; overflow-x: auto; font-family: var(--font-mono); font-size: .82rem; line-height: 1.6; white-space: pre; tab-size: 2; }
+h4 { font-size: .95rem; margin: 1.2rem 0 .5rem; font-weight: 600; }
+blockquote { margin: .3rem 0 1rem; padding: .1rem 0 .1rem 1rem; border-left: 3px solid var(--line); color: var(--muted); }
+blockquote p:last-child { margin-bottom: 0; }
+hr { border: 0; border-top: 1px solid var(--line); margin: 1.6rem 0; }
+del { opacity: .75; }
+.doc p, .doc li, .doc blockquote, .meta dd { overflow-wrap: anywhere; }
+.intro { padding-top: 1.6rem; }
+pre.code code { background: none; border: 0; padding: 0; font-size: inherit; }
 .lbl { font-size: .85rem; color: var(--muted); font-weight: 600; margin: 1rem 0 .4rem; }
-.src { padding-top: 2.2rem; font-size: .85rem; color: var(--muted); }
-.src code { color: var(--fg); }
 
 @media (min-width: 1000px) {
   .page { grid-template-columns: 15.5rem minmax(0, 1fr); column-gap: 2.5rem; grid-template-areas: ". top" "toc doc"; }
@@ -181,10 +164,6 @@ pre.code { margin: .3rem 0 1rem; padding: .8rem 1rem; background: var(--zone); b
 @media (max-width: 760px) {
   .meta { grid-template-columns: minmax(0, 1fr); gap: 0; }
   .meta dd { margin-bottom: .5rem; }
-  .hflow { flex-direction: column; gap: 1.1rem; }
-  .hflow > li { display: grid; grid-template-columns: 3.7rem minmax(0, 1fr); gap: .7rem; align-items: start; }
-  .hflow > li + li::before { content: "↓"; left: 1.85rem; top: -1.1rem; }
-  .hflow > li > .stg { margin-top: .2rem; }
 }
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; scroll-behavior: auto !important; }
@@ -198,72 +177,42 @@ pre.code { margin: .3rem 0 1rem; padding: .8rem 1rem; background: var(--zone); b
 <div class="top">
 <div class="head" id="top">
   <h1>hew 1번 단계 구현 명세 v0 — 입력에서 승인까지</h1>
-  <p>공개본에서는 사내 수치와 실제 일감의 기록을 뺐다.</p>
   <dl class="meta">
     <dt>작성</dt><dd>2026-11-14, hee-develop + Claude (Fable 5.2)</dd>
     <dt>기준 문서</dt><dd><code>docs/DESIGN.md</code>(2026-11-13, 결정 30건). 이 명세가 설계와 어긋나면 설계가 우선하고 이 명세를 고친다.</dd>
-    <dt>상태</dt><dd>초안. 사용자 검토 전이다. 구현은 검토 의견을 반영한 뒤 시작한다.</dd>
+    <dt>상태</dt><dd>초안. 2026-11-14 사용자가 &quot;선택지는 Claude 가 고르고 진행하라&quot;고 위임해, <a href="#s0-3">§0.3</a> 의 가정을 그대로 채택하고 구현을 시작했다. 위임받아 정한 것은 <code>docs/AUTO-DECISIONS-2026-11-14.md</code> 에 있고 사용자가 뒤에 고칠 수 있다.</dd>
   </dl>
   <ul class="headnotes">
+    <li>공개본에서는 사내 수치와 실제 일감의 기록을 뺐다.</li>
     <li>표기는 설계 문서와 같다. <span class="chip c-d">결정</span> 사용자가 정한 것, <span class="chip c-g">가정</span> Claude 가 두었고 확인받지 않은 것, <span class="chip c-j">제안</span>, <span class="chip c-m">미결</span>, <span class="chip c-s">사실</span>.</li>
-    <li>이 명세에서 새로 둔 큰 가정은 §0.3 에 모았다.</li>
+    <li>이 명세에서 새로 둔 큰 가정은 <a href="#s0-3">§0.3</a> 에 모았다.</li>
   </ul>
 </div>
-
 <div class="panel" id="legend">
   <h2>표기 필터</h2>
   <div class="filters" role="group" aria-label="표기 필터">
-    <button type="button" data-f="전체" aria-pressed="true">전체 <span class="n" data-n="전체">0</span></button>
-    <button type="button" data-f="결정" aria-pressed="false">결정 <span class="n" data-n="결정">0</span></button>
-    <button type="button" data-f="가정" aria-pressed="false">가정 <span class="n" data-n="가정">0</span></button>
-    <button type="button" data-f="제안" aria-pressed="false">제안 <span class="n" data-n="제안">0</span></button>
-    <button type="button" data-f="미결" aria-pressed="false">미결 <span class="n" data-n="미결">0</span></button>
-    <button type="button" data-f="사실" aria-pressed="false">사실 <span class="n" data-n="사실">0</span></button>
+    <button type="button" data-f="전체" aria-pressed="true">전체 <span class="n" data-n="전체">35</span></button>
+    <button type="button" data-f="결정" aria-pressed="false">결정 <span class="n" data-n="결정">1</span></button>
+    <button type="button" data-f="가정" aria-pressed="false">가정 <span class="n" data-n="가정">13</span></button>
+    <button type="button" data-f="제안" aria-pressed="false">제안 <span class="n" data-n="제안">1</span></button>
+    <button type="button" data-f="미결" aria-pressed="false">미결 <span class="n" data-n="미결">8</span></button>
+    <button type="button" data-f="사실" aria-pressed="false">사실 <span class="n" data-n="사실">12</span></button>
   </div>
 </div>
-
-<figure class="fig" id="flow">
-  <h2 class="figh">한눈에 보기: §0.1 의 흐름</h2>
-  <div class="zones">
-    <div class="zone">
-      <ol class="hflow">
-        <li><span class="stg o">입력</span><div class="box">PRD URL 또는 Jira 티켓 URL</div></li>
-        <li><span class="stg">[0]</span><div class="box"><b>수집</b></div></li>
-        <li><span class="stg">[1]</span><div class="box"><b>분석</b>(테크니컬 매니저)</div></li>
-        <li><span class="stg">[1]</span><div class="box"><b>QA 설계</b></div></li>
-        <li><span class="stg">[1-1]</span><div class="box"><b>매니저 사수</b></div></li>
-      </ol>
-    </div>
-    <div class="zone">
-      <ol class="hflow">
-        <li><span class="stg h">사람</span><div class="box human"><b>게이트</b>(답변)</div></li>
-        <li><span class="stg none" aria-hidden="true">·</span><div class="box"><b>답 반영</b></div></li>
-        <li><span class="stg">[2]</span><div class="box"><b>티켓 메이커</b></div></li>
-        <li><span class="stg">[2-1]</span><div class="box"><b>티켓 사수</b></div></li>
-        <li><span class="stg h">사람</span><div class="box human"><b>게이트</b>(승인)</div></li>
-        <li><span class="stg o">끝</span><div class="box"><b>잠금</b></div></li>
-      </ol>
-    </div>
-  </div>
-  <p class="figkey"><span class="k"><span class="stg h">사람</span>사람이 하는 지점(게이트 답변, 게이트 승인)</span><span class="k"><span class="stg o">입력</span>시작과 끝</span></p>
-  <div class="lbl">원문의 흐름</div>
-  <pre class="code"><code>입력 → [0] 수집 → [1] 분석(테크니컬 매니저) → [1] QA 설계 → [1-1] 매니저 사수
-     → 게이트(답변) → 답 반영 → [2] 티켓 메이커 → [2-1] 티켓 사수 → 게이트(승인) → 잠금</code></pre>
-</figure>
 </div>
 
 <nav class="toc" aria-label="절 목차">
-  <details id="tocd">
+  <details id="tocd" open>
     <summary>절 목차(§0~§15)</summary>
     <ul>
       <li><a href="#s0"><span class="sn">§0</span>범위</a></li>
       <li><a href="#s1"><span class="sn">§1</span>실행 모델</a></li>
       <li><a href="#s2"><span class="sn">§2</span>공통 틀</a></li>
       <li><a href="#s3"><span class="sn">§3</span>원천과 원문 단위</a></li>
-      <li><a href="#s4"><span class="sn">§4</span>요구사항 분석 문서</a></li>
-      <li><a href="#s5"><span class="sn">§5</span>QA 시나리오</a></li>
+      <li><a href="#s4"><span class="sn">§4</span>요구사항 분석 문서(<code>analysis</code>)</a></li>
+      <li><a href="#s5"><span class="sn">§5</span>QA 시나리오(<code>scenarios</code>)</a></li>
       <li><a href="#s6"><span class="sn">§6</span>매니저 사수</a></li>
-      <li><a href="#s7"><span class="sn">§7</span>티켓 분해안과 티켓 사수</a></li>
+      <li><a href="#s7"><span class="sn">§7</span>티켓 분해안(<code>plan</code>)과 티켓 사수</a></li>
       <li><a href="#s8"><span class="sn">§8</span>게이트</a></li>
       <li><a href="#s9"><span class="sn">§9</span>코어 명령</a></li>
       <li><a href="#s10"><span class="sn">§10</span>작은 티켓 경로</a></li>
@@ -277,14 +226,16 @@ pre.code { margin: .3rem 0 1rem; padding: .8rem 1rem; background: var(--zone); b
 </nav>
 
 <main class="doc" id="doc">
-
 <section id="s0">
   <h2><span class="sn">§0</span>범위</h2>
 
   <h3 id="s0-1"><span class="sn">§0.1</span>다루는 것</h3>
-  <p>설계 문서 §12 의 "1번 단계"다. 입력(PRD URL 또는 Jira 티켓 URL)에서 사람의 승인까지, 그리고 이 구간의 완료 기준을 재는 평가 장치다.</p>
+
+  <p>설계 문서 §12 의 &quot;1번 단계&quot;다. 입력(PRD URL 또는 Jira 티켓 URL)에서 사람의 승인까지, 그리고 이 구간의 완료 기준을 재는 평가 장치다.</p>
+
   <pre class="code"><code>입력 → [0] 수집 → [1] 분석(테크니컬 매니저) → [1] QA 설계 → [1-1] 매니저 사수
      → 게이트(답변) → 답 반영 → [2] 티켓 메이커 → [2-1] 티켓 사수 → 게이트(승인) → 잠금</code></pre>
+
   <ul>
     <li>수집, 원문 단위 열거</li>
     <li>요구사항 분석 문서, QA 시나리오, 티켓 분해안의 스키마와 결정적 검사</li>
@@ -296,48 +247,58 @@ pre.code { margin: .3rem 0 1rem; padding: .8rem 1rem; background: var(--zone); b
   </ul>
 
   <h3 id="s0-2"><span class="sn">§0.2</span>다루지 않는 것</h3>
+
   <p>Jira 쓰기 단계, 빌더, 빌더 사수, 코드 리뷰, QA 실행, PR 작성, 승인 뒤 요구 변경 처리, 종료 보고서. 다만 이 단계들이 읽을 산출물의 형식은 여기서 정한다.</p>
 
   <h3 id="s0-3"><span class="sn">§0.3</span>이 명세에서 새로 둔 가정</h3>
+
   <div class="tw">
     <table class="w4">
-      <thead><tr><th class="num">#</th><th>가정</th><th>이유</th><th>절</th></tr></thead>
+      <thead><tr><th class="num">#</th><th>가정</th><th>이유</th><th class="num">절</th></tr></thead>
       <tbody>
-        <tr><td class="num">1</td><td>수집 단계 [0] 을 분석과 분리한다. 분석 에이전트는 원천을 직접 가져오지 않고 스냅샷만 읽는다</td><td>승인 해시와 변경 감지에 고정된 원천이 필요하다. 리플레이에서 분석 에이전트의 외부 접근을 끊을 수 있다</td><td class="num">§3</td></tr>
-        <tr><td class="num">2</td><td>승인 전 단계도 코어가 <code>claude -p</code> 로 띄운다. 대화형 세션은 게이트 페이지 게시와 답 읽기만 한다</td><td>진행 주체를 하나로 둔다. 무인 세션에서 Artifact 게시가 되는지는 실측 전이다</td><td class="num">§1.4, §8.5</td></tr>
-        <tr><td class="num">3</td><td>에이전트는 산출물을 <code>hew submit</code> 으로 직접 제출하고, 검증 오류를 같은 세션에서 고친다</td><td>세션이 끝난 뒤 검증하면 오류 하나에 세션을 새로 띄워야 한다</td><td class="num">§1.5</td></tr>
-        <tr><td class="num">4</td><td>구현 언어는 TypeScript(Node), 스키마는 zod, 테스트는 vitest</td><td>옛 hew 와 같아 가져올 모듈을 그대로 쓸 수 있다</td><td class="num">§1.1</td></tr>
-        <tr><td class="num">5</td><td>인수 조건은 <code>given</code>(선택)·<code>when</code>·<code>then</code> 칸으로 쓴다</td><td>검증 가능한 형식(설계 §5.2 제안)을 구조로 강제한다</td><td class="num">§4.3</td></tr>
-        <tr><td class="num">6</td><td>AI용 문장은 자유 문장이 아니라 정해진 칸(근거 인용, 코드 위치, 검증 방법, 규칙 id)으로만 쓴다</td><td>"새 동작을 담지 못한다"를 구조로 막는다</td><td class="num">§4.3</td></tr>
-        <tr><td class="num">7</td><td>리플레이의 게이트 답은 사람이 미리 적어 둔 답안지에서 넣는다</td><td>사람 없이 여러 번 돌리기 위해서다</td><td class="num">§11.3</td></tr>
-        <tr><td class="num">8</td><td>완료 기준의 초기 수치를 제안값으로 적는다. 확정은 기준선 측정 뒤다</td><td>설계 §13 의 8</td><td class="num">§11.6</td></tr>
+        <tr><td class="num">1</td><td>수집 단계 [0] 을 분석과 분리한다. 분석 에이전트는 원천을 직접 가져오지 않고 스냅샷만 읽는다</td><td>승인 해시와 변경 감지에 고정된 원천이 필요하다. 리플레이에서 분석 에이전트의 외부 접근을 끊을 수 있다</td><td class="num"><a href="#s3">§3</a></td></tr>
+        <tr><td class="num">2</td><td>승인 전 단계도 코어가 <code>claude -p</code> 로 띄운다. 게이트는 로컬 HTML 파일이고 사람이 고른 답은 파일로 내보내 들여온다</td><td>진행 주체를 하나로 둔다. 이 계정은 요청이 없으면 Artifact 로 게시하지 않는다(2026-11-14 사용자 지시)</td><td class="num"><a href="#s1-4">§1.4</a>, <a href="#s8-5">§8.5</a></td></tr>
+        <tr><td class="num">3</td><td>에이전트는 산출물을 <code>hew submit</code> 으로 직접 제출하고, 검증 오류를 같은 세션에서 고친다</td><td>세션이 끝난 뒤 검증하면 오류 하나에 세션을 새로 띄워야 한다</td><td class="num"><a href="#s1-5">§1.5</a></td></tr>
+        <tr><td class="num">4</td><td>구현 언어는 TypeScript(Node), 스키마는 zod, 테스트는 vitest</td><td>옛 hew 와 같아 가져올 모듈을 그대로 쓸 수 있다</td><td class="num"><a href="#s1-1">§1.1</a></td></tr>
+        <tr><td class="num">5</td><td>인수 조건은 <code>given</code>(선택)·<code>when</code>·<code>then</code> 칸으로 쓴다</td><td>검증 가능한 형식(설계 §5.2 제안)을 구조로 강제한다</td><td class="num"><a href="#s4-3">§4.3</a></td></tr>
+        <tr><td class="num">6</td><td>AI용 문장은 자유 문장이 아니라 정해진 칸(근거 인용, 코드 위치, 검증 방법, 규칙 id)으로만 쓴다</td><td>&quot;새 동작을 담지 못한다&quot;를 구조로 막는다</td><td class="num"><a href="#s4-3">§4.3</a></td></tr>
+        <tr><td class="num">7</td><td>리플레이의 게이트 답은 사람이 미리 적어 둔 답안지에서 넣는다</td><td>사람 없이 여러 번 돌리기 위해서다</td><td class="num"><a href="#s11-3">§11.3</a></td></tr>
+        <tr><td class="num">8</td><td>완료 기준의 초기 수치를 제안값으로 적는다. 확정은 기준선 측정 뒤다</td><td>설계 §13 의 8</td><td class="num"><a href="#s11-6">§11.6</a></td></tr>
       </tbody>
     </table>
   </div>
+
+  <hr>
+
 </section>
 
 <section id="s1">
   <h2><span class="sn">§1</span>실행 모델</h2>
 
   <h3 id="s1-1"><span class="sn">§1.1</span>구성 요소</h3>
+
   <div class="tw">
     <table>
       <thead><tr><th>요소</th><th>위치</th><th>하는 일</th></tr></thead>
       <tbody>
         <tr><td>코어</td><td><code>src/</code>, 명령 <code>bin/hew</code></td><td>상태, 스키마 검증, 결정적 검사, 패킷 생성, 에이전트 실행, 게이트 페이지 생성, 채점</td></tr>
         <tr><td>역할 정의</td><td><code>agents/&lt;역할&gt;.md</code></td><td>역할별 지시문. 버전은 git SHA 로 기록한다</td></tr>
-        <tr><td>게이트 생성기</td><td><code>gate/</code></td><td>정본 JSON 에서 Artifact 페이지(HTML)와 올릴 이미지 목록을 만든다</td></tr>
-        <tr><td>세션 스킬</td><td><code>skills/hew-gate/</code></td><td>대화형 세션에서 게이트 페이지를 게시하고 답을 읽어 코어에 넘긴다. 다른 판단은 하지 않는다</td></tr>
+        <tr><td>게이트 생성기</td><td><code>gate/</code>, <code>src/core/gate/</code></td><td>정본 JSON 에서 브라우저로 여는 게이트 페이지(HTML 파일 하나와 이미지 폴더)를 만든다</td></tr>
+        <tr><td>훅</td><td><code>hooks/</code></td><td>역할 세션의 읽기·쓰기 범위를 지키는 훅(<code>guard.mjs</code>)과 수집한 도구 결과를 원문 그대로 받아 적는 훅(<code>record.mjs</code>)</td></tr>
+        <tr><td>형식 안내</td><td><code>refs/</code></td><td>역할이 읽는 산출물 형식 안내와, 검사를 통과하는 예시</td></tr>
         <tr><td>규칙 파일</td><td><code>rules/</code></td><td>티켓 분해·PR 묶음 규칙, 경험 점검표, 개인 습관 설정(팀으로 넓힐 때 갈아 끼울 지점)</td></tr>
       </tbody>
     </table>
   </div>
+
   <ul>
     <li>대상 저장소(mobile-app)의 경로와 base 브랜치는 실행 설정으로 받는다.</li>
   </ul>
 
   <h3 id="s1-2"><span class="sn">§1.2</span>실행 폴더</h3>
-  <p>실행 하나에 폴더 하나다. 기본 위치는 <code>~/hew-runs/&lt;run_id&gt;/</code> 이고 <code>run_id</code> 는 <code>&lt;날짜&gt;-&lt;일감 키 또는 PRD id&gt;-&lt;일련번호&gt;</code> 다. <span class="chip c-g" data-k="가정">가정</span></p>
+
+  <p class="m" data-m="가정">실행 하나에 폴더 하나다. 기본 위치는 <code>~/hew-runs/&lt;run_id&gt;/</code> 이고 <code>run_id</code> 는 <code>&lt;날짜&gt;-&lt;일감 키 또는 PRD id&gt;-&lt;일련번호&gt;</code> 다. <span class="chip c-g" data-k="가정">가정</span></p>
+
   <pre class="code"><code>run.json              상태(단계, 모드, 현재 revision, 입력)
 events.jsonl          일어난 일의 기록(덧붙이기만 한다)
 costs.jsonl           에이전트 실행별 비용·시간·모델
@@ -352,16 +313,19 @@ doc/                  검증을 통과한 정본
   analysis.json  scenarios.json  plan.json
   findings/&lt;단계&gt;-&lt;회차&gt;.json
   answers.json        게이트에서 들여온 답·결정
+eval/                 결함 주입 실행만(§11.5): injection.json  findings.json  result.json
 gate/                 page.html  assets/  url.txt  db-export.json
 approval.json         승인 기록(잠근 revision)</code></pre>
+
   <ul>
     <li>정본(<code>doc/</code>)은 코어만 쓴다. 에이전트는 <code>work/</code> 에 쓰고 <code>hew submit</code> 으로 낸다.</li>
-    <li>평가 모드의 채점표(gold)는 실행 폴더 밖에 둔다(§11.2).</li>
+    <li>평가 모드의 채점표(gold)는 실행 폴더 밖에 둔다(<a href="#s11-2">§11.2</a>).</li>
   </ul>
 
   <h3 id="s1-3"><span class="sn">§1.3</span>상태 기계</h3>
+
   <div class="tw">
-    <table class="w4">
+    <table>
       <thead><tr><th>상태</th><th>들어오는 조건</th><th>다음</th></tr></thead>
       <tbody>
         <tr><td><code>init</code></td><td><code>hew init</code></td><td>수집</td></tr>
@@ -379,80 +343,133 @@ approval.json         승인 기록(잠근 revision)</code></pre>
       </tbody>
     </table>
   </div>
+
   <ul>
     <li>수정 요청이 오면 <code>planned</code> 앞으로 돌아가 티켓 메이커를 다시 돌린다. 요구는 바뀌지 않는다.</li>
-    <li><code>gate_answering</code> 중에 답이 요구를 바꿔 새 질문이 생기면 다시 <code>gate_answering</code> 이다. 이미 답한 질문 중 근거가 바뀐 것은 "다시 답 필요"로 표시한다(heka <code>hew-superseded-79fa26</code>).</li>
+    <li><code>gate_answering</code> 중에 답이 요구를 바꿔 새 질문이 생기면 다시 <code>gate_answering</code> 이다. 이미 답한 질문 중 근거가 바뀐 것은 &quot;다시 답 필요&quot;로 표시한다(heka <code>hew-superseded-79fa26</code>).</li>
     <li>상태는 제출·검사·들여오기 명령의 결과로만 바뀐다. 에이전트의 완료 선언은 상태를 바꾸지 않는다.</li>
     <li>어느 상태에서든 실행이 죽으면 <code>hew run</code> 을 다시 부르면 같은 상태에서 이어 간다.</li>
   </ul>
 
+  <p class="m" data-m="가정">전이 표(구현 기준). 표에 없는 (상태, 사건) 조합은 종료 4 로 거부한다. <span class="chip c-g" data-k="가정">가정</span></p>
+
+  <div class="tw">
+    <table class="w4">
+      <thead><tr><th>지금 상태</th><th>사건</th><th>조건</th><th>다음 상태</th><th><code>hew next</code> 가 알려 주는 일</th></tr></thead>
+      <tbody>
+        <tr><td><code>init</code></td><td>필수 원천이 모두 등록됨</td><td>—</td><td><code>collected</code></td><td><code>collector</code> 띄우기</td></tr>
+        <tr><td><code>collected</code></td><td><code>analysis</code> 제출 통과</td><td>—</td><td><code>analyzed</code></td><td><code>technical-manager</code> 띄우기(처음 또는 반송)</td></tr>
+        <tr><td><code>analyzed</code></td><td><code>scenarios</code> 제출 통과</td><td>—</td><td><code>qa_designed</code></td><td><code>qa-designer</code> 띄우기</td></tr>
+        <tr><td><code>qa_designed</code></td><td>분석용 <code>findings</code> 가 모두 들어옴</td><td>차단 지적 0건, 또는 반송 2회를 채움(남은 지적은 질문으로 바뀜)</td><td><code>checked</code></td><td>매니저 사수 돌리기</td></tr>
+        <tr><td><code>qa_designed</code></td><td>분석용 <code>findings</code> 가 모두 들어옴</td><td>차단 지적(<code>fix</code>·<code>ask</code>·<code>drop</code> 모두)이 있고 반송이 2회 미만</td><td><code>collected</code>(반송 회차 +1)</td><td>〃</td></tr>
+        <tr><td><code>checked</code></td><td>게이트 게시됨</td><td>—</td><td><code>gate_answering</code></td><td>게이트 게시하기(답변)</td></tr>
+        <tr><td><code>gate_answering</code></td><td>답 들여옴</td><td>열린 항목 0</td><td><code>answers_complete</code></td><td>사람의 답 기다리기</td></tr>
+        <tr><td><code>gate_answering</code></td><td>답 들여옴</td><td>열린 항목이 남음</td><td><code>gate_answering</code></td><td>〃</td></tr>
+        <tr><td><code>answers_complete</code></td><td>답 반영 <code>analysis</code>·<code>scenarios</code> 제출 통과와 사수 재확인이 모두 끝남</td><td>열린 항목 0</td><td><code>answers_applied</code></td><td>답 반영으로 <code>technical-manager</code>, <code>qa-designer</code>, 사수를 차례로</td></tr>
+        <tr><td><code>answers_complete</code></td><td>〃</td><td>새 질문이 생겨 열린 항목이 있음</td><td><code>checked</code></td><td>〃</td></tr>
+        <tr><td><code>answers_complete</code></td><td>분석용 <code>findings</code> 가 모두 들어옴</td><td>차단 지적(<code>fix</code>·<code>ask</code>·<code>drop</code> 모두)이 있고 분석 반송이 2회 미만</td><td><code>answers_complete</code>(반송 회차 +1, 분석·사수 진행만 false)</td><td><code>technical-manager</code> 를 반송으로 띄우기</td></tr>
+        <tr><td><code>answers_applied</code></td><td><code>plan</code> 제출 통과</td><td>—</td><td><code>planned</code></td><td><code>ticket-maker</code> 띄우기</td></tr>
+        <tr><td><code>planned</code></td><td>분해안용 <code>findings</code> 가 모두 들어옴</td><td>차단 지적 0건 또는 반송 2회를 채움</td><td><code>plan_checked</code></td><td>티켓 사수 돌리기</td></tr>
+        <tr><td><code>planned</code></td><td>〃</td><td>차단 지적이 있고 반송이 2회 미만</td><td><code>answers_applied</code>(반송 회차 +1)</td><td>〃</td></tr>
+        <tr><td><code>plan_checked</code></td><td>게이트 게시됨</td><td>—</td><td><code>gate_plan_review</code></td><td>게이트 게시하기(승인)</td></tr>
+        <tr><td><code>gate_plan_review</code></td><td>분해안 수정 요청 들여옴</td><td>—</td><td><code>answers_applied</code>(반송 회차 0)</td><td>사람의 승인 기다리기</td></tr>
+        <tr><td><code>gate_plan_review</code></td><td>승인 요청</td><td>revision 이 현재 값과 같고 열린 항목 0</td><td><code>approved</code></td><td>〃</td></tr>
+        <tr><td><code>approved</code></td><td>—</td><td>—</td><td>—</td><td>끝</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <ul>
+    <li>승인 요청의 revision 이 현재 값과 다르면 종료 3 으로 거부하고 상태는 그대로다.</li>
+    <li>반송 회차와 <code>answers_complete</code> 안의 진행(분석·시나리오·사수 중 어디까지 끝났는지)은 <code>run.json</code> 에 적는다.</li>
+  </ul>
+
   <h3 id="s1-4"><span class="sn">§1.4</span>에이전트 실행기</h3>
+
   <p>코어의 <code>hew run</code> 이 상태를 보고 다음 역할을 새 세션으로 띄운다.</p>
-  <pre class="code"><code>claude -p "&lt;패킷 경로를 읽고 수행하라는 고정 문장&gt;" \
-  --agent &lt;역할&gt; --plugin-dir &lt;hew&gt; \
+
+  <pre class="code"><code>claude -p &quot;&lt;패킷 경로를 읽고 수행하라는 고정 문장&gt;&quot; \
+  --agent hew:&lt;역할&gt; --plugin-dir &lt;hew&gt; \
   --model &lt;모델&gt; --effort &lt;effort&gt; \
   --permission-mode dontAsk --allowedTools &lt;역할별 목록&gt; \
-  --settings &lt;실행용 설정(훅)&gt; --output-format json</code></pre>
+  --setting-sources project,local --strict-mcp-config --mcp-config '{&quot;mcpServers&quot;:{}}' \
+  --settings &lt;실행용 설정(훅)&gt; --output-format json &lt; /dev/null</code></pre>
+
   <ul>
-    <li><code>--bare</code> 는 쓰지 않는다. 구독 로그인을 읽지 않기 때문이다. <span class="chip c-s" data-k="사실">사실</span><span class="note">headless 문서 "bare mode doesn't use your subscription login"</span></li>
+    <li>수집 역할만 예외다. 연결된 커넥터(Atlassian, Figma)를 써야 하므로 <code>--setting-sources</code>·<code>--strict-mcp-config</code> 를 붙이지 않는다.</li>
+    <li class="m" data-m="사실">그 밖의 역할은 사용자 설정의 훅·플러그인·MCP 없이 뜬다. 2026-11-14 실측에서 이렇게 띄운 세션은 사용자 훅이 0번 돌고 MCP 서버가 0개였으며 로그인은 그대로 됐다. <span class="chip c-s" data-k="사실">사실</span></li>
+    <li class="m" data-m="사실">표준 입력을 닫지 않으면 세션이 입력을 3초 기다린다. <span class="chip c-s" data-k="사실">사실</span></li>
+    <li class="m" data-m="사실"><code>--bare</code> 는 쓰지 않는다. 구독 로그인을 읽지 않기 때문이다. <span class="chip c-s" data-k="사실">사실</span><span class="note">headless 문서 &quot;bare mode doesn't use your subscription login&quot;</span></li>
     <li>결과 JSON 에서 <code>total_cost_usd</code>, <code>num_turns</code>, <code>session_id</code>, 오류 여부를 <code>costs.jsonl</code> 에 남긴다.</li>
-    <li>세션이 끝나면 코어가 상태를 다시 읽는다. 기대한 제출이 없으면 그 실행은 실패다. 같은 역할을 최대 2회 더 띄우고, 그래도 없으면 실행을 멈추고 사람에게 알린다(승인 전이므로 사람이 세션에 있다). <span class="chip c-g" data-k="가정">가정</span></li>
-    <li>사용량 한도로 실패하면 리셋 시각까지 기다렸다 같은 역할을 다시 띄운다. 한도 실패를 어떻게 구분하는지는 <span class="chip c-m" data-k="미결">미결</span><span class="note">실측</span>.</li>
+    <li class="m" data-m="가정">세션이 끝나면 코어가 상태를 다시 읽는다. 기대한 제출이 없으면 그 실행은 실패다. 같은 역할을 최대 2회 더 띄우고, 그래도 없으면 실행을 멈추고 사람에게 알린다(승인 전이므로 사람이 세션에 있다). <span class="chip c-g" data-k="가정">가정</span></li>
+    <li class="m" data-m="미결">사용량 한도로 실패하면 리셋 시각까지 기다렸다 같은 역할을 다시 띄운다. 한도 실패를 어떻게 구분하는지는 <span class="chip c-m" data-k="미결">미결</span><span class="note">실측</span>.</li>
   </ul>
+
   <p>역할별 설정 [모델·effort 는 가정, 평가로 조정]</p>
+
   <div class="tw">
     <table class="w6">
       <thead><tr><th>단계</th><th>역할</th><th>모델·effort</th><th>허용 도구</th><th>읽는 것</th><th>내는 것</th></tr></thead>
       <tbody>
-        <tr><td class="num">0</td><td><code>collector</code></td><td>Sonnet 5.5 <code>medium</code></td><td>Atlassian·Figma 읽기 MCP, Bash(<code>hew source *</code>, <code>curl</code>), Read</td><td>수집 계획</td><td>원천 등록</td></tr>
-        <tr><td class="num">1</td><td><code>technical-manager</code></td><td>Opus 5.5 <code>high</code> (Fable 5.2 <code>medium</code> 과 비교, 설계 §4.5)</td><td>Read, Grep, Glob, Bash(<code>hew *</code>, 읽기 전용 <code>git</code>, <code>sips</code>), heka 읽기</td><td>원천 스냅샷, 대상 저장소</td><td><code>analysis</code></td></tr>
-        <tr><td class="num">1</td><td><code>qa-designer</code></td><td>위와 같다</td><td>Read, Grep, Glob, Bash(<code>hew *</code>), heka 읽기</td><td><code>analysis</code>, OpenAPI, 대상 저장소</td><td><code>scenarios</code></td></tr>
-        <tr><td class="num">1-1</td><td><code>manager-sasu</code></td><td>Haiku 5.5</td><td>Read, Bash(<code>hew submit findings</code>)</td><td>작업 묶음 파일 하나</td><td><code>findings</code></td></tr>
-        <tr><td class="num">2</td><td><code>ticket-maker</code></td><td>Sonnet 5.5 <code>medium</code></td><td>Read, Grep, Glob, Bash(<code>hew *</code>), heka 읽기</td><td>답이 반영된 <code>analysis</code>, 규칙 파일</td><td><code>plan</code></td></tr>
-        <tr><td class="num">2-1</td><td><code>ticket-sasu</code></td><td>Haiku 5.5</td><td>Read, Bash(<code>hew submit findings</code>)</td><td>작업 묶음 파일 하나</td><td><code>findings</code></td></tr>
+        <tr><td>0</td><td><code>collector</code></td><td>Sonnet 5.5 <code>medium</code></td><td>Atlassian·Figma 읽기 MCP, ToolSearch, Bash(<code>hew source *</code>, <code>curl</code>), Read</td><td>수집 계획</td><td>원천 등록</td></tr>
+        <tr><td>1</td><td><code>technical-manager</code></td><td>Opus 5.5 <code>high</code> (Fable 5.2 <code>medium</code> 과 비교, 설계 §4.5)</td><td>Read, Bash(<code>hew *</code>, 검색·보기 명령, 읽기 전용 <code>git</code>, <code>sips</code>)</td><td>원천 스냅샷, 대상 저장소</td><td><code>analysis</code></td></tr>
+        <tr><td>1</td><td><code>qa-designer</code></td><td>위와 같다</td><td>Read, Bash(<code>hew *</code>, 검색·보기 명령)</td><td><code>analysis</code>, OpenAPI, 대상 저장소</td><td><code>scenarios</code></td></tr>
+        <tr><td>1-1</td><td><code>manager-sasu</code></td><td>Haiku 5.5</td><td>Read, Bash(<code>hew submit findings</code>)</td><td>작업 묶음 파일 하나</td><td><code>findings</code></td></tr>
+        <tr><td>2</td><td><code>ticket-maker</code></td><td>Sonnet 5.5 <code>medium</code></td><td>Read, Bash(<code>hew *</code>, 검색·보기 명령)</td><td>답이 반영된 <code>analysis</code>, 규칙 파일</td><td><code>plan</code></td></tr>
+        <tr><td>2-1</td><td><code>ticket-sasu</code></td><td>Haiku 5.5</td><td>Read, Bash(<code>hew submit findings</code>)</td><td>작업 묶음 파일 하나</td><td><code>findings</code></td></tr>
       </tbody>
     </table>
   </div>
+
   <ul>
-    <li>분석 에이전트는 Atlassian·Slack 도구를 받지 않는다. PRD 와 관련 문서는 수집 단계가 스냅샷으로 넣어 둔 것만 읽는다(§3).</li>
-    <li>표의 "heka 읽기"는 <code>live</code> 모드에만 준다. 따를 규칙의 본문은 코어가 패킷에 실어 주므로(§9) heka 도구는 그 밖의 맥락을 찾을 때만 쓴다. <code>replay</code>·<code>shadow</code> 에서는 주지 않는다.</li>
-    <li>Figma 는 수집 단계가 화면 목록과 스크린샷을 넣어 두되, 분석 중 더 봐야 할 노드가 있으면 테크니컬 매니저가 <code>hew source request</code> 로 요청하고 수집 단계가 한 번 더 돈다. <span class="chip c-g" data-k="가정">가정</span> 분석 에이전트에 Figma 도구를 직접 주는 안은 호출 한도와 스냅샷 밖 인용 문제 때문에 택하지 않았다.</li>
-    <li>쓰기 범위는 실행용 설정의 훅(PreToolUse)이 지킨다. <code>work/&lt;실행 id&gt;/</code> 밖에 쓰는 호출과 대상 저장소를 바꾸는 명령은 거부한다.</li>
-    <li>Fable 5.2 를 <code>medium</code> 으로 쓸 때는 역할 정의에 "끝까지 진행" 문구를 넣는다(설계 §4.5).</li>
-    <li>사수 세션은 작업 하나가 작아서 세션을 띄우는 고정 비용이 더 클 수 있다. 작업 단위를 묶음으로 준다(§6.3). 묶음 크기는 <span class="chip c-m" data-k="미결">미결</span><span class="note">실측</span>.</li>
+    <li>분석 에이전트는 Atlassian·Slack 도구를 받지 않는다. PRD 와 관련 문서는 수집 단계가 스냅샷으로 넣어 둔 것만 읽는다(<a href="#s3">§3</a>).</li>
+    <li class="m" data-m="가정">역할 세션에는 heka 도구를 주지 않는다. 따를 규칙의 본문은 코어가 패킷에 실어 준다(<a href="#s9">§9</a>). 모드에 따라 달라지는 것은 코어가 읽는 시점뿐이다. <span class="chip c-g" data-k="가정">가정</span></li>
+    <li class="m" data-m="사실">이 버전(2.1.323)의 무인 세션에는 Grep·Glob 도구가 따로 없다. 검색은 Bash 의 허용 명령(<code>rg</code>, <code>grep</code>, <code>ls</code>, <code>find</code>, <code>cat</code>, <code>head</code>, <code>wc</code>, <code>jq</code>)으로 한다. <span class="chip c-s" data-k="사실">사실</span></li>
+    <li class="m" data-m="가정">Figma 는 수집 단계가 화면 목록과 스크린샷을 넣어 두되, 분석 중 더 봐야 할 노드가 있으면 테크니컬 매니저가 <code>hew source request</code> 로 요청하고 수집 단계가 한 번 더 돈다. <span class="chip c-g" data-k="가정">가정</span> 분석 에이전트에 Figma 도구를 직접 주는 안은 호출 한도와 스냅샷 밖 인용 문제 때문에 택하지 않았다.</li>
+    <li class="m" data-m="사실">읽기·쓰기 범위는 실행용 설정의 훅(PreToolUse)이 지킨다. 읽기는 실행 폴더와 대상 저장소(사본) 안으로, 쓰기는 <code>work/&lt;실행 id&gt;/</code> 안으로 제한한다. Bash 는 허용 명령만 받고, 명령에 든 경로가 범위 밖이면 거부한다. 2026-11-14 실측에서 Read 의 범위 밖 경로와 <code>..</code> 경로가 거부됐다. <span class="chip c-s" data-k="사실">사실</span></li>
+    <li>Fable 5.2 를 <code>medium</code> 으로 쓸 때는 역할 정의에 &quot;끝까지 진행&quot; 문구를 넣는다(설계 §4.5).</li>
+    <li class="m" data-m="사실">사수 세션의 고정 비용은 작다. 도구를 줄이고 사용자 설정 없이 띄운 Haiku 5.5 세션 한 번이 약 $0.001 이었다(도구 199개가 실린 기본 세션은 $0.006~0.010). <span class="chip c-s" data-k="사실">사실</span><span class="note">2026-11-14</span> 그래도 작업 단위는 묶음으로 준다(<a href="#s6-3">§6.3</a>).</li>
   </ul>
 
   <h3 id="s1-5"><span class="sn">§1.5</span>제출과 검증</h3>
+
   <ul>
     <li>에이전트는 초안을 <code>work/</code> 에 쓰고 <code>hew submit &lt;종류&gt; --file &lt;경로&gt;</code> 를 부른다.</li>
     <li>코어는 스키마, 참조 무결성, 결정적 검사를 돌린다. 거부(종료 3)면 정본은 그대로이고 오류 목록을 돌려준다. 에이전트는 같은 세션에서 고쳐 다시 낸다.</li>
-    <li>통과하면 코어가 공통 틀(§2.1)을 씌워 <code>doc/</code> 에 쓰고 이벤트를 남긴다.</li>
+    <li>통과하면 코어가 공통 틀(<a href="#s2-1">§2.1</a>)을 씌워 <code>doc/</code> 에 쓰고 이벤트를 남긴다.</li>
     <li>게이트에 한 번이라도 게시된 뒤의 재제출에서는 사람이 답했거나 결정한 항목을 에이전트가 지우지 못한다. 지우려면 <code>--withdraw &lt;id&gt;</code> 로 명시하고, 사람 입력이 있는 항목은 거부한다(heka <code>hew-submit-withdraw-2026-10-29</code>).</li>
     <li>재제출에서 같은 항목은 같은 id 를 유지한다.</li>
   </ul>
 
   <h3 id="s1-6"><span class="sn">§1.6</span>실행 모드</h3>
+
   <div class="tw">
-    <table>
+    <table class="w4">
       <thead><tr><th>모드</th><th>원천</th><th>외부 쓰기</th><th>heka</th><th>게이트</th></tr></thead>
       <tbody>
         <tr><td><code>live</code></td><td>현재 버전</td><td>승인 뒤 쓰기 단계에서만</td><td>현재</td><td>사람이 답한다</td></tr>
-        <tr><td><code>replay</code></td><td>사례 파일이 정한 과거 버전</td><td>없다</td><td>사례 시점까지만</td><td>답안지에서 넣는다(§11.3)</td></tr>
+        <tr><td><code>replay</code></td><td>사례 파일이 정한 과거 버전</td><td>없다</td><td>사례 시점까지만</td><td>답안지에서 넣는다(<a href="#s11-3">§11.3</a>)</td></tr>
         <tr><td><code>shadow</code></td><td>현재 버전</td><td>없다</td><td>현재(그 일감의 노트 제외)</td><td>답안지 또는 사람</td></tr>
       </tbody>
     </table>
   </div>
+
   <ul>
     <li>모드는 <code>run.json</code> 에 적히고 실행 중에 바뀌지 않는다.</li>
     <li><code>replay</code>·<code>shadow</code> 에서는 수집 단계를 뺀 모든 에이전트에서 Atlassian·Slack·GitHub 도구를 허용하지 않고, 게이트 결정을 heka 에 기록하지 않는다.</li>
   </ul>
+
+  <hr>
+
 </section>
 
 <section id="s2">
   <h2><span class="sn">§2</span>공통 틀</h2>
 
   <h3 id="s2-1"><span class="sn">§2.1</span>산출물 틀</h3>
+
   <p>정본 파일은 모두 같은 겉 구조를 쓴다. 에이전트가 쓰는 것은 <code>items</code> 뿐이고 나머지는 코어가 채운다.</p>
+
   <div class="tw">
     <table>
       <thead><tr><th>칸</th><th>내용</th></tr></thead>
@@ -461,7 +478,7 @@ approval.json         승인 기록(잠근 revision)</code></pre>
         <tr><td><code>run_id</code>, <code>stage</code>, <code>attempt</code></td><td>실행, 단계, 몇 번째 제출인지</td></tr>
         <tr><td><code>input_revision</code></td><td>이 산출물이 읽은 입력의 해시(원천 manifest, 앞 단계 정본, 답)</td></tr>
         <tr><td><code>produced_by</code></td><td>역할, 모델, effort, 역할 정의의 git SHA, 세션 id</td></tr>
-        <tr><td><code>items</code></td><td>단계별 본문(§4, §5, §7)</td></tr>
+        <tr><td><code>items</code></td><td>단계별 본문(<a href="#s4">§4</a>, <a href="#s5">§5</a>, <a href="#s7">§7</a>)</td></tr>
         <tr><td><code>open</code></td><td>아직 닫히지 않은 것의 id 목록(질문, 미결정 차이, 미확인 가정)</td></tr>
         <tr><td><code>verdict</code></td><td>결정적 검사와 사수 지적에서 코어가 계산한 판정(<code>pass</code>, <code>blocked</code>, 사유)</td></tr>
         <tr><td><code>cost</code></td><td>이 산출물에 든 실행들의 비용·시간 합</td></tr>
@@ -470,7 +487,9 @@ approval.json         승인 기록(잠근 revision)</code></pre>
   </div>
 
   <h3 id="s2-2"><span class="sn">§2.2</span>id 규칙</h3>
-  <p>heka <code>hew-id-labels-korean</code> 을 따른다. 새 종류는 <span class="chip c-g" data-k="가정">가정</span>이다.</p>
+
+  <p class="m" data-m="가정">heka <code>hew-id-labels-korean</code> 을 따른다. 새 종류는 <span class="chip c-g" data-k="가정">가정</span>이다.</p>
+
   <div class="tw">
     <table class="w4">
       <thead><tr><th>대상</th><th>형식</th><th>대상</th><th>형식</th></tr></thead>
@@ -486,14 +505,18 @@ approval.json         승인 기록(잠근 revision)</code></pre>
   </div>
 
   <h3 id="s2-3"><span class="sn">§2.3</span>근거 형식</h3>
-  <p>근거는 항상 "원문 단위 id + 그 단위에서 그대로 옮긴 인용"이다.</p>
-  <pre class="code"><code>{ "unit_id": "U-41", "quote": "원가가 입력되지 않은 팩은 판매가만 노출한다" }</code></pre>
+
+  <p>근거는 항상 &quot;원문 단위 id + 그 단위에서 그대로 옮긴 인용&quot;이다.</p>
+
+  <pre class="code"><code>{ &quot;unit_id&quot;: &quot;U-41&quot;, &quot;quote&quot;: &quot;원가가 입력되지 않은 팩은 판매가만 노출한다&quot; }</code></pre>
+
   <ul>
-    <li>코어는 인용이 그 단위의 본문에 실제로 있는지 대조한다(공백과 줄바꿈만 정규화).</li>
+    <li>코어는 인용이 그 단위의 본문에 실제로 있는지 대조한다. 대조 전에 양쪽에서 공백·줄바꿈과 Markdown 강조 표시(<code>**</code>, <code>__</code>, 백틱)를 지운다.</li>
     <li>시안이 근거이면 단위는 Figma 화면이나 설명 카드이고, 인용 대신 <code>image</code>(스냅샷 경로)와 필요하면 <code>box</code>(좌표)를 쓴다.</li>
   </ul>
 
   <h3 id="s2-4"><span class="sn">§2.4</span>revision</h3>
+
   <ul>
     <li>revision 은 승인 대상 전체의 해시다. 대상은 <code>analysis</code>(사람용·AI용 문장 모두), <code>scenarios</code>, <code>plan</code>, <code>answers</code>, 원천 manifest 다.</li>
     <li>계산: 키를 정렬한 JSON 의 sha256. 비용, 시각, 세션 id, 빈 값은 뺀다.</li>
@@ -501,7 +524,9 @@ approval.json         승인 기록(잠근 revision)</code></pre>
   </ul>
 
   <h3 id="s2-5"><span class="sn">§2.5</span>명령 출력과 종료 코드</h3>
+
   <p>모든 명령은 <code>--json</code> 에서 <code>{ ok, data, warnings[], errors[] }</code> 를 낸다.</p>
+
   <div class="tw">
     <table>
       <thead><tr><th class="num">코드</th><th>뜻</th></tr></thead>
@@ -515,17 +540,27 @@ approval.json         승인 기록(잠근 revision)</code></pre>
       </tbody>
     </table>
   </div>
+
+  <hr>
+
 </section>
 
 <section id="s3">
   <h2><span class="sn">§3</span>원천과 원문 단위</h2>
 
   <h3 id="s3-1"><span class="sn">§3.1</span>수집</h3>
+
   <ul>
-    <li><code>hew init</code> 이 수집 계획을 만든다. 입력이 PRD URL 이면 PRD 를, Jira 티켓 URL 이면 티켓과 그 상위 스토리·에픽에 연결된 PRD 를 필수 원천으로 둔다.</li>
-    <li><code>collector</code> 가 계획대로 가져와 <code>hew source add</code> 로 등록한다. 등록할 때 코어가 본문을 파일로 저장하고 해시를 <code>manifest.json</code> 에 적는다.</li>
-    <li>본문은 모델이 다시 적지 않는다. 모델이 옮겨 적으면 글자가 바뀌기 때문이다. 코어가 수집 세션의 기록에서 도구가 돌려준 결과를 그대로 꺼내 저장한다. <span class="chip c-s" data-k="사실">사실</span><span class="note">옛 hew 의 <code>toolcalls extract</code> 가 같은 이유로 이 방식을 썼다</span></li>
+    <li>수집 계획은 코어가 결정적으로 계산한다(<code>hew source plan --run</code>. 아무것도 바꾸지 않는다). <code>run.json</code>·<code>sources/manifest.json</code>·실패 기록(<code>sources/failures.jsonl</code>)에서 다음에 가져올 항목(<code>id</code>, <code>what</code>, <code>tool_hint</code>, <code>register</code>, <code>note</code>, <code>skip</code>)과 실패로 빠진 항목(<code>failed</code>), 막힌 일(<code>blocked</code>)을 낸다. 입력이 PRD URL 이면 PRD(페이지 id 는 URL 의 <code>pageId=</code> 또는 <code>/pages/&lt;id&gt;/</code>)를, 티켓 URL 이면 티켓을 첫 항목으로 두고, 등록된 본문에서 연결된 것(티켓의 상위 이슈 1단계, Figma 메타데이터, 캡처 대상 스크린샷, 같은 사이트의 관련 문서)이 계획에 새로 생긴다. 상한과 호스트·도구 허용 목록은 <code>rules/collect.yaml</code> 이 정한다.</li>
+    <li><code>hew init --repo</code> 가 있으면 코어가 직접 <code>git rev-parse &lt;base 또는 HEAD&gt;</code> 로 SHA 를 얻어 <code>code</code> 원천을 등록한다(사례가 base 를 정했고 <code>--base</code> 가 없으면 사례의 값. git 이 실패하면 경고만 내고 등록하지 않는다). 계획에는 <code>code</code> 가 없을 때 &quot;대상 저장소가 지정되지 않음&quot; 이 막힌 일로 나온다.</li>
+    <li><code>hew init --case</code>(replay) 는 사례 파일(<a href="#s11-1">§11.1</a> 형식과 옛 형식 <code>prd_version</code>·<code>known_at</code>·<code>blocked</code>)을 읽어 <code>run.json</code> 의 <code>case_info</code>(<code>story</code>, <code>known_at</code>, <code>prd_version</code>, <code>block.jira_keys·pr_numbers·heka_ids</code>)에 싣고 <code>known_at</code> 은 <code>run.known_at</code> 에도 넣는다. 계획은 <code>prd_version</code> 이 있으면 그 버전만 가져오라고 적는다.</li>
+    <li class="m" data-m="사실"><code>collector</code> 가 계획대로 도구를 불러 가져온다. 도구 결과는 모델이 옮겨 적지 않는다. 수집 세션의 PostToolUse 훅(<code>hooks/record.mjs</code>)이 도구 결과를 원문 그대로 <code>work/collector-&lt;n&gt;/calls/&lt;번호&gt;.payload</code> 와 <code>index.jsonl</code>(번호, 도구, 입력, 크기, 해시, 큰 결과 여부)에 받아 적는다. 응답이 &quot;결과가 커서 파일로 저장했다&quot;는 안내문이면 그 파일의 내용을 받아 적는다. <span class="chip c-s" data-k="사실">사실</span><span class="note">2026-11-14 Claude Code 2.1.323 무인 세션에서 MCP 도구의 <code>tool_response</code> 는 문자열이고 큰 결과는 안내문으로 바뀐다</span></li>
+    <li>등록: <code>hew source calls</code> 가 가장 최근 수집 작업 폴더의 호출 표(이미 등록됐는지 포함)를 보여 주고, <code>hew source add … --from-call &lt;번호&gt;</code> 가 그 payload 를 바이트 그대로 원천 파일로 복사한다(<code>--file</code> 과 둘 중 하나. 확장자는 JSON 으로 읽히면 <code>.json</code>, 아니면 <code>.md</code>. manifest 의 <code>meta</code> 에 <code>call</code>·<code>tool</code>·<code>tool_use_id</code>). Confluence 응답(<code>content.nodes[0].body</code>)과 Jira 응답(<code>fields.description</code>·<code>fields.summary</code>·<code>renderedFields.description</code>·최상위 <code>description</code>)은 원문 단위 추출이 그대로 받고, 제목·버전이 응답에 있으면 manifest 에서 비어 있을 때 채운다.</li>
+    <li>실패: <code>hew source fail --item &lt;계획 항목 id&gt; --reason</code> 가 <code>sources/failures.jsonl</code> 에 덧붙인다. 같은 항목이 2회 실패하면 계획에서 빠지고 <code>failed</code> 에 실린다.</li>
+    <li>완료: <code>hew source done</code> 은 필수 항목(입력에 따른 <code>prd</code> 또는 <code>ticket</code>, 그리고 <code>code</code>)이 없거나, PRD·티켓에 Figma 노드 링크가 있는데 <code>figma_meta</code> 가 하나도 없고 시도한 기록도 없거나, 계획에 아직 가져올 항목이 남아 있으면(<code>skip</code>·<code>failed</code> 제외) 종료 3 과 남은 항목 목록을 낸다. 필수가 아닌 항목의 2회 실패와 노드 지정 없는 Figma 링크의 건너뜀은 경고와 함께 통과시키고 <code>run.json</code> 의 <code>collect_warnings</code> 에 남긴다(manifest 에는 쓰지 않는다).</li>
+    <li>수집 세션은 실행용 설정에 PreToolUse(<code>hooks/guard.mjs</code> 의 수집 프로필: <code>HEW_GUARD_PROFILE=collector</code>)와 PostToolUse(<code>hooks/record.mjs</code>, 매처 <code>mcp__.*</code>)를 함께 건다. 수집 프로필은 <code>ToolSearch</code>, <code>rules/collect.yaml</code> 의 <code>mcp_allow</code> 에 전체 일치하는 MCP 읽기 도구, 형식이 고정된 <code>curl</code>(<code>curl -sS -L -o &lt;쓰기 뿌리 안 경로&gt; https://&lt;허용 호스트&gt;/…</code>), <code>hew source plan|calls|add|fail|done|list|request</code> 를 추가로 허용한다. 사례의 차단 Jira 키(<code>HEW_GUARD_BLOCK</code>)가 MCP 입력에 단어 경계로 들어 있으면 거부하고, replay·shadow 에서는 <code>executeRead</code> 로 검색(<code>jql</code>·<code>cql</code>)을 하지 못하게 지정한 문서·버전 조회(<code>getConfluenceContentVersion</code>, <code>listConfluenceContentVersions</code>, <code>getConfluencePage</code> 류)만 허용한다.</li>
   </ul>
+
   <div class="tw">
     <table>
       <thead><tr><th>원천</th><th>가져오는 것</th><th>필수</th></tr></thead>
@@ -539,14 +574,19 @@ approval.json         승인 기록(잠근 revision)</code></pre>
       </tbody>
     </table>
   </div>
+
   <ul>
-    <li>Figma 는 heka <code>figma-mcp-read-procedure</code> 를 따른다. 메타데이터는 파일로 받아 코어가 줄 단위 정규식으로 파싱하고, 플랫폼은 프레임 이름 접두사(<code>앱/</code>, <code>app/</code>, <code>모웹/</code>, <code>웹/</code>, <code>web/</code>)로 가르며, AS-IS·TO-BE 는 라벨 좌표로 짝짓는다. 같은 그림은 해시로 하나만 남긴다.</li>
-    <li>AS-IS 는 TO-BE 옆뿐 아니라 "제거 대상 UI" 같은 다른 섹션에서도 찾는다(heka <code>hew-gate-layout-decisions-2026-11-11</code> 의 4).</li>
+    <li>Figma 는 heka <code>figma-mcp-read-procedure</code> 를 따른다. 메타데이터는 파일로 받아 코어가 줄 단위 정규식으로 파싱하고, 플랫폼은 프레임 이름 접두사(<code>앱/</code>, <code>app/</code>, <code>모웹/</code>, <code>웹/</code>, <code>web/</code>. 구분자는 <code>/</code> 와 <code>_</code>)로 가른다. 같은 그림은 해시로 하나만 남긴다.</li>
+    <li class="m" data-m="사실">AS-IS 인지 TO-BE 인지는 메타데이터만으로 알 수 없다. 라벨(<code>asis_tobe_label</code>)은 글자가 없는 인스턴스로만 나오기 때문이다. <span class="chip c-s" data-k="사실">사실</span><span class="note">2026-11-14 APP-3008 시안의 메타데이터에서 확인</span> 그래서 코어의 화면 목록은 역할을 비워 두고, 분석 단계가 스크린샷을 보고 화면의 이미지에 역할을 적는다(<a href="#s4-2">§4.2</a>).</li>
+    <li class="m" data-m="사실">접두사가 없는 프레임은 <code>unknown</code> 으로 싣는다. 옛 분석이 화면으로 쓴 프레임 27개 중 7개가 접두사 없는 이름이었다. <span class="chip c-s" data-k="사실">사실</span> 분석 단계는 <code>unknown</code> 프레임도 범위 장부에서 처리해야 한다.</li>
+    <li>AS-IS 는 TO-BE 옆뿐 아니라 &quot;제거 대상 UI&quot; 같은 다른 섹션에서도 찾는다(heka <code>hew-gate-layout-decisions-2026-11-11</code> 의 4).</li>
     <li>수집이 끝나면 코어가 <code>sources/figma/inventory.json</code>(프레임 목록, 플랫폼, 좌표, 짝, 스크린샷 경로)을 만든다.</li>
   </ul>
 
   <h3 id="s3-2"><span class="sn">§3.2</span>원문 단위</h3>
-  <p>누락 검사를 "통째로 다시 읽기"가 아니라 "단위마다 대조"로 만들기 위해, 코어가 원천을 단위로 쪼갠다. 모델을 쓰지 않는다.</p>
+
+  <p>누락 검사를 &quot;통째로 다시 읽기&quot;가 아니라 &quot;단위마다 대조&quot;로 만들기 위해, 코어가 원천을 단위로 쪼갠다. 모델을 쓰지 않는다.</p>
+
   <div class="tw">
     <table>
       <thead><tr><th>원천</th><th>단위</th></tr></thead>
@@ -558,20 +598,28 @@ approval.json         승인 기록(잠근 revision)</code></pre>
       </tbody>
     </table>
   </div>
+
   <p>단위의 칸: <code>id</code>, <code>source_id</code>, <code>locator</code>(절 경로와 행 번호, 또는 노드 id), <code>kind</code>, <code>text</code>, <code>columns</code>(표 행일 때), <code>actor</code>(표에 주체 열이 있으면 그 값), <code>platform</code>(Figma 일 때), <code>image</code>(Figma 일 때).</p>
+
   <ul>
-    <li><code>actor</code> 가 운영자·관리자인 단위는 요구·차이·질문의 근거로 쓸 수 없다(§4.6 의 검사 <code>evidence_operator_row</code>). 예외는 작업 구분 표의 Mobile(App) 열에 명시된 요소다(heka <code>hew-scope-operator-journeys-excluded-2026-10-29</code>).</li>
+    <li><code>actor</code> 가 운영자·관리자인 단위는 요구·차이·질문의 근거로 쓸 수 없다(<a href="#s4-6">§4.6</a> 의 검사 <code>evidence_operator_row</code>). 예외는 작업 구분 표의 Mobile(App) 열에 명시된 요소다(heka <code>hew-scope-operator-journeys-excluded-2026-10-29</code>).</li>
     <li>웹·모웹 레인의 Figma 프레임은 단위로 싣되 <code>platform</code> 을 표기하고 요구를 묶지 않는다.</li>
-    <li>표의 주체 열을 코드로 알아내지 못하는 PRD 가 있을 수 있다. 그때는 <code>actor</code> 를 비우고 사수가 판정한다(§6.2 의 W6).</li>
+    <li>표의 주체 열을 코드로 알아내지 못하는 PRD 가 있을 수 있다. 그때는 <code>actor</code> 를 비우고 사수가 판정한다(<a href="#s6-2">§6.2</a> 의 W6).</li>
   </ul>
+
+  <hr>
+
 </section>
 
 <section id="s4">
   <h2><span class="sn">§4</span>요구사항 분석 문서(<code>analysis</code>)</h2>
+
   <p>화면 우선이다. Figma 앱 화면 목록을 먼저 만들고 요구를 화면 아래에 둔다(heka <code>hew-2026-10-21-figma-prd</code>). 시안이 없는 일감(작은 티켓 등)은 화면 목록을 코드의 화면으로 만든다.</p>
 
   <h3 id="s4-1"><span class="sn">§4.1</span>본문 구성</h3>
+
   <p><code>items</code> 는 아래 일곱 묶음이다.</p>
+
   <div class="tw">
     <table>
       <thead><tr><th>묶음</th><th>내용</th></tr></thead>
@@ -588,6 +636,7 @@ approval.json         승인 기록(잠근 revision)</code></pre>
   </div>
 
   <h3 id="s4-2"><span class="sn">§4.2</span>화면</h3>
+
   <div class="tw">
     <table>
       <thead><tr><th>칸</th><th>내용</th></tr></thead>
@@ -603,15 +652,16 @@ approval.json         승인 기록(잠근 revision)</code></pre>
   </div>
 
   <h3 id="s4-3"><span class="sn">§4.3</span>요구</h3>
+
   <div class="tw">
     <table>
       <thead><tr><th>칸</th><th>사람용/AI용</th><th>내용</th></tr></thead>
       <tbody>
         <tr><td><code>id</code>, <code>title</code></td><td>사람용</td><td><code>요구-n</code>, 한 줄 제목</td></tr>
-        <tr><td><code>screen_ids[]</code></td><td>사람용</td><td>첫 번째가 대표 자리. 비어 있으면 "화면에 묶이지 않은 요구"</td></tr>
+        <tr><td><code>screen_ids[]</code></td><td>사람용</td><td>첫 번째가 대표 자리. 비어 있으면 &quot;화면에 묶이지 않은 요구&quot;</td></tr>
         <tr><td><code>changes[]</code></td><td>사람용</td><td>항목 하나가 변경 하나다. <code>{ text, screen_id }</code>. 여러 화면·변형에 걸치면 항목마다 자리를 적는다</td></tr>
         <tr><td><code>status</code></td><td>사람용</td><td><code>confirmed</code>, <code>pending</code>(열린 질문·미결정 차이·미확인 가정에 걸림)</td></tr>
-        <tr><td><code>evidence[]</code></td><td>둘 다</td><td>§2.3 형식. 변경 항목마다 근거가 하나 이상 있어야 한다</td></tr>
+        <tr><td><code>evidence[]</code></td><td>둘 다</td><td><a href="#s2-3">§2.3</a> 형식. 변경 항목마다 근거가 하나 이상 있어야 한다</td></tr>
         <tr><td><code>acceptance[]</code></td><td>사람용(기본 접힘)</td><td><code>{ id, given?, when, then, verify }</code>. <code>verify.method</code> 는 <code>unit_test</code>, <code>type_check</code>, <code>qa_scenario</code>, <code>visual_compare</code>, <code>review</code> 중 하나</td></tr>
         <tr><td><code>ai</code></td><td>AI용</td><td>아래 네 칸만 있다</td></tr>
         <tr><td><code>ai.code[]</code></td><td>AI용</td><td><code>{ path, symbol?, role }</code>. <code>role</code> 은 <code>modify</code>, <code>reuse</code>, <code>reference</code></td></tr>
@@ -622,14 +672,17 @@ approval.json         승인 기록(잠근 revision)</code></pre>
       </tbody>
     </table>
   </div>
+
   <ul>
-    <li>사람이 승인하는 대상은 사람용 칸이다. AI용 칸은 새 동작·조건을 담지 못한다. <code>ai.notes</code> 의 문장이 <code>changes</code>·<code>acceptance</code> 에 없는 동작을 말하면 사수가 지적한다(§6.2 의 W5).</li>
-    <li><code>confirmed</code> 는 근거가 모두 대조를 통과했고 걸린 질문·차이·가정이 없을 때만 쓸 수 있다. 근거 없이 "별도 단계일 것"처럼 추정으로 범위를 닫지 않는다. 그런 경우는 질문으로 올린다.</li>
+    <li>사람이 승인하는 대상은 사람용 칸이다. AI용 칸은 새 동작·조건을 담지 못한다. <code>ai.notes</code> 의 문장이 <code>changes</code>·<code>acceptance</code> 에 없는 동작을 말하면 사수가 지적한다(<a href="#s6-2">§6.2</a> 의 W5).</li>
+    <li><code>confirmed</code> 는 근거가 모두 대조를 통과했고 걸린 질문·차이·가정이 없을 때만 쓸 수 있다. 근거 없이 &quot;별도 단계일 것&quot;처럼 추정으로 범위를 닫지 않는다. 그런 경우는 질문으로 올린다.</li>
     <li>숫자가 들어간 변경은 시안의 숫자를 산술로 확인한 결과를 <code>ai.notes</code> 에 남긴다(heka <code>figma-mcp-read-procedure</code> 의 7).</li>
   </ul>
 
   <h3 id="s4-4"><span class="sn">§4.4</span>차이, 질문, 가정</h3>
+
   <p>차이(<code>deltas</code>)</p>
+
   <div class="tw">
     <table>
       <thead><tr><th>칸</th><th>내용</th></tr></thead>
@@ -637,18 +690,21 @@ approval.json         승인 기록(잠근 revision)</code></pre>
         <tr><td><code>id</code>, <code>title</code>, <code>kind</code></td><td><code>D-n</code>, 제목, <code>figma_only</code>·<code>prd_only</code>·<code>mismatch</code></td></tr>
         <tr><td><code>requirement_ids[]</code></td><td>첫 번째가 대표 요구. 페이지는 대표 요구 아래 한 번만 그린다</td></tr>
         <tr><td><code>comparison</code></td><td><code>{ prd_source, figma_source, rows[{ aspect, prd, figma }] }</code>. 같은 조건·같은 대상일 때만 한 행에 두고 짝이 없으면 비운다</td></tr>
-        <tr><td><code>prd_evidence</code>, <code>figma_evidence</code></td><td>§2.3 형식의 원문 인용</td></tr>
+        <tr><td><code>prd_evidence</code>, <code>figma_evidence</code></td><td><a href="#s2-3">§2.3</a> 형식의 원문 인용</td></tr>
         <tr><td><code>audience[]</code></td><td><code>dev</code>, <code>po</code>, <code>designer</code>, <code>backend</code></td></tr>
         <tr><td><code>recommendation</code></td><td>추천 결정과 이유(선택)</td></tr>
         <tr><td><code>decision</code></td><td>사람이 채운다. <code>follow_figma</code>, <code>follow_prd</code>, <code>drop</code>, <code>hold</code>. 종류별로 허용되는 값이 다르다(heka <code>hew-2026-10-21-follow-figma</code>)</td></tr>
       </tbody>
     </table>
   </div>
+
   <ul>
     <li>차이 하나에 결정 하나다. 결정이 요구마다 달라질 수 있으면 요구 단위로 나눈다.</li>
     <li><code>hold</code> 는 승인을 막지 않지만 분해안에서 빠지고 보류 사유로 남는다. <code>drop</code> 은 범위 장부에 범위 밖으로 기록된다.</li>
   </ul>
+
   <p>질문(<code>questions</code>)</p>
+
   <div class="tw">
     <table>
       <thead><tr><th>칸</th><th>내용</th></tr></thead>
@@ -656,35 +712,41 @@ approval.json         승인 기록(잠근 revision)</code></pre>
         <tr><td><code>id</code>, <code>text</code></td><td><code>Q-n</code>, 질문</td></tr>
         <tr><td><code>origin</code></td><td><code>analysis</code>, <code>impact</code>(막힐 것), <code>qa</code>, <code>sasu</code>(사수 지적에서 넘어옴)</td></tr>
         <tr><td><code>blocking</code></td><td>답이 없으면 진행할 수 없는가</td></tr>
-        <tr><td><code>options[]</code></td><td><code>{ key, label, consequence }</code>. <code>consequence</code> 는 "이 답이 바꾸는 구현"이다</td></tr>
-        <tr><td><code>recommended</code>, <code>rationale</code></td><td>추천 선택지와 근거(§2.3 형식)</td></tr>
+        <tr><td><code>options[]</code></td><td><code>{ key, label, consequence }</code>. <code>consequence</code> 는 &quot;이 답이 바꾸는 구현&quot;이다</td></tr>
+        <tr><td><code>recommended</code>, <code>rationale</code></td><td>추천 선택지와 근거(<a href="#s2-3">§2.3</a> 형식)</td></tr>
         <tr><td><code>affects</code></td><td>걸린 요구·시나리오 id</td></tr>
         <tr><td><code>audience[]</code></td><td>차이와 같다</td></tr>
         <tr><td><code>answer</code></td><td>사람이 채운다. 선택지 키 또는 자유 답</td></tr>
       </tbody>
     </table>
   </div>
+
   <ul>
     <li>모든 질문은 명시적 답이 있어야 닫힌다. 추천안을 답으로 간주하지 않는다.</li>
-    <li>원문에 이미 답이 있는 것을 묻지 않는다. 사수가 질문마다 원문에 답이 있는지 본다(§6.2 의 W9).</li>
+    <li>원문에 이미 답이 있는 것을 묻지 않는다. 사수가 질문마다 원문에 답이 있는지 본다(<a href="#s6-2">§6.2</a> 의 W9).</li>
   </ul>
+
   <p>가정(<code>assumptions</code>): <code>id</code>, <code>text</code>, <code>basis</code>(근거 또는 근거가 없는 이유), <code>requirement_ids[]</code>, <code>status</code>(사람이 <code>confirmed</code> 또는 <code>rejected</code>).</p>
 
   <h3 id="s4-5"><span class="sn">§4.5</span>범위 장부와 영향 분석</h3>
-  <p>범위 장부(<code>coverage</code>): 원문 단위마다 행이 정확히 하나 있다.</p>
+
+  <p class="m" data-m="가정">범위 장부(<code>coverage</code>): 모든 원문 단위가 정확히 한 행에 들어 있다. 한 행이 같은 처리의 단위 여러 개를 묶을 수 있다. 웹·모웹 레인의 Figma 단위는 코어가 <code>not_app</code> 으로 자동 처리하므로 행을 쓰지 않아도 된다. <span class="chip c-g" data-k="가정">가정</span></p>
+
   <div class="tw">
     <table>
       <thead><tr><th>칸</th><th>내용</th></tr></thead>
       <tbody>
-        <tr><td><code>id</code>, <code>unit_id</code></td><td><code>C-n</code>, 단위</td></tr>
+        <tr><td><code>id</code>, <code>unit_ids[]</code></td><td><code>C-n</code>, 이 행이 처리하는 단위(1개 이상)</td></tr>
         <tr><td><code>disposition</code></td><td><code>covered</code>, <code>out_of_scope</code>, <code>not_app</code>(운영자 주체, 웹 레인, 서버 몫), <code>duplicate</code>, <code>context</code>(배경 설명)</td></tr>
-        <tr><td><code>requirement_ids[]</code></td><td><code>covered</code> 일 때 필수</td></tr>
+        <tr><td><code>requirement_ids[]</code>, <code>screen_ids[]</code></td><td><code>covered</code> 일 때 둘 중 하나는 필수. Figma 화면 단위는 화면으로, 문서 단위는 요구로 덮는다</td></tr>
         <tr><td><code>quote</code>, <code>reason</code></td><td><code>out_of_scope</code>·<code>not_app</code> 일 때 필수. 범위 밖은 원문 인용이 있어야 한다</td></tr>
         <tr><td><code>delta_id</code></td><td><code>drop</code> 결정으로 범위 밖이 된 경우</td></tr>
       </tbody>
     </table>
   </div>
+
   <p>영향 분석(<code>impact</code>)</p>
+
   <div class="tw">
     <table>
       <thead><tr><th>칸</th><th>내용</th></tr></thead>
@@ -697,23 +759,28 @@ approval.json         승인 기록(잠근 revision)</code></pre>
       </tbody>
     </table>
   </div>
+
   <ul>
     <li>막힐 것은 반드시 질문으로 이어진다. <code>question_id</code> 가 없는 막힘은 거부한다.</li>
     <li>시안의 변경 대상을 코드에서 찾을 때는 AS-IS 문구로 찾는다. Figma 컴포넌트 이름은 코드에 없다(heka <code>figma-to-mobile-component-lookup</code>).</li>
   </ul>
 
   <h3 id="s4-6"><span class="sn">§4.6</span>결정적 검사</h3>
-  <p><code>hew submit analysis</code> 와 <code>hew check</code> 가 돌린다. 거부는 종료 3 이고, 경고는 저장하되 게이트의 "확인 필요"에 올린다.</p>
+
+  <p><code>hew submit analysis</code> 와 <code>hew check</code> 가 돌린다. 거부는 종료 3 이고, 경고는 저장하되 게이트의 &quot;확인 필요&quot;에 올린다.</p>
+
   <div class="tw">
-    <table class="codecol w4">
+    <table>
       <thead><tr><th>코드</th><th>검사</th><th>결과</th></tr></thead>
       <tbody>
-        <tr><td><code>id_format</code>, <code>id_stable</code></td><td>id 형식. 재제출에서 사라지거나 바뀐 id</td><td>거부</td></tr>
+        <tr><td><code>id_format</code></td><td>id 형식</td><td>거부</td></tr>
+        <tr><td><code>id_removed</code>, <code>withdraw_has_human_input</code></td><td>게이트 게시 뒤의 재제출에서 <code>--withdraw</code> 없이 사라진 질문·차이·가정, 사람 입력이 있는데 지우려는 항목</td><td>거부</td></tr>
+        <tr><td><code>human_field_ignored</code></td><td>에이전트가 사람의 칸(<code>answer</code>, <code>decision</code>, 가정의 <code>status</code>)을 채워 냈다. 값은 버린다</td><td>경고</td></tr>
         <tr><td><code>ref_missing</code></td><td>없는 화면·요구·단위·질문을 가리키는 참조</td><td>거부</td></tr>
         <tr><td><code>quote_not_found</code></td><td>인용이 그 단위 본문에 없다</td><td>거부</td></tr>
         <tr><td><code>change_without_evidence</code></td><td>근거가 없는 변경 항목</td><td>거부</td></tr>
         <tr><td><code>confirmed_with_open</code></td><td><code>confirmed</code> 인데 열린 질문·차이·가정에 걸려 있다</td><td>거부</td></tr>
-        <tr><td><code>coverage_incomplete</code></td><td>범위 장부에 행이 없는 원문 단위, 행이 둘 이상인 단위</td><td>거부</td></tr>
+        <tr><td><code>coverage_incomplete</code></td><td>범위 장부의 어느 행에도 없는 원문 단위, 두 행 이상에 든 단위</td><td>거부</td></tr>
         <tr><td><code>scope_out_without_quote</code></td><td>인용 없는 범위 밖 처리</td><td>거부</td></tr>
         <tr><td><code>evidence_operator_row</code></td><td>주체가 운영자·관리자인 단위를 근거로 썼다</td><td>거부</td></tr>
         <tr><td><code>evidence_wrong_lane</code></td><td>웹·모웹 레인 프레임만을 근거로 한 앱 요구</td><td>경고</td></tr>
@@ -726,17 +793,22 @@ approval.json         승인 기록(잠근 revision)</code></pre>
         <tr><td><code>delta_decision_kind</code></td><td>차이 종류에 허용되지 않는 결정 값</td><td>거부</td></tr>
         <tr><td><code>delta_comparison_missing</code>, <code>delta_comparison_unpaired</code></td><td>비교 행이 없다, <code>mismatch</code> 인데 양쪽이 다 있는 행이 없다</td><td>경고</td></tr>
         <tr><td><code>delta_multi_decision</code></td><td>대표 요구가 여럿으로 갈릴 수 있는 묶음(걸린 요구 4개 이상)</td><td>경고</td></tr>
-        <tr><td><code>question_without_options</code></td><td>선택지도 "이 답이 바꾸는 구현"도 없는 질문</td><td>거부</td></tr>
+        <tr><td><code>question_without_options</code></td><td>선택지도 &quot;이 답이 바꾸는 구현&quot;도 없는 질문</td><td>거부</td></tr>
         <tr><td><code>api_presence_unchecked</code></td><td>변경 API 가 있는데 환경 대조가 비어 있다</td><td>거부</td></tr>
         <tr><td><code>mismatch_ratio</code></td><td><code>mismatch</code> 차이에 걸린 요구 수 / 전체 요구 수. 10%를 넘으면 확인 요청서를 만든다</td><td>정보</td></tr>
       </tbody>
     </table>
   </div>
+
+  <hr>
+
 </section>
 
 <section id="s5">
   <h2><span class="sn">§5</span>QA 시나리오(<code>scenarios</code>)</h2>
+
   <p><code>qa-designer</code> 가 <code>analysis</code> 를 읽고 만든다. 실행은 4번 단계지만 기대 결과는 승인 때 잠긴다.</p>
+
   <div class="tw">
     <table>
       <thead><tr><th>칸</th><th>내용</th></tr></thead>
@@ -754,63 +826,74 @@ approval.json         승인 기록(잠근 revision)</code></pre>
       </tbody>
     </table>
   </div>
+
   <p><code>items</code> 에는 <code>scenarios[]</code> 와 함께 <code>accounts[]</code>(필요한 계정 상태와 지금 가진 계정으로 되는지)를 둔다. 계정이 모자라면 질문으로 올린다.</p>
+
   <p>결정적 검사</p>
+
   <div class="tw">
-    <table class="codecol w4">
+    <table>
       <thead><tr><th>코드</th><th>검사</th><th>결과</th></tr></thead>
       <tbody>
         <tr><td><code>ac_uncovered</code></td><td><code>verify.method</code> 가 <code>qa_scenario</code> 인 인수 조건을 덮는 시나리오가 없다</td><td>거부</td></tr>
         <tr><td><code>scenario_ref_missing</code></td><td>없는 요구·인수 조건·화면을 가리킨다</td><td>거부</td></tr>
         <tr><td><code>expected_empty</code></td><td>기대 결과가 없는 시나리오</td><td>거부</td></tr>
         <tr><td><code>mock_without_reason</code></td><td>모킹인데 이유나 엔드포인트가 없다</td><td>거부</td></tr>
-        <tr><td><code>real_without_presence</code></td><td>실서버인데 쓰는 API 가 고른 환경에 없다(§4.5 의 <code>presence</code>)</td><td>거부</td></tr>
-        <tr><td><code>mock_only_requirement</code></td><td>어떤 요구가 모킹 시나리오로만 덮인다</td><td>경고("통합 미검증")</td></tr>
+        <tr><td><code>real_without_presence</code></td><td>실서버인데 쓰는 API 가 고른 환경에 없다(<a href="#s4-5">§4.5</a> 의 <code>presence</code>)</td><td>거부</td></tr>
+        <tr><td><code>mock_only_requirement</code></td><td>어떤 요구가 모킹 시나리오로만 덮인다</td><td>경고(&quot;통합 미검증&quot;)</td></tr>
         <tr><td><code>reach_unknown</code></td><td>도달 방법을 모르는 시나리오</td><td>경고</td></tr>
       </tbody>
     </table>
   </div>
+
+  <hr>
+
 </section>
 
 <section id="s6">
   <h2><span class="sn">§6</span>매니저 사수</h2>
 
   <h3 id="s6-1"><span class="sn">§6.1</span>원칙</h3>
+
   <ul>
     <li>사수는 문서 전체를 다시 읽지 않는다. 코어가 만든 작은 작업 단위를 하나씩 판정한다.</li>
-    <li>코드로 할 수 있는 대조는 §4.6·§5 의 결정적 검사가 이미 했다. 사수는 뜻을 봐야 하는 것만 본다.</li>
+    <li>코드로 할 수 있는 대조는 <a href="#s4-6">§4.6</a>·<a href="#s5">§5</a> 의 결정적 검사가 이미 했다. 사수는 뜻을 봐야 하는 것만 본다.</li>
     <li>증거(원문 인용이나 이미지 위치)가 없는 지적은 차단하지 않는다.</li>
   </ul>
 
   <h3 id="s6-2"><span class="sn">§6.2</span>작업 단위</h3>
+
   <div class="tw">
     <table class="w4">
-      <thead><tr><th>코드</th><th>단위</th><th>사수에게 주는 것</th><th>묻는 것</th></tr></thead>
+      <thead><tr><th class="num">코드</th><th>단위</th><th>사수에게 주는 것</th><th>묻는 것</th></tr></thead>
       <tbody>
-        <tr><td>W2</td><td>요구 하나</td><td>사람용 문장, 근거로 든 단위들의 본문</td><td>각 변경 항목이 근거로 뒷받침되는가</td></tr>
-        <tr><td>W3</td><td>원문 단위 하나</td><td>단위 본문, 범위 장부의 처리, 그 단위를 근거로 든 요구들</td><td>이 단위가 말하는 것이 빠짐없이 요구에 있는가. 처리(<code>not_app</code> 등)가 맞는가</td></tr>
-        <tr><td>W4</td><td><code>confirmed</code> 요구 하나</td><td>요구, 근거 단위들, 같은 절의 이웃 단위들</td><td>원문에 미정·조건부·논의 필요 표시가 있는데 확정으로 적었는가</td></tr>
-        <tr><td>W5</td><td>요구 하나</td><td>사람용 칸과 <code>ai.notes</code></td><td>AI용 문장에만 있는 동작·조건이 있는가</td></tr>
-        <tr><td>W6</td><td><code>actor</code> 가 빈 표 행 단위</td><td>행 전체</td><td>주체가 운영자·관리자인가</td></tr>
-        <tr><td>W7</td><td>AS-IS·TO-BE 가 있는 화면 하나</td><td>두 이미지, 코어가 계산한 차이 상자, 그 화면의 변경 항목</td><td>변경 항목에 없는 시각 차이(아이콘·그래픽·컴포넌트 교체)가 있는가</td></tr>
-        <tr><td>W8</td><td>차이 하나</td><td>비교 행, 양쪽 인용</td><td>한 행에 놓인 짝이 같은 조건·같은 대상인가</td></tr>
-        <tr><td>W9</td><td>질문 하나</td><td>질문, 관련 단위들</td><td>원문에 이미 답이 있는가</td></tr>
+        <tr><td class="num">W2</td><td>요구 하나</td><td>사람용 문장, 근거로 든 단위들의 본문</td><td>각 변경 항목이 근거로 뒷받침되는가</td></tr>
+        <tr><td class="num">W3</td><td>원문 단위 하나</td><td>단위 본문, 범위 장부의 처리, 그 단위를 근거로 든 요구들</td><td>이 단위가 말하는 것이 빠짐없이 요구에 있는가. 처리(<code>not_app</code> 등)가 맞는가</td></tr>
+        <tr><td class="num">W4</td><td><code>confirmed</code> 요구 하나</td><td>요구, 근거 단위들, 같은 절의 이웃 단위들</td><td>원문에 미정·조건부·논의 필요 표시가 있는데 확정으로 적었는가</td></tr>
+        <tr><td class="num">W5</td><td>요구 하나</td><td>사람용 칸과 <code>ai.notes</code></td><td>AI용 문장에만 있는 동작·조건이 있는가</td></tr>
+        <tr><td class="num">W6</td><td><code>actor</code> 가 빈 표 행 단위</td><td>행 전체</td><td>주체가 운영자·관리자인가</td></tr>
+        <tr><td class="num">W7</td><td>AS-IS·TO-BE 가 있는 화면 또는 변형 하나</td><td>두 이미지, 코어가 계산한 차이 상자, 변경 항목(변형: 그 변형에 직접 걸린 것 <code>changes_for_variant</code> 과 부모 화면에 걸린 것 <code>changes_for_screen</code>. 화면: 그 화면에 걸린 것 <code>changes_for_screen</code> 과 모든 변형에 걸린 것 <code>changes_for_variants</code>)</td><td>이 변형과 그 화면 전체에 걸린 변경 항목 어디에도 없는 시각 차이(아이콘·그래픽·컴포넌트 교체)가 있는가</td></tr>
+        <tr><td class="num">W8</td><td>차이 하나</td><td>비교 행, 양쪽 인용</td><td>한 행에 놓인 짝이 같은 조건·같은 대상인가</td></tr>
+        <tr><td class="num">W9</td><td>질문 하나</td><td>질문, 관련 단위들</td><td>원문에 이미 답이 있는가</td></tr>
       </tbody>
     </table>
   </div>
+
   <ul>
     <li>W1(인용이 원문에 있는가)은 코드 검사 <code>quote_not_found</code> 다.</li>
     <li>W7 은 Haiku 5.5 로 되는지 확인되지 않았다(설계 §13 의 2). 결함 주입에서 못 잡으면 이 단위만 상위 모델로 올린다. 차이 상자 계산은 코드다.</li>
   </ul>
 
   <h3 id="s6-3"><span class="sn">§6.3</span>실행</h3>
+
   <ul>
     <li><code>hew sasu plan</code> 이 작업 단위를 만들고 묶음 파일로 나눈다. 묶음 하나는 입력 10만 토큰 아래로 유지한다(Haiku 5.5 의 장문 할증 기준).</li>
     <li>묶음마다 <code>manager-sasu</code> 세션 하나를 띄운다. 세션은 묶음 파일만 읽고 <code>findings</code> 를 제출한다.</li>
-    <li>같은 종류의 단위끼리 묶는다. 묶음 안의 단위 수는 <span class="chip c-m" data-k="미결">미결</span><span class="note">실측</span>이고 출발점은 20개다.</li>
+    <li class="m" data-m="가정">같은 종류의 단위끼리 묶는다. 묶음 안의 단위 수는 20개로 시작하고 결함 주입 결과를 보고 조정한다. <span class="chip c-g" data-k="가정">가정</span></li>
   </ul>
 
   <h3 id="s6-4"><span class="sn">§6.4</span>지적(<code>findings</code>)</h3>
+
   <div class="tw">
     <table>
       <thead><tr><th>칸</th><th>내용</th></tr></thead>
@@ -819,54 +902,70 @@ approval.json         승인 기록(잠근 revision)</code></pre>
         <tr><td><code>verdict</code></td><td><code>ok</code>, <code>issue</code></td></tr>
         <tr><td><code>kind</code></td><td><code>unsupported</code>, <code>missing</code>, <code>wrong_disposition</code>, <code>false_confirmed</code>, <code>ai_only_behavior</code>, <code>operator_row</code>, <code>visual_unlisted</code>, <code>bad_pairing</code>, <code>already_answered</code></td></tr>
         <tr><td><code>claim</code></td><td>무엇이 문제인지 한 문장</td></tr>
-        <tr><td><code>evidence</code></td><td>§2.3 형식. 없으면 차단하지 않는다</td></tr>
-        <tr><td><code>action</code></td><td><code>fix</code>(테크니컬 매니저가 고침), <code>ask</code>(질문으로 올림), <code>drop</code>(항목 삭제)</td></tr>
+        <tr><td><code>evidence</code></td><td><a href="#s2-3">§2.3</a> 형식. 없으면 차단하지 않는다</td></tr>
+        <tr><td><code>action</code></td><td><code>fix</code>(테크니컬 매니저가 고침), <code>ask</code>(원문만으로 정할 수 없어 사람에게 물어야 함), <code>drop</code>(항목 삭제). 차단 지적이면 셋 모두 먼저 테크니컬 매니저에게 반송한다</td></tr>
       </tbody>
     </table>
   </div>
+
   <ul>
     <li>모든 작업 단위에 판정이 하나씩 있어야 한다. 빠진 단위가 있으면 제출을 거부한다.</li>
-    <li>차단 지적이 있으면 코어가 지적 목록을 패킷으로 만들어 테크니컬 매니저를 다시 띄운다. 상한은 2회다.</li>
-    <li>상한에 닿고도 남은 차단 지적은 코어가 <code>origin: sasu</code> 질문으로 바꿔 게이트에 올린다. 통과로 치지 않는다.</li>
+    <li>차단 지적이 있으면(<code>action</code> 이 <code>fix</code>·<code>ask</code>·<code>drop</code> 어느 것이든) 코어가 지적 목록을 패킷으로 만들어 테크니컬 매니저를 다시 띄운다. 상한은 2회다. 패킷의 표는 <code>kind</code> 가 같고 <code>claim</code> 의 공백을 지운 문자열이 같은 지적을 한 줄로 묶어 보이며, 줄마다 지적 id 를 모두 적는다.</li>
+    <li>상한에 닿고도 남은 차단 지적은 코어가 <code>origin: sasu</code> 질문으로 바꿔 게이트에 올린다. 통과로 치지 않는다. 같은 <code>kind</code>·같은 <code>claim</code> 인 지적은 질문 하나로 합치고(<code>affects</code> 는 합집합, 본문 끝에 &quot;같은 지적 n건: 대상…&quot;), 같은 대상·같은 <code>kind</code> 의 sasu 질문이 이미 있으면 다시 만들지 않는다.</li>
     <li>반송 뒤 재확인은 바뀐 항목에 걸린 작업 단위만 다시 돌린다.</li>
+    <li>테크니컬 매니저는 반송된 차단 지적마다 <code>hew sasu respond --run &lt;폴더|id&gt; --for analysis --file &lt;JSON&gt;</code> 으로 답한다. 형식은 <code>{ responses: [{ finding, response, reason, evidence? }] }</code> 이고 <code>response</code> 는 <code>fixed</code>(고쳤다), <code>rejected</code>(근거를 들어 그대로 둔다. <code>reason</code> 필수), <code>asked</code>(질문으로 올렸다)다. <code>evidence.quote</code> 는 <code>evidence.unit_id</code> 단위 본문에 있어야 한다. 답변은 <code>doc/sasu/analysis-&lt;회차&gt;.responses.json</code>(회차는 지적이 나온 회차)에 저장하고, 같은 지적에 다시 내면 덮어쓰며 상태는 바꾸지 않는다. 반송 중일 때만 받는다(아니면 종료 4).</li>
+    <li>다음 회차에 다시 도는 단위 중 직전 회차에서 <code>issue</code> 였던 것의 <code>inputs.previous</code> 에 <code>{ claim, kind, response? }</code> 를 싣는다. <code>previous</code> 는 단위의 <code>hash</code> 계산에서 뺀다. 사수는 답변을 읽고 지적이 풀렸는지 다시 판정하며, 답변이 근거를 들어 반박했고 그 근거가 맞으면 <code>ok</code> 를 낸다.</li>
   </ul>
+
+  <hr>
+
 </section>
 
 <section id="s7">
   <h2><span class="sn">§7</span>티켓 분해안(<code>plan</code>)과 티켓 사수</h2>
 
   <h3 id="s7-1"><span class="sn">§7.1</span>본문</h3>
+
   <p><code>ticket-maker</code> 가 답이 반영된 <code>analysis</code> 와 규칙 파일을 읽고 만든다. Jira 에 쓰지 않는다.</p>
+
   <p>티켓(<code>tickets[]</code>)</p>
+
   <div class="tw">
     <table>
       <thead><tr><th>칸</th><th>내용</th></tr></thead>
       <tbody>
         <tr><td><code>id</code></td><td><code>Tn</code></td></tr>
         <tr><td><code>title</code></td><td><code>[MO] {일감명} / {작업 요약}</code> (heka <code>jira-ticket-title-format</code>)</td></tr>
-        <tr><td><code>body</code></td><td><code>배경</code>, <code>작업 내용</code>, 필요하면 <code>확인 사항</code>·<code>선행 의존</code>, <code>참고</code> 순서(heka <code>jira-mo-ticket-body-format</code>). 코드 경로와 구현 방법은 쓰지 않는다</td></tr>
-        <tr><td><code>requirement_ids[]</code>, <code>changes[]</code></td><td>덮는 요구와, 요구의 일부만 덮을 때 그 변경 항목</td></tr>
+        <tr><td><code>body</code></td><td><code>{ background, work[], checks[], depends_note, refs[], tracker_events[{ name, when, properties[] }] }</code>. <code>배경</code>, <code>작업 내용</code>(글머리표, 1개 이상), 필요하면 <code>확인 사항</code>·<code>선행 의존</code>, <code>참고</code> 순서(heka <code>jira-mo-ticket-body-format</code>). 코드 경로와 구현 방법은 쓰지 않는다</td></tr>
+        <tr><td><code>requirement_ids[]</code>, <code>changes[]</code></td><td>덮는 요구와, 요구의 일부만 덮을 때 그 변경 항목 <code>{ requirement_id, index }</code>(<code>index</code> 는 그 요구 <code>changes</code> 배열의 0부터 위치)</td></tr>
         <tr><td><code>sp</code></td><td>Story Points. 1SP 는 1시간이다</td></tr>
         <tr><td><code>depends_on[]</code></td><td>먼저 끝나야 하는 티켓</td></tr>
         <tr><td><code>pr</code></td><td>속한 PR 묶음</td></tr>
       </tbody>
     </table>
   </div>
+
   <p>PR 묶음(<code>prs[]</code>): <code>id</code>, <code>title</code>, <code>ticket_ids[]</code>, <code>base</code>(<code>develop</code> 또는 앞선 <code>PR-n</code>), <code>order</code>.</p>
-  <p>그 밖: <code>parent</code>(티켓을 달 스토리 키), <code>feature_flag{ used, name, removal_ticket }</code>, <code>excluded[]</code>(보류 결정으로 빠진 항목과 사유).</p>
+
+  <p>그 밖: <code>epic_name</code>(일감명, 모든 티켓 제목의 <code>{일감명}</code> 과 같다), <code>parent</code>(티켓을 달 스토리 키), <code>feature_flag{ used, name, removal_ticket }</code>, <code>excluded[]</code>(<code>{ kind: delta|requirement|change, ref, reason }</code> — 보류·구현 안 함으로 빠진 항목과 사유. <code>change</code> 의 ref 는 <code>요구-n#&lt;index&gt;</code>).</p>
+
+  <p>범위 안 변경 항목의 계산: 사람이 <code>drop</code>·<code>hold</code> 로 결정한 차이의 <code>requirement_ids</code> 에 든 요구는 요구 전체를 범위 밖으로 본다. 나머지 요구의 변경 항목이 범위 안이다. 티켓이 <code>changes</code> 없이 요구를 적으면 그 요구의 변경 전부를 맡은 것이다.</p>
 
   <h3 id="s7-2"><span class="sn">§7.2</span>분해 규칙</h3>
-  <p><code>rules/plan.yaml</code> 에 두고 코드로 검사한다. 값은 heka 규칙에서 가져왔고 <span class="chip c-g" data-k="가정">가정</span>이다.</p>
+
+  <p class="m" data-m="가정"><code>rules/plan.yaml</code> 에 두고 코드로 검사한다. 값은 heka 규칙에서 가져왔고 <span class="chip c-g" data-k="가정">가정</span>이다.</p>
+
   <ul>
     <li>티켓은 2~4SP 를 기본으로 한다. 넘으면 나눈다(heka <code>prd-to-pr-pipeline-decisions-2026-09-r2</code>).</li>
     <li>티켓 하나가 PR 하나일 필요는 없다. 함께 리뷰해야 뜻이 통하는 티켓은 한 PR 로 묶는다(2026-10-20 결정 6, APP-3008 실제 작업).</li>
     <li>피처플래그를 쓰는 일감은 에픽 브랜치를 만들지 않는다. 첫 PR 의 base 는 <code>develop</code> 이고 의존이 있으면 앞 PR 위에 쌓으며, 플래그 제거가 마지막 티켓이다(heka <code>app-team-feature-flag-replaces-epic-branch</code>).</li>
-    <li>PR 하나의 예상 변경 크기에 상한을 둔다. 값은 <span class="chip c-m" data-k="미결">미결</span>이다(이 저장소의 PR 크기 중앙값은 68줄이다).</li>
+    <li class="m" data-m="미결">PR 하나의 예상 변경 크기에 상한을 둔다. 값은 <span class="chip c-m" data-k="미결">미결</span>이다(이 저장소의 PR 크기 중앙값은 68줄이다).</li>
   </ul>
 
   <h3 id="s7-3"><span class="sn">§7.3</span>결정적 검사</h3>
+
   <div class="tw">
-    <table class="codecol w4">
+    <table>
       <thead><tr><th>코드</th><th>검사</th><th>결과</th></tr></thead>
       <tbody>
         <tr><td><code>requirement_unmapped</code></td><td>범위 안 요구(변경 항목 단위) 중 어느 티켓에도 없는 것</td><td>거부</td></tr>
@@ -878,42 +977,59 @@ approval.json         승인 기록(잠근 revision)</code></pre>
         <tr><td><code>pr_base_order</code></td><td>PR 의 base 와 순서가 티켓 의존과 어긋난다</td><td>거부</td></tr>
         <tr><td><code>flag_removal_last</code></td><td>플래그를 쓰는데 제거 티켓이 없거나 마지막이 아니다</td><td>거부</td></tr>
         <tr><td><code>sp_range</code></td><td>2~4SP 를 벗어난 티켓</td><td>경고</td></tr>
+        <tr><td><code>pr_too_large</code></td><td>PR 하나의 티켓 수가 <code>rules/plan.yaml</code> 의 상한을 넘었다</td><td>경고</td></tr>
+        <tr><td><code>excluded_missing</code></td><td>범위 밖 요구가 <code>excluded</code> 에 없다</td><td>경고</td></tr>
+        <tr><td><code>plan_ref_missing</code></td><td>없는 요구·티켓·PR 을 가리킨다</td><td>거부</td></tr>
+        <tr><td><code>ticket_without_pr</code>, <code>pr_ticket_mismatch</code></td><td>티켓의 <code>pr</code> 과 PR 의 <code>ticket_ids</code> 가 맞지 않는다</td><td>거부</td></tr>
+        <tr><td><code>id_format</code>, <code>id_duplicate</code></td><td>티켓·PR id 형식과 중복</td><td>거부</td></tr>
+        <tr><td><code>plan_change_unaddressed</code></td><td>사람의 수정 요청이 들어와 있다(수만 알림, 반영 여부는 사람이 본다)</td><td>정보</td></tr>
         <tr><td><code>requirement_dependency_broken</code></td><td>요구의 의존 순서가 티켓 순서에서 뒤집혔다</td><td>거부</td></tr>
       </tbody>
     </table>
   </div>
 
   <h3 id="s7-4"><span class="sn">§7.4</span>티켓 사수</h3>
+
   <p>작업 단위는 티켓 하나다. 티켓 본문과 그 티켓이 덮는 요구(사람용 문장)를 주고 두 가지를 묻는다.</p>
+
   <ul>
     <li>티켓이 요구와 모순되거나 요구에 없는 일을 시키는가.</li>
     <li>티켓만 읽은 사람이 무엇을 해야 하는지 알 수 있는가(맥락 누락).</li>
   </ul>
-  <p>지적 형식과 반송(상한 2회)은 §6.4 와 같다. 반송은 티켓 메이커에게 간다.</p>
+
+  <p>지적 형식과 반송(상한 2회)은 <a href="#s6-4">§6.4</a> 와 같다. 반송은 티켓 메이커에게 간다. 작업 단위 코드는 <code>T1</code>(id <code>T1:&lt;티켓 id&gt;</code>), 지적 <code>kind</code> 는 <code>ticket_contradicts</code>·<code>ticket_missing_change</code>·<code>ticket_missing_context</code>, <code>action</code> 은 <code>fix</code>·<code>ask</code> 다. 묶음은 10개 이하로 나눈다. 답변(<code>hew sasu respond --for plan</code>)의 인용 대조는 그 지적 단위의 <code>inputs</code> 텍스트로 한다.</p>
+
+  <p>반송 상한(2회)을 채우고도 남은 차단 지적은 질문으로 바꾸지 않는다(분해안은 사람이 승인 단계에서 어차피 본다). <code>doc/findings/plan-&lt;회차&gt;.json</code> 의 그 지적에 <code>to_gate: true</code> 를 붙이고, 게이트의 승인 단계 &quot;확인 필요&quot; 에 &quot;티켓 사수 지적(미해결): &lt;claim&gt; (대상 Tn)&quot; 으로 싣는다. 분해안 정본의 <code>verdict.reasons</code> 에는 넣지 않는다.</p>
+
+  <hr>
+
 </section>
 
 <section id="s8">
   <h2><span class="sn">§8</span>게이트</h2>
 
   <h3 id="s8-1"><span class="sn">§8.1</span>페이지</h3>
-  <p><code>hew gate build</code> 가 정본에서 <code>gate/page.html</code> 과 올릴 이미지 목록을 만든다. 페이지는 heka 에 남은 게이트 결정을 따른다.</p>
+
+  <p class="m" data-m="미결"><code>hew gate build</code> 가 정본에서 <code>gate/page.html</code> 을 만들고 화면 이미지를 <code>gate/assets/</code> 로 복사한다. 페이지는 파일 하나로 동작하고(외부 스크립트·글꼴 없음) 브라우저에서 바로 연다. heka 에 남은 게이트 결정을 따른다. 차이 상자(이미지 픽셀 비교)는 아직 만들지 않았다. <span class="chip c-m" data-k="미결">미결</span></p>
+
   <div class="tw">
-    <table class="w4">
+    <table>
       <thead><tr><th>영역</th><th>내용</th><th>근거</th></tr></thead>
       <tbody>
         <tr><td>머리</td><td>일감, 원천 버전, 진행(질문 n개 중 m개), 서버 환경, 승인 버튼</td><td>설계 §5.1</td></tr>
         <tr><td>확인 필요</td><td>결정적 검사의 경고, 다시 답해야 하는 질문</td><td>—</td></tr>
-        <tr><td>화면</td><td>화면별 탭. 탭 안에서 AS-IS·TO-BE 이미지는 왼쪽에 고정하고 요구는 오른쪽에서 스크롤한다. 이미지 폭 250px. 차이는 붉은 상자(선 2px, 불투명도 0.8), 차이 면적이 60%를 넘으면 "전면 변경"으로 표시한다</td><td><code>hew-gate-layout-decisions-2026-11-11</code>, <code>hew-6-2026-10-23-mismatch</code></td></tr>
-        <tr><td>요구</td><td>화면 아래에 요구별 변경 목록. 변형에 걸린 변경은 그 변형 아래. 인수 조건은 기본 접힘. AI용 칸은 "AI용 보기"로 접어 둔다</td><td><code>hew-2026-10-21-figma-prd</code></td></tr>
+        <tr><td>화면</td><td>화면별 탭. 탭 안에서 AS-IS·TO-BE 이미지는 왼쪽에 고정하고 요구는 오른쪽에서 스크롤한다. 이미지 폭 250px. 차이는 붉은 상자(선 2px, 불투명도 0.8), 차이 면적이 60%를 넘으면 &quot;전면 변경&quot;으로 표시한다</td><td><code>hew-gate-layout-decisions-2026-11-11</code>, <code>hew-6-2026-10-23-mismatch</code></td></tr>
+        <tr><td>요구</td><td>화면 아래에 요구별 변경 목록. 변형에 걸린 변경은 그 변형 아래. 인수 조건은 기본 접힘. AI용 칸은 &quot;AI용 보기&quot;로 접어 둔다</td><td><code>hew-2026-10-21-figma-prd</code></td></tr>
         <tr><td>차이</td><td>대표 요구 아래 한 번만. 관점, PRD, 시안 3열 표. 미결정은 펼치고 결정된 것은 접는다. 다른 관련 요구에는 링크만</td><td><code>hew-2026-10-21-requirement-ids</code>, <code>hew-delta-comparison-rows-2026-10-28</code></td></tr>
-        <tr><td>질문</td><td>선택지, 추천과 근거, "이 답이 바꾸는 구현", 자유 답</td><td>설계 §5.1</td></tr>
+        <tr><td>질문</td><td>선택지, 추천과 근거, &quot;이 답이 바꾸는 구현&quot;, 자유 답</td><td>설계 §5.1</td></tr>
         <tr><td>가정과 범위 밖</td><td>가정 확인. 범위 밖은 원문 인용과 함께</td><td>설계 §5.1</td></tr>
         <tr><td>영향 분석</td><td>걸리는 영역, API 의 환경별 유무, 없는 에셋</td><td>설계 §5.1</td></tr>
         <tr><td>QA 시나리오</td><td>시나리오별 여정, 기대 결과, 실서버/모킹 전환</td><td>설계 §5.1</td></tr>
-        <tr><td>분해안</td><td>티켓 표(제목, 덮는 요구, SP), PR 묶음, 의존 그래프, 수정 요청 입력. 답변 단계에서는 "답이 끝나면 만들어집니다"로 비워 둔다</td><td>설계 §4.4</td></tr>
+        <tr><td>분해안</td><td>티켓 표(제목, 덮는 요구, SP), PR 묶음, 의존 그래프, 수정 요청 입력. 답변 단계에서는 &quot;답이 끝나면 만들어집니다&quot;로 비워 둔다</td><td>설계 §4.4</td></tr>
       </tbody>
     </table>
   </div>
+
   <ul>
     <li>기계 식별자(Figma 노드 번호, 원문 단위 id)는 화면에 그대로 보이지 않는다. 링크나 접힌 상세로만 간다.</li>
     <li>링크로 이동한 뒤 원래 자리로 돌아올 수 있어야 한다.</li>
@@ -921,9 +1037,11 @@ approval.json         승인 기록(잠근 revision)</code></pre>
   </ul>
 
   <h3 id="s8-2"><span class="sn">§8.2</span>페이지가 저장하는 것</h3>
-  <p>페이지는 Artifact 의 데이터베이스에 쓴다. 문서 id 는 항목 id 다.</p>
+
+  <p class="m" data-m="결정">사람이 고른 것은 페이지가 브라우저에 임시로 보관하고, &quot;답 내보내기&quot;를 누르면 아래 모양의 JSON 파일(<code>gate-answers-&lt;실행 id&gt;.json</code>)로 내려 준다. <code>hew gate import</code> 가 이 파일을 <code>doc/answers.json</code> 에 합친다. 묶음 이름과 항목 id 는 아래와 같다. <span class="chip c-d" data-k="결정">결정</span><span class="note">로컬 파일. 2026-11-14 사용자 지시. Artifact 로 게시해 여럿이 답하게 하는 방식은 요청이 있을 때 추가한다</span></p>
+
   <div class="tw">
-    <table class="w4">
+    <table>
       <thead><tr><th>컬렉션</th><th>문서</th><th>내용</th></tr></thead>
       <tbody>
         <tr><td><code>answers</code></td><td><code>Q-n</code></td><td><code>{ option?, text?, at, by }</code></td></tr>
@@ -932,41 +1050,50 @@ approval.json         승인 기록(잠근 revision)</code></pre>
         <tr><td><code>scenarios</code></td><td><code>시나리오-n</code></td><td><code>{ backend, note?, at, by }</code> (실서버/모킹을 바꿨을 때만)</td></tr>
         <tr><td><code>plan_requests</code></td><td>자동 id</td><td><code>{ target, text, at, by }</code>. <code>target</code> 은 <code>Tn</code>, <code>PR-n</code>, <code>전체</code></td></tr>
         <tr><td><code>approvals</code></td><td>revision 앞 12자</td><td><code>{ revision, at, by, note? }</code>. 문서 id 가 revision 이라 다른 판의 승인과 섞이지 않는다. 승인을 거두면 문서를 지운다</td></tr>
-        <tr><td><code>meta</code></td><td><code>current</code></td><td><code>{ revision, answered, total, updated_at }</code> (세션 스킬이 진행을 볼 때 쓴다)</td></tr>
       </tbody>
     </table>
   </div>
 
   <h3 id="s8-3"><span class="sn">§8.3</span>두 번 보는 절차</h3>
+
   <ol>
     <li>답변: 사람이 질문에 답하고, 차이를 결정하고, 가정을 확인하고, 필요하면 모킹을 바꾼다.</li>
-    <li>세션 스킬이 답을 내려받아 <code>hew gate import</code> 로 넘긴다. 코어는 <code>answers.json</code> 에 합치고, 모두 채워졌으면 <code>answers_complete</code> 로 간다.</li>
-    <li>코어가 테크니컬 매니저와 QA 설계를 "답 반영" 패킷으로 다시 띄운다. 요구의 <code>pending</code> 이 <code>confirmed</code> 로 바뀌고, 범위 밖·보류가 정리된다. 바뀐 항목만 사수가 다시 본다.</li>
-    <li>답 반영에서 새 질문이 생기면 페이지를 다시 게시하고 1로 돌아간다.</li>
-    <li>티켓 메이커와 티켓 사수가 돈다. 분해안이 실린 페이지를 같은 주소에 다시 게시한다.</li>
+    <li>사람이 &quot;답 내보내기&quot;로 받은 파일을 <code>hew gate import --file</code> 로 넣는다. 코어는 <code>answers.json</code> 에 합치고, 모두 채워졌으면 <code>answers_complete</code> 로 간다.</li>
+    <li>코어가 테크니컬 매니저와 QA 설계를 &quot;답 반영&quot; 패킷으로 다시 띄운다. 요구의 <code>pending</code> 이 <code>confirmed</code> 로 바뀌고, 범위 밖·보류가 정리된다. 바뀐 항목만 사수가 다시 본다.</li>
+    <li>답 반영에서 새 질문이 생기면 페이지를 다시 만들고 1로 돌아간다.</li>
+    <li>티켓 메이커와 티켓 사수가 돈다. 분해안이 실린 페이지를 같은 파일에 다시 만든다.</li>
     <li>승인: 사람이 분해안을 확인한다. 수정 요청을 적으면 5로 돌아간다. 승인 버튼은 열린 항목이 없고 페이지의 revision 이 최신일 때만 켜진다.</li>
-    <li>세션 스킬이 승인 문서를 내려받아 <code>hew approve</code> 를 부른다. 코어는 revision 이 현재 값과 같을 때만 잠근다.</li>
+    <li>승인 버튼을 누르면 승인이 든 파일이 내려온다. <code>hew gate import</code> 로 넣으면(또는 <code>hew approve --revision</code> 을 직접 부르면) 코어가 revision 이 현재 값과 같을 때만 잠근다.</li>
   </ol>
+
   <ul>
     <li>답의 시각이 이전 답보다 늦은 것만 새 답으로 본다.</li>
-    <li>승인하면 게이트에서 내린 결정을 heka 결정 노트로 남긴다(<code>live</code> 모드만). 차이 결정과 차단 질문의 답은 건별로, 나머지는 묶어서 남긴다(heka <code>hew-6-2026-10-23-mismatch</code> 의 4).</li>
+    <li>질문의 본문이 답한 뒤에 바뀌면 그 답은 &quot;다시 답 필요&quot;가 된다(답과 함께 질문 본문의 해시를 저장해 가린다).</li>
+    <li class="m" data-m="미결">승인하면 게이트에서 내린 결정을 heka 결정 노트로 남긴다(<code>live</code> 모드만). 차이 결정과 차단 질문의 답은 건별로, 나머지는 묶어서 남긴다(heka <code>hew-6-2026-10-23-mismatch</code> 의 4). 아직 만들지 않았다. <span class="chip c-m" data-k="미결">미결</span></li>
   </ul>
 
   <h3 id="s8-4"><span class="sn">§8.4</span>확인 요청서</h3>
-  <p><code>mismatch_ratio</code> 가 10%를 넘으면 PO·디자이너에게 보낼 확인 요청서 페이지를 함께 만든다. 대상(<code>audience</code>)이 <code>po</code>·<code>designer</code> 인 질문과 차이만 싣고, 선택지는 게이트와 같다. 요청서에서 고른 답은 세션 스킬이 게이트의 같은 문서로 복사한다(heka <code>hew-review-request-page-decisions-2026-10-28</code>). 요청서는 게이트를 대신하지 않는다.</p>
 
-  <h3 id="s8-5"><span class="sn">§8.5</span>게시와 답 읽기</h3>
+  <p class="m" data-m="미결"><code>mismatch_ratio</code> 가 10%를 넘으면 PO·디자이너에게 보낼 확인 요청서 페이지를 함께 만든다. 대상(<code>audience</code>)이 <code>po</code>·<code>designer</code> 인 질문과 차이만 싣고, 선택지는 게이트와 같다(heka <code>hew-review-request-page-decisions-2026-10-28</code>). 요청서는 게이트를 대신하지 않는다. 다른 사람에게 보내는 문서라 게시가 필요하므로, 요청이 있을 때 만든다. 아직 만들지 않았다. <span class="chip c-m" data-k="미결">미결</span></p>
+
+  <h3 id="s8-5"><span class="sn">§8.5</span>여는 방법과 답 넣기</h3>
+
   <ul>
-    <li>기본은 대화형 세션의 <code>hew-gate</code> 스킬이다. 스킬이 하는 일은 넷뿐이다. <code>hew run</code> 을 띄워 놓고 기다리기, 페이지와 이미지를 Artifact 로 게시하기, 데이터베이스를 내려받아 <code>hew gate import</code>·<code>hew approve</code> 부르기, 상태를 사람에게 알리기.</li>
-    <li>무인 세션에서 Artifact 게시와 데이터베이스 읽기가 되면 이 일도 코어가 띄운 세션으로 옮길 수 있다. <span class="chip c-m" data-k="미결">미결</span><span class="note">실측, 설계 §13 의 1</span></li>
-    <li><code>replay</code> 모드는 페이지를 게시하지 않는다. 페이지 파일은 만들어 두고(생성기 검증용) 답은 답안지에서 넣는다.</li>
+    <li><code>hew gate build --run &lt;실행&gt;</code> 이 페이지를 만들고 경로를 <code>gate/path.txt</code> 에 적는다. <code>--open</code> 을 붙이면 브라우저로 연다.</li>
+    <li>답은 <code>hew gate import --run &lt;실행&gt; --file &lt;내려받은 JSON&gt;</code> 으로 넣는다. 같은 파일을 다시 넣어도 결과가 같다(늦은 시각의 답만 반영).</li>
+    <li><code>hew run</code> 은 사람 차례(<code>gate_answering</code>, <code>gate_plan_review</code>)에서 멈춘다. 답을 넣은 뒤 다시 부르면 이어 간다.</li>
+    <li><code>replay</code> 모드는 사람이 답하지 않는다. 답안지에서 넣는다(<a href="#s11-3">§11.3</a>).</li>
   </ul>
+
+  <hr>
+
 </section>
 
 <section id="s9">
   <h2><span class="sn">§9</span>코어 명령</h2>
+
   <div class="tw">
-    <table class="w4">
+    <table>
       <thead><tr><th>명령</th><th>하는 일</th><th>상태 변화</th></tr></thead>
       <tbody>
         <tr><td><code>hew init --prd &lt;url&gt;</code> 또는 <code>--ticket &lt;url&gt;</code> <code>[--mode live|replay|shadow] [--case &lt;파일&gt;] [--repo &lt;경로&gt;] [--base &lt;브랜치&gt;]</code></td><td>실행 폴더와 수집 계획을 만든다</td><td>→ <code>init</code></td></tr>
@@ -978,90 +1105,114 @@ approval.json         승인 기록(잠근 revision)</code></pre>
         <tr><td><code>hew submit &lt;analysis|scenarios|plan|findings&gt; --file &lt;경로&gt; [--withdraw &lt;id,…&gt;]</code></td><td>검증하고 정본에 쓴다</td><td>단계별</td></tr>
         <tr><td><code>hew check --run &lt;폴더&gt; [--only &lt;종류&gt;]</code></td><td>결정적 검사만 다시 돌린다</td><td>없음</td></tr>
         <tr><td><code>hew sasu plan --run &lt;폴더&gt; --for &lt;analysis|plan&gt;</code></td><td>사수 작업 단위와 묶음을 만든다</td><td>없음</td></tr>
+        <tr><td><code>hew sasu respond --run &lt;폴더|id&gt; --for analysis --file &lt;JSON&gt;</code></td><td>반송된 차단 지적에 대한 테크니컬 매니저의 답변을 저장한다(반송 중일 때만)</td><td>없음</td></tr>
         <tr><td><code>hew packet --run &lt;폴더&gt; --role &lt;역할&gt;</code></td><td>그 역할의 패킷을 만든다(<code>hew run</code> 이 내부에서 쓴다)</td><td>없음</td></tr>
         <tr><td><code>hew gate build --run &lt;폴더&gt; [--review-request]</code></td><td>게이트 페이지와 이미지 목록을 만든다</td><td>없음</td></tr>
         <tr><td><code>hew gate import --run &lt;폴더&gt; --file &lt;db 내보내기&gt;</code></td><td>답·결정·수정 요청을 들여온다</td><td>→ <code>answers_complete</code> 등</td></tr>
         <tr><td><code>hew approve --run &lt;폴더&gt; --revision &lt;해시&gt;</code></td><td>revision 이 같으면 잠근다</td><td>→ <code>approved</code></td></tr>
         <tr><td><code>hew mistake add --run &lt;폴더&gt; …</code></td><td>실수 기록을 덧붙인다</td><td>없음</td></tr>
-        <tr><td><code>hew replay prepare|answer|judge</code>, <code>hew eval inject</code></td><td>§11</td><td>—</td></tr>
+        <tr><td><code>hew replay prepare|answer|judge</code></td><td><a href="#s11">§11</a></td><td>—</td></tr>
+        <tr><td><code>hew eval inject --run &lt;원본&gt; --kind &lt;종류&gt; [--seed &lt;n&gt;] [--out-id &lt;run_id&gt;]</code></td><td>원본 실행을 새 실행 폴더로 복사하고 분석 문서에 결함 하나를 심는다(<a href="#s11-5">§11.5</a>). 후보가 없으면 종료 3</td><td>없음(새 실행은 <code>qa_designed</code>)</td></tr>
+        <tr><td><code>hew eval inject-all --run &lt;원본&gt; [--per-kind &lt;n=3&gt;] [--seed &lt;시작=1&gt;]</code></td><td>종류 6개 × n 개의 주입 실행을 한꺼번에 만든다. 같은 대상이 다시 뽑히거나 후보가 없으면 건너뛴다</td><td>없음</td></tr>
+        <tr><td><code>hew eval sasu --run &lt;주입 실행&gt; [--codes W3,W2] [--max-steps &lt;n&gt;]</code></td><td>주입 실행에서 사수 1회차만 돌리고 <code>eval/result.json</code> 을 쓴다. 회차 완료 처리는 하지 않는다</td><td>없음</td></tr>
+        <tr><td><code>hew eval score --runs &lt;id,…&gt;|--source &lt;원본&gt; [--out &lt;파일&gt;]</code></td><td><code>eval/result.json</code> 들을 모아 종류별 포착률 표를 낸다</td><td>없음</td></tr>
       </tbody>
     </table>
   </div>
+
   <ul>
     <li>패킷은 역할이 읽어야 할 파일 경로, 이번 일의 범위(처음인지, 반송인지, 답 반영인지), 따를 규칙 id, 제출 방법만 담는다. 앞 단계 에이전트의 추론이나 대화는 담지 않는다.</li>
-    <li>따를 규칙의 본문은 코어가 패킷에 싣는다. <span class="chip c-g" data-k="가정">가정</span> <code>rules/heka.&lt;역할&gt;.yaml</code> 에 역할별 규칙 id 를 두고(출발점은 설계 §16), 코어가 heka 명령줄 도구(<code>node ~/heka/bin/heka.js expand &lt;id&gt;</code>)로 제목과 "적용" 절을 읽어 넣는다. <code>replay</code> 에서는 <code>--known-at</code> 으로 사례 시점 이후의 노트를 뺀다. <span class="chip c-s" data-k="사실">사실</span><span class="note">옛 hew 의 기준선 주입 훅이 이 방식으로 동작했다</span></li>
+    <li class="m" data-m="가정 사실">따를 규칙의 본문은 코어가 패킷에 싣는다. <span class="chip c-g" data-k="가정">가정</span> <code>rules/heka.&lt;역할&gt;.yaml</code> 에 역할별 규칙 id 를 두고(출발점은 설계 §16), 코어가 heka 명령줄 도구(<code>node ~/heka/bin/heka.js expand &lt;id&gt;</code>)로 제목과 &quot;적용&quot; 절을 읽어 넣는다. 시점으로 거르지 않고 사례의 차단 heka id 만 뺀다(<a href="#s11-2">§11.2</a>). <span class="chip c-s" data-k="사실">사실</span><span class="note">옛 hew 의 기준선 주입 훅이 이 방식으로 동작했다</span></li>
   </ul>
+
+  <hr>
+
 </section>
 
 <section id="s10">
   <h2><span class="sn">§10</span>작은 티켓 경로</h2>
-  <p>입력이 Jira 티켓 URL 이면 같은 상태 기계를 돌되 내용이 줄어든다. <span class="chip c-g" data-k="가정">가정</span></p>
+
+  <p class="m" data-m="가정">입력이 Jira 티켓 URL 이면 같은 상태 기계를 돌되 내용이 줄어든다. <span class="chip c-g" data-k="가정">가정</span></p>
+
   <ul>
     <li>원천은 티켓과 상위 스토리이고, 연결된 PRD·Figma 가 있으면 함께 수집한다.</li>
     <li>시안이 없으면 화면 목록은 코드의 화면에서 만들고 이미지와 차이 표는 없다.</li>
     <li>분해안은 보통 티켓 1개, PR 1개다. 입력 티켓 자체가 구현 단위이면 새 티켓을 만들지 않고 그 티켓을 <code>Tn</code> 으로 쓴다.</li>
     <li>질문과 차이가 하나도 없어도 승인은 받는다. 이때 게이트는 요구, 인수 조건, 시나리오, 분해안을 한 화면에 보이고 답변 단계를 건너뛴다.</li>
-    <li>한 줄 변경 같은 일감에 게이트 왕복이 과한지는 실제로 돌려 보고 정한다. <span class="chip c-m" data-k="미결">미결</span><span class="note">설계 §13 의 10</span></li>
+    <li class="m" data-m="미결">한 줄 변경 같은 일감에 게이트 왕복이 과한지는 실제로 돌려 보고 정한다. <span class="chip c-m" data-k="미결">미결</span><span class="note">설계 §13 의 10</span></li>
   </ul>
+
+  <hr>
+
 </section>
 
 <section id="s11">
   <h2><span class="sn">§11</span>평가</h2>
 
   <h3 id="s11-1"><span class="sn">§11.1</span>사례 파일</h3>
+
   <pre class="code"><code>id: app-3008
 story: APP-3008
 known_at: 2026-09-10            # 이 시점까지의 지식만 쓴다
-prd: { page_id: "1000000001", version: 22 }
-figma: { url: "…", note: "현재본만 읽을 수 있음" }
-repo: { path: "~/Projects/mobile-app", base: "&lt;계산한 SHA&gt;" }
+prd: { page_id: &quot;1000000001&quot;, version: 22 }
+figma: { url: &quot;…&quot;, note: &quot;현재본만 읽을 수 있음&quot; }
+repo: { path: &quot;~/Projects/mobile-app&quot;, base: &quot;&lt;계산한 SHA&gt;&quot; }
 block:
-  jira: ["parent = APP-3008"]    # 읽지 못하게 할 티켓
+  jira: [&quot;parent = APP-3008&quot;]    # 읽지 못하게 할 티켓
   prs: [1054, 1081, 1091]
-  heka_scope: ["ticket/APP-3008"]
-  heka_ids: ["app-3008-hew-vs-actual-2026-10-08", "…"]
+  heka_scope: [&quot;ticket/APP-3008&quot;]
+  heka_ids: [&quot;app-3008-hew-vs-actual-2026-10-08&quot;, &quot;…&quot;]
 answers: ./app-3008.answers.yaml # 답안지
 gold: ../gold/app-3008.yaml      # 실행 폴더와 에이전트가 볼 수 없는 곳
 role: dev                        # dev(프롬프트를 고치며 본 사례) | heldout(채점 전용)</code></pre>
+
   <ul>
     <li>base 는 PR 의 <code>base.sha</code> 가 아니라 first-parent 이력에서 계산한다(heka <code>github-pr-base-sha-not-creation-time-r2</code>).</li>
     <li>PRD 버전은 날짜로만 고르지 않는다. 사람이 티켓을 쪼갠 시점에 본 버전을 확인한다(heka <code>confluence-version-history-via-atlassian-mcp-prd-d9-r3</code>).</li>
   </ul>
 
   <h3 id="s11-2"><span class="sn">§11.2</span>컨텍스트 차단</h3>
+
   <p><code>hew replay prepare</code> 가 준비하고, 실행기가 지킨다. 설계 §10 의 결정 22·23 이다.</p>
+
   <div class="tw">
     <table>
       <thead><tr><th>대상</th><th>방법</th></tr></thead>
       <tbody>
         <tr><td>코드</td><td>대상 저장소를 base SHA 로 꺼내 이력이 없는 단일 커밋 사본으로 만든다. 에이전트는 이 사본만 읽는다</td></tr>
         <tr><td>PRD·티켓</td><td>수집 단계가 사례의 버전만 가져온다. 수집 단계 말고는 Atlassian 도구가 없다</td></tr>
-        <tr><td>heka</td><td>에이전트에 heka 도구를 주지 않는다. 규칙 본문은 코어가 사례 시점(<code>--known-at</code>)으로 읽어 패킷에 싣고, 차단 id·범위의 노트는 뺀다</td></tr>
-        <tr><td>세션에 자동으로 붙는 heka 주입</td><td>평가 실행에서는 끈다. 방법은 <span class="chip c-m" data-k="미결">미결</span><span class="note">실측</span></td></tr>
+        <tr><td>heka</td><td>에이전트에 heka 도구를 주지 않는다. 규칙 본문은 코어가 패킷에 싣는다. 역할별 규칙 목록은 일하는 방법이라 시점으로 거르지 않고 항상 싣고, 사례의 차단 id(<code>case_info.block.heka_ids</code>)의 노트만 뺀다</td></tr>
+        <tr><td>세션에 자동으로 붙는 heka 주입</td><td>역할 세션을 사용자 설정 없이 띄우므로(<a href="#s1-4">§1.4</a>) 붙지 않는다. 수집 세션에는 붙지만 수집은 정해진 원천만 가져온다</td></tr>
         <tr><td>과거 세션 기록, 메모리</td><td>읽기 경로를 실행 폴더와 저장소 사본으로 제한하는 훅으로 막는다</td></tr>
         <tr><td>채점표</td><td>실행 폴더 밖에 두고 위 읽기 제한으로 막는다</td></tr>
         <tr><td>외부 쓰기</td><td>쓰기 단계를 띄우지 않는다. 게이트 페이지를 게시하지 않고 heka 에 기록하지 않는다</td></tr>
       </tbody>
     </table>
   </div>
+
   <ul>
     <li>훅이 입력을 바꾸고 호출을 거부하는 것은 2026-11-13 실험에서 확인했다(설계 §4.3).</li>
     <li>차단이 실제로 지켜졌는지는 실행 뒤 코어가 세션 기록에서 도구 호출을 훑어 확인한다. 범위 밖 읽기가 하나라도 있으면 그 실행은 채점하지 않는다.</li>
-    <li>Figma 는 과거 버전을 읽는 수단을 확인하지 못했다. 사례마다 "현재 시안이 당시와 달라진 곳"을 사람이 적어 두고 채점에서 뺀다. <span class="chip c-g" data-k="가정">가정</span></li>
+    <li class="m" data-m="가정">Figma 는 과거 버전을 읽는 수단을 확인하지 못했다. 사례마다 &quot;현재 시안이 당시와 달라진 곳&quot;을 사람이 적어 두고 채점에서 뺀다. <span class="chip c-g" data-k="가정">가정</span></li>
   </ul>
 
   <h3 id="s11-3"><span class="sn">§11.3</span>답안지</h3>
+
   <p>리플레이는 사람 없이 승인까지 가야 한다. 사례마다 실제로 내려졌던 결정을 답안지로 적어 둔다.</p>
+
   <ul>
-    <li>답안지는 "이런 내용을 물으면 이렇게 답한다"의 목록이다. 질문 id 가 실행마다 달라지므로 내용으로 맞춘다.</li>
+    <li>답안지는 &quot;이런 내용을 물으면 이렇게 답한다&quot;의 목록이다. 질문 id 가 실행마다 달라지므로 내용으로 맞춘다.</li>
     <li><code>hew replay answer</code> 가 질문·차이·가정을 답안지와 맞춘다. 맞추는 일은 모델이 하고(채점용 모델), 맞춘 결과는 기록에 남긴다.</li>
-    <li>답안지에 없는 질문은 "답 없음"으로 기록하고 그 질문에 걸린 요구는 보류로 둔다. 답 없음의 수는 질문 수율 지표에 쓴다.</li>
+    <li>답안지에 없는 질문은 &quot;답 없음&quot;으로 기록하고 그 질문에 걸린 요구는 보류로 둔다. 답 없음의 수는 질문 수율 지표에 쓴다.</li>
     <li>분해안은 수정 요청 없이 승인한 것으로 친다.</li>
   </ul>
 
   <h3 id="s11-4"><span class="sn">§11.4</span>채점표와 지표</h3>
+
   <p>채점표(gold)는 Claude 가 실제 결과물(티켓, PR, QA 결함)에서 초안을 만들고, 사용자가 에이전트 산출물을 보기 전에 교정한다(heka <code>hew-slice1-decisions-2026-10-20</code>). 교정 전 초안으로는 채점하지 않는다.</p>
+
   <p>채점표의 내용: 기준 요구 목록(<code>must</code> 여부, 화면, 출처), 반드시 물었어야 할 질문, 당시 확정이 아니었던 항목, 실제 티켓과 PR 묶음, QA 결함과 그 원인.</p>
+
   <div class="tw">
     <table>
       <thead><tr><th>지표</th><th>정의</th><th>방향</th></tr></thead>
@@ -1077,31 +1228,46 @@ role: dev                        # dev(프롬프트를 고치며 본 사례) | h
       </tbody>
     </table>
   </div>
+
   <ul>
-    <li>대응 판정(산출 요구가 기준 요구를 덮는가)은 채점용 모델이 한다. 채점 모델에게는 두 목록을 섞어 중립 id 로만 보이고, 어느 쪽이 산출물이고 어느 쪽이 채점표인지 알리지 않는다. 사례마다 사람이 일부를 직접 판정해 채점 모델과 맞는지 확인한다. 어긋남이 10%를 넘으면 채점 지시문을 고친다. <span class="chip c-g" data-k="가정">가정</span></li>
+    <li class="m" data-m="가정">대응 판정(산출 요구가 기준 요구를 덮는가)은 채점용 모델이 한다. 채점 모델에게는 두 목록을 섞어 중립 id 로만 보이고, 어느 쪽이 산출물이고 어느 쪽이 채점표인지 알리지 않는다. 사례마다 사람이 일부를 직접 판정해 채점 모델과 맞는지 확인한다. 어긋남이 10%를 넘으면 채점 지시문을 고친다. <span class="chip c-g" data-k="가정">가정</span></li>
     <li>실행은 비결정적이므로 사례·구성마다 3회 돌린다.</li>
     <li>게이트 체류 시간은 리플레이로 잴 수 없다. <code>live</code> 실행에서만 기록한다.</li>
   </ul>
 
   <h3 id="s11-5"><span class="sn">§11.5</span>결함 주입</h3>
-  <p><code>hew eval inject</code> 가 통과한 정본을 복사해 결함을 심고, 사수만 다시 돌린다.</p>
+
+  <p><code>hew eval inject</code> 가 통과한 정본을 새 실행 폴더로 복사해 결함 하나를 심고, <code>hew eval sasu</code> 가 사수 1회차만 돌려 잡았는지 잰다. <code>hew eval inject-all</code> 은 종류 6개 × n 개를 한 번에 만들고, <code>hew eval score</code> 가 결과를 종류별 표로 모은다.</p>
+
   <div class="tw">
     <table>
-      <thead><tr><th>주입</th><th>잡아야 하는 작업 단위</th></tr></thead>
+      <thead><tr><th><code>--kind</code></th><th>변형</th><th>잡아야 하는 단위(<code>expected</code>)</th></tr></thead>
       <tbody>
-        <tr><td>요구 하나를 지우고 범위 장부 행을 <code>context</code> 로 바꾼다</td><td>W3</td></tr>
-        <tr><td>변경 항목 하나를 원문과 다르게 바꾼다(숫자, 조건)</td><td>W2</td></tr>
-        <tr><td>미정 표시가 있는 요구를 <code>confirmed</code> 로 바꾼다</td><td>W4</td></tr>
-        <tr><td><code>ai.notes</code> 에 사람용 문장에 없는 조건을 넣는다</td><td>W5</td></tr>
-        <tr><td>아이콘이 바뀐 화면에서 그 변경 항목을 지운다</td><td>W7</td></tr>
-        <tr><td>다른 조건의 두 문장을 한 비교 행에 놓는다</td><td>W8</td></tr>
+        <tr><td><code>w3_delete</code></td><td>인용 근거가 있는 변경 항목 하나를 지운다. 후보는 그 변경의 근거 문서 단위(<code>table_row</code>·<code>bullet</code>·<code>paragraph</code>, 인용 근거의 단위가 하나뿐인 변경)를 다른 어떤 변경·<code>ai.notes</code> 도 인용하지 않는 것. 요구의 변경이 하나뿐이면 그 요구는 제외</td><td><code>W3:&lt;그 단위 id&gt;</code></td></tr>
+        <tr><td><code>w2_alter</code></td><td>인용 근거가 있는 변경 항목 하나의 <code>text</code> 를 원문과 어긋나게 바꾼다. (a) 숫자가 있으면 첫 숫자를 <code>n</code> → <code>n+2</code>(<code>%</code>·<code>px</code> 앞 숫자 우선), (b) 없으면 '이내'↔'이후', '이전'↔'이후', '추가한다'↔'없앤다', '위'↔'아래', '보인다'↔'숨긴다' 중 처음 맞는 낱말. 둘 다 안 되면 후보가 아니다</td><td><code>W2:&lt;요구 id&gt;</code></td></tr>
+        <tr><td><code>w4_confirm</code></td><td><code>pending</code> 요구 중 근거 단위나 같은 절의 이웃 단위(W4 단위 입력에 실리는 앞 12개)에 <code>미정</code>·<code>논의</code>·<code>TBD</code>·<code>확인 필요</code>·<code>명확화</code>·<code>검토 중</code> 이 있는 것을 <code>confirmed</code> 로 바꾸고, 그 요구를 차이·가정의 <code>requirement_ids</code> 와 질문의 <code>affects</code> 에서 뺀다(질문·차이·가정은 남긴다)</td><td><code>W4:&lt;요구 id&gt;</code></td></tr>
+        <tr><td><code>w5_ainote</code></td><td>요구 하나의 <code>ai.notes</code> 에 사람용 문장에 없는 조건 <code>단, &lt;화면 이름 또는 '이 화면'&gt;에 처음 들어온 사용자에게만 적용하고 두 번째부터는 보이지 않는다</code>(근거: 그 요구의 기존 인용 하나)를 넣는다</td><td><code>W5:&lt;요구 id&gt;</code></td></tr>
+        <tr><td><code>w7_drop_visual</code></td><td>AS-IS·TO-BE 이미지가 모두 있는 화면(또는 변형)에 걸린 변경 중 이미지 근거만 가진 것 하나를 지운다. 요구의 변경이 하나뿐이면 제외</td><td><code>W7:&lt;변경의 screen_id, 없으면 요구의 대표 화면&gt;</code></td></tr>
+        <tr><td><code>w8_pair</code></td><td>짝지어진(<code>prd</code>·<code>figma</code> 모두 있는) 비교 행이 둘 이상이고 그 <code>figma</code> 칸이 서로 다른 차이에서 두 행의 <code>figma</code> 칸을 맞바꾼다</td><td><code>W8:&lt;차이 id&gt;</code></td></tr>
       </tbody>
     </table>
   </div>
-  <p>지표는 포착률(심은 결함 중 잡은 비율)과 오탐률(결함을 심지 않은 원본에서 낸 차단 지적 중 사람이 틀렸다고 본 비율)이다. 주입 한 건에 결함 하나만 심는다.</p>
+
+  <ul>
+    <li>변형은 시드로 결정적이다. 후보를 id 순(숫자는 크기순)으로 늘어놓고 <code>seed % 개수</code> 번째를 고른다. 후보가 없으면 종료 3 이다.</li>
+    <li>새 실행: <code>sources/</code> 전체, <code>doc/analysis.json</code>, <code>doc/scenarios.json</code>, <code>doc/answers.json</code>(있으면)만 복사한다. 모드는 <code>shadow</code>, 상태는 <code>qa_designed</code>, 반송 0, 제출 기록은 analysis·scenarios 를 attempt 1 로 둔다. <code>repo</code>·<code>input</code>·<code>case_info</code> 는 원본 그대로이고, <code>eval: { source_run, kind, seed }</code> 가 붙는다. revision·열린 항목은 다시 계산한다. 외부에 아무것도 쓰지 않는다.</li>
+    <li>변형 뒤 분석 문서는 스키마를 통과해야 한다. 결정적 검사(<a href="#s4-6">§4.6</a>)는 통과하지 않아도 되며, 거부 코드는 <code>eval/injection.json</code> 의 <code>checks_after</code> 에 적기만 한다.</li>
+    <li><code>eval/injection.json</code>: <code>{ source_run, kind, seed, target, before, after, expected, candidates, checks_after }</code>.</li>
+    <li><code>hew eval sasu</code> 는 <code>--codes</code>(없으면 <code>expected</code> 의 코드)의 단위만 계획에 넣고 묶음마다 <code>manager-sasu</code> 를 띄운다. <code>run.eval</code> 이 있는 실행은 마지막 묶음이 들어와도 회차 완료 처리(상태 전이, 질문 전환, 실수 기록)를 하지 않으므로 상태는 <code>qa_designed</code> 로 남는다. 묶음별 지적은 <code>eval/findings.json</code> 에 모으고 <code>eval/result.json</code> 에 <code>{ expected, caught, caught_any, other_issues, units, cost_usd, duration_ms }</code> 를 쓴다. <code>caught</code> 는 <code>expected</code> 단위에 차단 <code>issue</code>(근거가 묶음 본문과 맞는 것)가 있는가, <code>caught_any</code> 는 근거 없는 <code>issue</code> 까지 센 것이다.</li>
+    <li><code>hew eval score</code> 의 표: 종류별 주입 수, 잡은 수, 근거 없이 잡은 수(<code>caught_any</code> 이지만 <code>caught</code> 아님), 포착률, <code>expected</code> 가 아닌 단위에 난 지적 수의 평균, 비용 합. <code>--out</code> 이면 Markdown 표로 저장한다.</li>
+  </ul>
+
+  <p>지표는 포착률(심은 결함 중 잡은 비율)과 오탐률(결함을 심지 않은 원본에서 낸 차단 지적 중 사람이 틀렸다고 본 비율)이다. 오탐률은 이 명령이 재지 않는다(<code>other_issues</code> 는 사람이 판정할 목록일 뿐이다). 주입 한 건에 결함 하나만 심는다.</p>
 
   <h3 id="s11-6"><span class="sn">§11.6</span>완료 기준</h3>
-  <p>1번 단계는 아래를 채우면 끝난 것으로 보고 2번 단계 이후로 넘어간다. 수치는 <span class="chip c-j" data-k="제안">제안</span>이고, 기준선(옛 hew 의 분석 결과나 첫 실행)을 잰 뒤 사용자가 확정한다.</p>
+
+  <p class="m" data-m="제안">1번 단계는 아래를 채우면 끝난 것으로 보고 2번 단계 이후로 넘어간다. 수치는 <span class="chip c-j" data-k="제안">제안</span>이고, 기준선(옛 hew 의 분석 결과나 첫 실행)을 잰 뒤 사용자가 확정한다.</p>
+
   <div class="tw">
     <table>
       <thead><tr><th>기준</th><th>제안값</th></tr></thead>
@@ -1117,15 +1283,21 @@ role: dev                        # dev(프롬프트를 고치며 본 사례) | h
       </tbody>
     </table>
   </div>
+
   <ul>
-    <li>사례: APP-3008, APP-2513 은 실패 내용이 설계와 heka 규칙에 이미 들어 있어 <code>dev</code> 로만 쓴다. 두 사례의 채점표 초안이 옛 hew 에 있으나 사용자 교정 전이라 그대로는 채점에 쓰지 못한다. <span class="chip c-s" data-k="사실">사실</span> <code>heldout</code> 사례는 사용자가 고른다. <span class="chip c-m" data-k="미결">미결</span> 후보는 이 워크플로우 설계에 쓰이지 않은 과거 PRD 다.</li>
+    <li class="m" data-m="사실 미결">사례: APP-3008, APP-2513 은 실패 내용이 설계와 heka 규칙에 이미 들어 있어 <code>dev</code> 로만 쓴다. 두 사례의 채점표 초안이 옛 hew 에 있으나 사용자 교정 전이라 그대로는 채점에 쓰지 못한다. <span class="chip c-s" data-k="사실">사실</span> <code>heldout</code> 사례는 사용자가 고른다. <span class="chip c-m" data-k="미결">미결</span> 후보는 이 워크플로우 설계에 쓰이지 않은 과거 PRD 다.</li>
     <li>모델 비교(설계 §4.5): 같은 사례를 Opus 5.5 <code>high</code> 와 Fable 5.2 <code>medium</code> 으로 각각 3회 돌려 요구 재현율과 틀린 확정을 견준다. 차이가 실행 간 흔들림보다 작으면 싼 쪽을 쓴다.</li>
   </ul>
+
+  <hr>
+
 </section>
 
 <section id="s12">
   <h2><span class="sn">§12</span>실수 기록</h2>
+
   <p><code>mistakes.jsonl</code> 에 한 줄씩 덧붙인다. 개선 루프는 나중에 만들지만 형식은 지금 정한다(설계 원칙 9).</p>
+
   <div class="tw">
     <table>
       <thead><tr><th>칸</th><th>내용</th></tr></thead>
@@ -1141,82 +1313,108 @@ role: dev                        # dev(프롬프트를 고치며 본 사례) | h
       </tbody>
     </table>
   </div>
+
   <ul>
-    <li>사수의 차단 지적이 받아들여져 고쳐지면 코어가 자동으로 기록한다. 게이트에서 사람이 요구를 고치게 한 것, 리플레이 채점에서 나온 것도 자동으로 기록한다.</li>
+    <li>사수의 차단 지적이 받아들여져 고쳐지면 코어가 자동으로 기록한다. 기록은 지적이 나온 회차가 아니라 다음 회차 완료 때 직전 지적과 이번 판정을 견주어 한다: 이번에 <code>ok</code> 이고 답변이 <code>fixed</code>·<code>asked</code>·없음이면 기록하고, 답변이 <code>rejected</code> 이면 사수의 오탐이라 기록하지 않고 <code>events.jsonl</code> 에 <code>sasu_false_positive</code> 를 남긴다. 상한에 닿아 질문이 된 지적은 사람의 답이 판정하므로 기록하지 않는다. 게이트에서 사람이 요구를 고치게 한 것, 리플레이 채점에서 나온 것도 자동으로 기록한다.</li>
     <li>역할 정의를 고쳐 규칙을 하나 넣을 때는 그 규칙을 낳은 실수의 <code>case</code> 가 있어야 한다.</li>
   </ul>
+
+  <hr>
+
 </section>
 
 <section id="s13">
   <h2><span class="sn">§13</span>구현 순서</h2>
+
   <p>구현은 하위 모델 에이전트에 맡기고, 명세와 검증은 상위 모델이 한다. 조각마다 끝났는지 확인하는 방법을 먼저 적는다.</p>
+
   <div class="tw">
-    <table class="w4">
-      <thead><tr><th class="num">조각</th><th>내용</th><th>끝난 것으로 보는 조건</th></tr></thead>
+    <table>
+      <thead><tr><th class="num">조각</th><th>내용</th><th>상태(2026-11-14)</th></tr></thead>
       <tbody>
-        <tr><td class="num">0</td><td>실측(§14)</td><td>항목마다 결과를 이 명세에 반영</td></tr>
-        <tr><td class="num">1</td><td>코어 뼈대: 실행 폴더, 상태 기계, 이벤트, 공통 틀, <code>init</code>·<code>status</code>·<code>next</code>·<code>submit</code>(빈 스키마)</td><td>상태 전이 표(§1.3)의 모든 줄에 테스트</td></tr>
-        <tr><td class="num">2</td><td>수집과 원문 단위: <code>source</code>, <code>units</code>, Figma 화면 목록</td><td>APP-3008 PRD v22 와 시안에서 단위를 열거해 사람이 훑어본 수와 맞음</td></tr>
-        <tr><td class="num">3</td><td><code>analysis</code> 스키마와 결정적 검사, <code>technical-manager</code> 정의</td><td>검사 코드(§4.6)마다 통과·거부 테스트. 사례 1건을 끝까지 제출</td></tr>
-        <tr><td class="num">4</td><td><code>scenarios</code> 와 <code>qa-designer</code></td><td>§5 검사 테스트. 같은 사례에 시나리오 제출</td></tr>
-        <tr><td class="num">5</td><td>매니저 사수: 작업 단위, 묶음, <code>findings</code>, 반송</td><td>결함 주입 6종을 돌려 포착률 표가 나옴</td></tr>
-        <tr><td class="num">6</td><td>게이트(답변): 페이지, 저장, <code>gate import</code>, 답 반영</td><td>브라우저 테스트로 답·결정·재답변 흐름 통과. 사람이 실제 페이지 1회 확인</td></tr>
-        <tr><td class="num">7</td><td><code>plan</code>, <code>ticket-maker</code>, 티켓 사수, 게이트(승인), <code>approve</code></td><td>§7.3 검사 테스트. 수정 요청 → 재게시 → 승인 흐름 통과</td></tr>
-        <tr><td class="num">8</td><td>리플레이: <code>prepare</code>, 차단 훅, 답안지, <code>judge</code></td><td>차단을 일부러 깨는 실행이 채점에서 제외됨. 사례 1건 3회 채점</td></tr>
-        <tr><td class="num">9</td><td>기준선 측정, 완료 기준 확정, 모델 비교</td><td>§11.6 표가 실제 수치로 채워짐</td></tr>
+        <tr><td class="num">0</td><td>실측(<a href="#s14">§14</a>)</td><td>끝남. 사용량 한도 동작만 미결</td></tr>
+        <tr><td class="num">1</td><td>코어 뼈대: 실행 폴더, 상태 기계, 이벤트, 공통 틀, <code>init</code>·<code>status</code>·<code>next</code>·<code>submit</code></td><td>끝남. 전이 표의 모든 줄에 테스트</td></tr>
+        <tr><td class="num">2</td><td>수집과 원문 단위: <code>source</code>, <code>units</code>, Figma 화면 목록, 수집 역할</td><td>끝남. 실제 수집은 Figma 만 확인(<a href="#s14">§14</a> 의 9)</td></tr>
+        <tr><td class="num">3</td><td><code>analysis</code> 스키마와 결정적 검사, <code>technical-manager</code> 정의</td><td>끝남. APP-3008 로 실제 제출까지 확인</td></tr>
+        <tr><td class="num">4</td><td><code>scenarios</code> 와 <code>qa-designer</code></td><td>끝남. 실제 제출까지 확인</td></tr>
+        <tr><td class="num">5</td><td>매니저 사수: 작업 단위, 묶음, <code>findings</code>, 반송, 답변</td><td>끝남. 실제 실행에서 소음이 커서 한 번 조정했다. 결함 주입 측정은 진행 중</td></tr>
+        <tr><td class="num">6</td><td>게이트(로컬 페이지), <code>gate import</code>, <code>approve</code></td><td>끝남. 실제 데이터로 페이지 생성 확인. 브라우저에서 눌러 보는 확인은 사람 몫</td></tr>
+        <tr><td class="num">7</td><td><code>plan</code>, <code>ticket-maker</code>, 티켓 사수, 게이트의 분해안</td><td>코드는 끝남. 실제 실행은 아직(사람의 답이 있어야 이 단계에 닿는다)</td></tr>
+        <tr><td class="num">8</td><td>리플레이: <code>prepare</code>, 답안지, <code>judge</code>, 실행 뒤 감사</td><td>아직. 범위 훅과 결함 주입(<code>hew eval</code>)만 있다</td></tr>
+        <tr><td class="num">9</td><td>기준선 측정, 완료 기준 확정, 모델 비교</td><td>아직. 채점표 교정과 채점 전용 사례가 먼저다</td></tr>
       </tbody>
     </table>
   </div>
+
   <ul>
-    <li>조각 2·3 을 먼저 한 사례로 끝까지 잇고 나서 5 이후를 붙인다.</li>
-    <li>옛 hew 에서 가져올 모듈은 조각마다 §15 의 후보를 코드로 읽고 판정한다.</li>
+    <li>옛 hew 에서 가져올 모듈은 조각마다 <a href="#s15">§15</a> 의 후보를 코드로 읽고 판정한다.</li>
   </ul>
+
+  <hr>
+
 </section>
 
 <section id="s14">
   <h2><span class="sn">§14</span>실측과 미결</h2>
-  <p>구현 전에 작은 실험으로 확인할 것(조각 0)</p>
+
+  <p>구현 전에 작은 실험으로 확인한 것(조각 0, 2026-11-14, Claude Code 2.1.323, Haiku 5.5)</p>
+
   <div class="tw">
     <table>
-      <thead><tr><th class="num">#</th><th>확인할 것</th><th>깨지면</th></tr></thead>
+      <thead><tr><th class="num">#</th><th>확인할 것</th><th>결과</th></tr></thead>
       <tbody>
-        <tr><td class="num">1</td><td><code>claude -p</code> 에서 <code>--agent</code>·<code>--plugin-dir</code> 로 역할 정의가 실리고, <code>--allowedTools</code> 와 <code>dontAsk</code> 로 의도한 도구만 쓰이는가</td><td>역할 정의를 <code>--append-system-prompt-file</code> 로 넣는다</td></tr>
-        <tr><td class="num">2</td><td>무인 세션에서 Atlassian·Figma 읽기 도구가 보이는가(claude.ai 커넥터)</td><td>수집 단계만 대화형 세션의 스킬로 옮긴다</td></tr>
-        <tr><td class="num">3</td><td>사용량 한도에 걸린 <code>claude -p</code> 가 어떻게 끝나는가(구분할 수 있는 출력이 있는가)</td><td>실패를 모두 같은 재시도로 다룬다</td></tr>
-        <tr><td class="num">4</td><td>사수 세션 하나의 고정 비용과 알맞은 묶음 크기</td><td>묶음을 키운다</td></tr>
-        <tr><td class="num">5</td><td>무인 세션에서 Artifact 게시와 데이터베이스 읽기가 되는가</td><td>지금 설계(세션 스킬) 그대로</td></tr>
-        <tr><td class="num">6</td><td>평가 실행에서 사용자 설정의 heka 주입 훅과 heka 도구를 끄는 방법</td><td>평가 실행을 별도 설정 폴더로 띄운다</td></tr>
-        <tr><td class="num">7</td><td>읽기 경로를 제한하는 훅이 Read·Grep·Glob·Bash 를 모두 덮는가</td><td>Bash 를 허용 명령 목록으로 좁힌다</td></tr>
-        <tr><td class="num">8</td><td>Atlassian 읽기 호출에서 입력 교체 훅이 동작하는가(설계 §13 의 13)</td><td>쓰기는 에이전트가 직접 한다</td></tr>
+        <tr><td class="num">1</td><td><code>--agent</code>·<code>--plugin-dir</code> 로 역할 정의가 실리고 <code>--allowedTools</code>·<code>dontAsk</code> 로 의도한 도구만 쓰이는가</td><td>된다. 역할 정의의 <code>tools</code> 에 적은 도구만 세션에 실렸다. <code>dontAsk</code> 에서 허용하지 않은 Bash 명령은 거부됐다. 다만 Read 는 경로를 가리지 않으므로 경로 훅이 필요하다(7번)</td></tr>
+        <tr><td class="num">2</td><td>무인 세션에서 Atlassian·Figma 읽기 도구가 보이는가</td><td>보인다. Atlassian 은 처음부터 실려 있고(<code>mcp__claude_ai_Atlassian__*</code>), Figma 는 ToolSearch 로 찾은 뒤 호출됐다(<code>mcp__claude_ai_Figma__*</code>)</td></tr>
+        <tr class="m" data-m="미결"><td class="num">3</td><td>사용량 한도에 걸린 <code>claude -p</code> 가 어떻게 끝나는가</td><td>확인하지 못했다. 일부러 한도에 걸 수 없다. 처음 걸렸을 때의 출력을 기록해 구분 규칙을 만든다. 그 전에는 실패를 모두 같은 재시도로 다룬다 <span class="chip c-m" data-k="미결">미결</span></td></tr>
+        <tr><td class="num">4</td><td>사수 세션 하나의 고정 비용</td><td>약 $0.001(도구 2개, 사용자 설정 없음). 묶음 크기는 비용이 아니라 판정 품질로 정한다</td></tr>
+        <tr><td class="num">5</td><td>무인 세션에서 Artifact 게시와 데이터베이스 읽기가 되는가</td><td>하지 않았다. 이 계정은 요청 없이 Artifact 를 게시하지 않기로 했고, 게이트는 로컬 파일로 바꿨다(<a href="#s8-5">§8.5</a>)</td></tr>
+        <tr><td class="num">9</td><td>수집 역할이 실제로 가져오는가(2026-11-14, APP-3008)</td><td>Figma 메타데이터(839KB, 파일로 떨어진 결과를 훅이 받아 적음)와 스크린샷 44장은 됐다. PRD 의 과거 버전은 실패했다. 지금 연결된 Atlassian 커넥터에 과거 버전을 읽는 도구가 없고, 그 도구가 있는 <code>claude.ai Atlassian MCP</code> 는 인증되지 않았다</td></tr>
+        <tr><td class="num">6</td><td>평가 실행에서 사용자 설정의 heka 주입 훅과 heka 도구를 끄는 방법</td><td><code>--setting-sources project,local --strict-mcp-config --mcp-config '{&quot;mcpServers&quot;:{}}'</code> 로 꺼진다. 훅 0번, MCP 0개, 로그인 유지</td></tr>
+        <tr><td class="num">7</td><td>읽기 경로를 제한하는 훅</td><td>Read 는 막힌다(범위 밖 절대 경로, <code>..</code> 경로 모두 거부). Grep·Glob 도구는 이 버전에 없어 대상이 아니다. Bash 는 허용 명령 목록과 경로 검사로 막는다(구현 조각 8 에서 확인)</td></tr>
+        <tr><td class="num">8</td><td>Atlassian 읽기 호출에서 입력 교체 훅이 동작하는가</td><td>동작한다. <code>APP-1</code> 을 조회하라고 시킨 세션에서 훅이 넣은 <code>APP-3008</code> 이 조회됐다. 설계 §4.3 의 쓰기 전용 단계는 그대로 간다</td></tr>
       </tbody>
     </table>
   </div>
+
+  <ul>
+    <li>부수 확인: Atlassian 커넥터가 폐기 예정인 V1 주소를 쓰고 있다는 안내가 도구 응답에 실려 온다(2027-03-01 폐기). 커넥터를 다시 추가해야 한다.</li>
+  </ul>
+
   <p>사용자가 정할 것</p>
+
   <div class="tw">
     <table>
       <thead><tr><th class="num">#</th><th>항목</th></tr></thead>
       <tbody>
-        <tr><td class="num">1</td><td>§0.3 의 가정 8건</td></tr>
+        <tr><td class="num">1</td><td><a href="#s0-3">§0.3</a> 의 가정 8건</td></tr>
         <tr><td class="num">2</td><td>채점 전용(<code>heldout</code>) 사례로 쓸 과거 PRD 와, 작은 티켓 경로의 사례</td></tr>
-        <tr><td class="num">3</td><td>완료 기준 수치(§11.6). 기준선을 잰 뒤</td></tr>
+        <tr><td class="num">3</td><td>완료 기준 수치(<a href="#s11-6">§11.6</a>). 기준선을 잰 뒤</td></tr>
       </tbody>
     </table>
   </div>
+
   <p>명세를 쓰며 남긴 미결</p>
+
   <ul>
-    <li>PR 하나의 예상 변경 크기 상한(§7.2)</li>
-    <li>Figma 과거 버전(§11.2)</li>
-    <li>작은 티켓 경로의 게이트 축소 범위(§10)</li>
+    <li>PR 하나의 예상 변경 크기 상한(<a href="#s7-2">§7.2</a>)</li>
+    <li>Figma 과거 버전(<a href="#s11-2">§11.2</a>)</li>
+    <li>작은 티켓 경로의 게이트 축소 범위(<a href="#s10">§10</a>)</li>
   </ul>
+
+  <hr>
+
 </section>
 
 <section id="s15">
   <h2><span class="sn">§15</span>옛 hew 에서 가져올 후보</h2>
-  <p>2026-11-14 에 옛 hew(브랜치 <code>slice-2</code> 작업 트리)의 계약을 읽기 전용으로 조사한 결과다. <span class="chip c-s" data-k="사실">사실</span> 판정 기준은 설계 §11 대로 "새 계약과 입출력이 같고, 옛 스키마에 묶여 있지 않고, 테스트가 있다"이며, 실제로 가져올지는 조각마다 코드를 읽고 정한다. 아래는 후보일 뿐이다.</p>
+
+  <p class="m" data-m="사실">2026-11-14 에 옛 hew(브랜치 <code>slice-2</code> 작업 트리)의 계약을 읽기 전용으로 조사한 결과다. <span class="chip c-s" data-k="사실">사실</span> 판정 기준은 설계 §11 대로 &quot;새 계약과 입출력이 같고, 옛 스키마에 묶여 있지 않고, 테스트가 있다&quot;이며, 실제로 가져올지는 조각마다 코드를 읽고 정한다. 아래는 후보일 뿐이다.</p>
+
   <p>그대로 쓸 수 있어 보이는 것(옛 스키마에 묶이지 않음)</p>
+
   <div class="tw">
     <table>
-      <thead><tr><th>모듈</th><th>하는 일</th><th>쓰일 조각</th></tr></thead>
+      <thead><tr><th>모듈</th><th>하는 일</th><th class="num">쓰일 조각</th></tr></thead>
       <tbody>
         <tr><td><code>src/core/hash.ts</code></td><td>키를 정렬한 JSON 의 sha256</td><td class="num">1</td></tr>
         <tr><td><code>src/core/replay/prepare.ts</code>, <code>exec.ts</code></td><td>base SHA 로 단일 커밋 사본을 만들고 커밋 수가 1인지 검증</td><td class="num">8</td></tr>
@@ -1229,7 +1427,9 @@ role: dev                        # dev(프롬프트를 고치며 본 사례) | h
       </tbody>
     </table>
   </div>
+
   <p>손을 봐야 쓸 수 있는 것(옛 스키마에 묶임)</p>
+
   <div class="tw">
     <table>
       <thead><tr><th>모듈</th><th>하는 일</th><th>묶인 곳</th></tr></thead>
@@ -1237,14 +1437,16 @@ role: dev                        # dev(프롬프트를 고치며 본 사례) | h
         <tr><td><code>src/core/answers.ts</code>, <code>merge.ts</code></td><td>답을 시각 비교로 합치기, 사람 입력 보존, 철회</td><td>옛 질문·차이 스키마</td></tr>
         <tr><td><code>src/core/replay/judge.ts</code>, <code>score.ts</code></td><td>중립 id 로 섞은 채점 패킷, 재현율·정밀도 계산</td><td>옛 요구·채점표 스키마</td></tr>
         <tr><td><code>gate/template.html</code>, <code>build.ts</code>, <code>review.ts</code></td><td>게이트 페이지와 확인 요청서</td><td>옛 brief 구조. 화면 구성 결정(탭, 고정 이미지 등)이 이미 반영돼 있는지는 코드로 확인해야 한다</td></tr>
-        <tr><td><code>scripts/heka-baseline.sh</code></td><td>heka 규칙의 "적용" 절을 모아 주입</td><td>서브에이전트 시작 훅 방식</td></tr>
+        <tr><td><code>scripts/heka-baseline.sh</code></td><td>heka 규칙의 &quot;적용&quot; 절을 모아 주입</td><td>서브에이전트 시작 훅 방식</td></tr>
         <tr><td><code>scripts/guard-hew.sh</code></td><td>쓰기 범위와 리플레이 차단 훅</td><td>옛 실행 폴더 구조</td></tr>
       </tbody>
     </table>
   </div>
+
   <p>옛 hew 와 달라지는 점(가져올 때 주의)</p>
+
   <div class="tw">
-    <table class="w4">
+    <table>
       <thead><tr><th>항목</th><th>옛 hew</th><th>이 명세</th></tr></thead>
       <tbody>
         <tr><td>인용 대조</td><td>코드 검사가 없다. 인용이 비었는지만 본다</td><td>인용이 원문 단위에 실제로 있는지 대조한다(<code>quote_not_found</code>)</td></tr>
@@ -1259,105 +1461,32 @@ role: dev                        # dev(프롬프트를 고치며 본 사례) | h
       </tbody>
     </table>
   </div>
+
   <ul>
     <li>옛 hew 의 테스트는 이 구간에 약 1,200건이 있다(게이트 430여 건, 리플레이 100여 건 포함. 테스트 선언 줄 수로 센 대략값). 모듈을 가져올 때 그 모듈의 테스트도 함께 가져온다.</li>
     <li>옛 게이트 README 는 페이지의 데이터베이스 왕복을 실제 Artifact 뷰어에서 확인하지 못했다고 적고 있다.</li>
   </ul>
-</section>
 
+</section>
 </main>
 </div>
-
-<p class="src">원본: <code>docs/SPEC-stage-1.md</code></p>
 </div>
-
 <script>
 (function () {
-  /* 본문의 "§n", "§n.m" 을 절 링크로 바꾼다. "설계 §…" 는 설계 문서의 절이므로 제외한다. */
-  var main = document.getElementById("doc");
-  var re = /(?<!설계 )(?<!설계 문서 )§(\d+)(?:\.(\d+))?/g;
-  var walker = document.createTreeWalker(main, NodeFilter.SHOW_TEXT, {
-    acceptNode: function (n) {
-      if (n.nodeValue.indexOf("§") === -1) return NodeFilter.FILTER_REJECT;
-      var p = n.parentNode;
-      if (p.closest("a, code, pre, .sn, .chip, h2, h3")) return NodeFilter.FILTER_REJECT;
-      return NodeFilter.FILTER_ACCEPT;
-    }
-  });
-  var nodes = [];
-  while (walker.nextNode()) nodes.push(walker.currentNode);
-  nodes.forEach(function (n) {
-    var s = n.nodeValue, last = 0, m, frag = document.createDocumentFragment(), hit = false;
-    re.lastIndex = 0;
-    while ((m = re.exec(s))) {
-      var id = "s" + m[1] + (m[2] ? "-" + m[2] : "");
-      if (!document.getElementById(id)) id = "s" + m[1];
-      if (!document.getElementById(id)) continue;
-      hit = true;
-      frag.appendChild(document.createTextNode(s.slice(last, m.index)));
-      var a = document.createElement("a");
-      a.href = "#" + id;
-      a.textContent = m[0];
-      frag.appendChild(a);
-      last = m.index + m[0].length;
-    }
-    if (!hit) return;
-    frag.appendChild(document.createTextNode(s.slice(last)));
-    n.parentNode.replaceChild(frag, n);
-  });
-
   /* 절 목차: 넓은 화면에서는 항상 펼치고, 좁은 화면에서는 접어 둔다 */
   var tocd = document.getElementById("tocd");
-  var mq = window.matchMedia("(min-width: 1000px)");
-  function syncToc() { if (mq.matches) tocd.open = true; else tocd.open = false; }
-  syncToc();
-  if (mq.addEventListener) mq.addEventListener("change", syncToc);
-  tocd.addEventListener("click", function (e) {
-    if (!mq.matches && e.target.closest && e.target.closest("a")) tocd.open = false;
-  });
+  if (tocd) {
+    var mq = window.matchMedia("(min-width: 1000px)");
+    var syncToc = function () { tocd.open = mq.matches; };
+    syncToc();
+    if (mq.addEventListener) mq.addEventListener("change", syncToc);
+    tocd.addEventListener("click", function (e) {
+      if (!mq.matches && e.target.closest && e.target.closest("a")) tocd.open = false;
+    });
+  }
 
-  /* 표기 필터 */
-  var kinds = ["결정", "가정", "제안", "미결", "사실"];
-  var chips = document.querySelectorAll(".chip[data-k]");
-  var counts = {};
-  kinds.forEach(function (k) { counts[k] = 0; });
-  chips.forEach(function (c) { var k = c.getAttribute("data-k"); if (counts.hasOwnProperty(k)) counts[k]++; });
-  var total = 0;
-  kinds.forEach(function (k) {
-    total += counts[k];
-    var el = document.querySelector('[data-n="' + k + '"]');
-    if (el) el.textContent = counts[k];
-  });
-  var all = document.querySelector('[data-n="전체"]');
-  if (all) all.textContent = total;
-
+  /* 표기 필터: 고른 표기가 달린 블록만 또렷하게 두고 나머지는 흐리게 한다 */
   var buttons = document.querySelectorAll(".filters button");
-  function target(box) {
-    if (box._t) return box._t;
-    var t = box;
-    if (box.tagName === "LI") {
-      var nested = box.querySelector(":scope > ul, :scope > ol");
-      if (nested) {
-        t = document.createElement("span");
-        box.insertBefore(t, box.firstChild);
-        while (t.nextSibling && t.nextSibling !== nested) t.appendChild(t.nextSibling);
-      }
-    }
-    box._t = t;
-    return t;
-  }
-  function mark(el, k) {
-    var cur = (el.getAttribute("data-m") || "").split(" ").filter(Boolean);
-    if (cur.indexOf(k) === -1) cur.push(k);
-    el.setAttribute("data-m", cur.join(" "));
-    el.classList.add("m");
-  }
-  /* 칩은 그 칩이 붙은 문장이 속한 목록 항목·표 행·문단 전체에 표기를 건다 */
-  chips.forEach(function (c) {
-    var box = c.closest("li, tr, p, dd");
-    if (box) mark(target(box), c.getAttribute("data-k"));
-  });
-
   var items = document.querySelectorAll(".m[data-m]");
   function apply(f) {
     buttons.forEach(function (b) { b.setAttribute("aria-pressed", b.getAttribute("data-f") === f ? "true" : "false"); });

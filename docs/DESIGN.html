@@ -1,0 +1,1033 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{color-scheme:light}body{margin:0;font:14px system-ui,-apple-system,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>hew 설계 v0 — PRD 에서 draft PR 까지</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
+<style>
+/* 레이아웃: 머리 → 표기 필터 → (넓은 화면: 고정 절 목차 + 본문 / 좁은 화면: 접힌 절 목차 → 본문). 표·코드는 각자 가로 스크롤. */
+:root {
+  --bg: #f3f6f7;
+  --surface: #ffffff;
+  --fg: #17262b;
+  --muted: #55676d;
+  --line: #d3dde0;
+  --accent: #0b6e7f;
+  --accent-soft: #dbedf0;
+  --on-accent: #ffffff;
+  --zone: #eaf0f2;
+  --focus: #0b6e7f;
+  --c-d-bg: #d3ebe7; --c-d-fg: #0b5249;
+  --c-g-bg: #f5e6c2; --c-g-fg: #664500;
+  --c-j-bg: #dce5f6; --c-j-fg: #243f7c;
+  --c-m-bg: #f6d8d4; --c-m-fg: #84261e;
+  --c-s-bg: #e0e5e7; --c-s-fg: #2f4147;
+  --font-body: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e181b;
+    --surface: #152226;
+    --fg: #e2ebed;
+    --muted: #9bafb5;
+    --line: #2b3c41;
+    --accent: #5cc3d4;
+    --accent-soft: #163a41;
+    --on-accent: #08242a;
+    --zone: #121f23;
+    --focus: #5cc3d4;
+    --c-d-bg: #12403a; --c-d-fg: #8fdcd1;
+    --c-g-bg: #473711; --c-g-fg: #f0cf80;
+    --c-j-bg: #1e2f55; --c-j-fg: #aac2f3;
+    --c-m-bg: #4c201c; --c-m-fg: #f3a9a1;
+    --c-s-bg: #26353b; --c-s-fg: #bccbd0;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e181b;
+  --surface: #152226;
+  --fg: #e2ebed;
+  --muted: #9bafb5;
+  --line: #2b3c41;
+  --accent: #5cc3d4;
+  --accent-soft: #163a41;
+  --on-accent: #08242a;
+  --zone: #121f23;
+  --focus: #5cc3d4;
+  --c-d-bg: #12403a; --c-d-fg: #8fdcd1;
+  --c-g-bg: #473711; --c-g-fg: #f0cf80;
+  --c-j-bg: #1e2f55; --c-j-fg: #aac2f3;
+  --c-m-bg: #4c201c; --c-m-fg: #f3a9a1;
+  --c-s-bg: #26353b; --c-s-fg: #bccbd0;
+  color-scheme: dark;
+}
+body { background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 15px; line-height: 1.7; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+* { box-sizing: border-box; }
+.wrap { max-width: 1160px; margin-inline: auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 28px 56px; }
+a { color: var(--accent); text-underline-offset: 2px; overflow-wrap: anywhere; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 3px; }
+code { font-family: var(--font-mono); font-size: .86em; background: var(--zone); border: 1px solid var(--line); padding: .05em .35em; border-radius: 3px; overflow-wrap: anywhere; }
+strong { font-weight: 600; }
+p { margin: 0 0 .7em; }
+ul, ol { margin: 0 0 .8em; padding-left: 1.4em; }
+li { margin-bottom: .3em; }
+li > ul, li > ol { margin-top: .3em; margin-bottom: 0; }
+
+/* 전체 격자: 넓은 화면에서 왼쪽에 고정 목차 */
+.page { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; }
+.top { min-width: 0; }
+.toc { min-width: 0; margin-top: 2rem; }
+.doc { min-width: 0; }
+
+/* 머리 */
+.head h1 { font-size: clamp(1.45rem, 4.6vw, 2rem); line-height: 1.3; margin: 0 0 .9rem; font-weight: 700; text-wrap: balance; letter-spacing: -.01em; }
+.meta { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .25rem 1rem; margin: 0 0 1rem; font-size: .9rem; }
+.meta dt { color: var(--muted); font-weight: 500; }
+.meta dd { margin: 0; min-width: 0; }
+.headnotes { list-style: none; padding: 0; margin: 0; border-left: 3px solid var(--accent); padding: .1rem 0 .1rem 1rem; font-size: .95rem; }
+.headnotes li { margin: 0 0 .35rem; }
+.headnotes li:last-child { margin-bottom: 0; }
+
+/* 칩 */
+.chip { display: inline-block; font-family: var(--font-mono); font-size: .68rem; line-height: 1; font-weight: 500; padding: .22em .5em; border-radius: 3px; margin-left: .4em; margin-right: .15em; vertical-align: .1em; white-space: nowrap; }
+.c-d { background: var(--c-d-bg); color: var(--c-d-fg); }
+.c-g { background: var(--c-g-bg); color: var(--c-g-fg); }
+.c-j { background: var(--c-j-bg); color: var(--c-j-fg); }
+.c-m { background: var(--c-m-bg); color: var(--c-m-fg); }
+.c-s { background: var(--c-s-bg); color: var(--c-s-fg); }
+.note { font-size: .72rem; color: var(--muted); margin-left: .3em; margin-right: .15em; }
+.m { transition: opacity .15s; }
+.m.dim { opacity: .28; }
+
+/* 범례·필터 */
+.panel { margin-top: 1.6rem; padding-block: 1rem; border-block: 1px solid var(--line); }
+.panel h2 { font-size: .78rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; margin: 0 0 .7rem; }
+.filters { display: flex; flex-wrap: wrap; gap: .4rem; }
+.filters button { font: inherit; font-size: .85rem; background: var(--surface); color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: .35rem .7rem; cursor: pointer; display: inline-flex; gap: .45rem; align-items: baseline; }
+.filters button .n { font-family: var(--font-mono); font-size: .75rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.filters button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.filters button[aria-pressed="true"] .n { color: var(--on-accent); }
+
+/* 절 목차 */
+.toc summary { cursor: pointer; font-size: .9rem; font-weight: 600; padding: .55rem .8rem; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); list-style: none; }
+.toc summary::-webkit-details-marker { display: none; }
+.toc summary::after { content: "▾"; float: right; color: var(--muted); }
+.toc[open] summary::after { content: "▴"; }
+.toc ul { list-style: none; margin: .5rem 0 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: .2rem; }
+.toc li { margin: 0; }
+.toc a { display: block; text-decoration: none; font-size: .88rem; line-height: 1.4; padding: .35rem .6rem; border-radius: 5px; color: var(--fg); border: 1px solid var(--line); background: var(--surface); overflow-wrap: normal; }
+.toc a:hover { border-color: var(--accent); color: var(--accent); }
+.toc a .sn { font-family: var(--font-mono); color: var(--accent); margin-right: .45em; display: inline-block; min-width: 2.4em; }
+
+/* 본문 */
+section { padding-top: 2.2rem; scroll-margin-top: 16px; }
+h3 { scroll-margin-top: 16px; }
+section h2 { font-size: 1.3rem; line-height: 1.35; margin: 0 0 .9rem; padding-bottom: .4rem; border-bottom: 1px solid var(--line); font-weight: 700; text-wrap: balance; }
+section h2 .sn { font-family: var(--font-mono); font-weight: 500; color: var(--accent); margin-right: .4em; font-size: .85em; }
+section h3 { font-size: 1.03rem; margin: 1.5rem 0 .6rem; font-weight: 600; text-wrap: balance; }
+section h3 .sn { font-family: var(--font-mono); color: var(--accent); font-weight: 500; margin-right: .4em; font-size: .88em; }
+.tw { overflow-x: auto; margin: .3rem 0 1rem; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; min-width: 34rem; font-size: .88rem; line-height: 1.55; }
+table.w6 { min-width: 58rem; }
+table.w4 { min-width: 44rem; }
+th, td { text-align: left; vertical-align: top; padding: .55rem .7rem; border-bottom: 1px solid var(--line); }
+th { background: var(--zone); font-weight: 600; font-size: .8rem; white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+td.num, th.num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+table.codecol td:first-child { min-width: 11rem; }
+pre.code { margin: .3rem 0 1rem; padding: .8rem 1rem; background: var(--zone); border: 1px solid var(--line); border-radius: 6px; overflow-x: auto; font-family: var(--font-mono); font-size: .82rem; line-height: 1.6; white-space: pre; tab-size: 2; }
+h4 { font-size: .95rem; margin: 1.2rem 0 .5rem; font-weight: 600; }
+blockquote { margin: .3rem 0 1rem; padding: .1rem 0 .1rem 1rem; border-left: 3px solid var(--line); color: var(--muted); }
+blockquote p:last-child { margin-bottom: 0; }
+hr { border: 0; border-top: 1px solid var(--line); margin: 1.6rem 0; }
+del { opacity: .75; }
+.doc p, .doc li, .doc blockquote, .meta dd { overflow-wrap: anywhere; }
+.intro { padding-top: 1.6rem; }
+pre.code code { background: none; border: 0; padding: 0; font-size: inherit; }
+.lbl { font-size: .85rem; color: var(--muted); font-weight: 600; margin: 1rem 0 .4rem; }
+
+@media (min-width: 1000px) {
+  .page { grid-template-columns: 15.5rem minmax(0, 1fr); column-gap: 2.5rem; grid-template-areas: ". top" "toc doc"; }
+  .top { grid-area: top; max-width: 860px; }
+  .toc { grid-area: toc; margin-top: 2.2rem; position: sticky; top: calc(env(safe-area-inset-top, 0px) + 12px); align-self: start; max-height: calc(100vh - 24px); overflow-y: auto; }
+  .doc { grid-area: doc; max-width: 860px; }
+  .toc summary { display: none; }
+  .toc ul { margin-top: 0; }
+  .toc a { border-color: transparent; background: none; padding: .25rem .5rem; }
+}
+@media (max-width: 760px) {
+  .meta { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .meta dd { margin-bottom: .5rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; scroll-behavior: auto !important; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="page">
+
+<div class="top">
+<div class="head" id="top">
+  <h1>hew 설계 v0 — PRD 에서 draft PR 까지</h1>
+  <dl class="meta">
+    <dt>작성</dt><dd>2026-11-13, hee-develop + Claude (Fable 5.2)</dd>
+    <dt>상태</dt><dd>구상 확정본. 2026-11-13 대화(질문 5라운드)의 결정을 정리했고, 같은 날 저녁 6라운드(가정·제안 확인, <a href="#s14">§14</a> 의 19~30)를 반영했다. 구현 명세(스키마·명령 계약)는 이 문서 다음에 쓴다.</dd>
+    <dt>구현 명세</dt><dd>1번 단계(입력에서 승인까지)는 <code>docs/SPEC-stage-1.md</code>(2026-11-14 초안, 검토 전).</dd>
+  </dl>
+  <ul class="headnotes">
+    <li>공개본에서는 사내 수치와 실제 일감의 기록을 뺐다.</li>
+    <li>표기
+      <ul>
+        <li><span class="chip c-d">결정</span> 사용자가 정한 것</li>
+        <li><span class="chip c-g">가정</span> Claude 가 두었고 사용자가 반대하지 않은 것. 명시적 확인 전까지 뒤집힐 수 있다</li>
+        <li><span class="chip c-j">제안</span> Claude 제안. 채택 여부 미정</li>
+        <li><span class="chip c-m">미결</span> 실측이나 결정이 필요한 것</li>
+        <li><span class="chip c-s">사실</span> 직접 확인한 것(출처는 <a href="#s15">§15</a>)</li>
+      </ul>
+    </li>
+  </ul>
+</div>
+<div class="panel" id="legend">
+  <h2>표기 필터</h2>
+  <div class="filters" role="group" aria-label="표기 필터">
+    <button type="button" data-f="전체" aria-pressed="true">전체 <span class="n" data-n="전체">123</span></button>
+    <button type="button" data-f="결정" aria-pressed="false">결정 <span class="n" data-n="결정">51</span></button>
+    <button type="button" data-f="가정" aria-pressed="false">가정 <span class="n" data-n="가정">46</span></button>
+    <button type="button" data-f="제안" aria-pressed="false">제안 <span class="n" data-n="제안">4</span></button>
+    <button type="button" data-f="미결" aria-pressed="false">미결 <span class="n" data-n="미결">8</span></button>
+    <button type="button" data-f="사실" aria-pressed="false">사실 <span class="n" data-n="사실">14</span></button>
+  </div>
+</div>
+</div>
+
+<nav class="toc" aria-label="절 목차">
+  <details id="tocd" open>
+    <summary>절 목차(§0~§16)</summary>
+    <ul>
+      <li><a href="#s0"><span class="sn">§0</span>한눈에 보기</a></li>
+      <li><a href="#s1"><span class="sn">§1</span>주장과 요구</a></li>
+      <li><a href="#s2"><span class="sn">§2</span>성공 지표</a></li>
+      <li><a href="#s3"><span class="sn">§3</span>원칙</a></li>
+      <li><a href="#s4"><span class="sn">§4</span>단계와 역할</a></li>
+      <li><a href="#s5"><span class="sn">§5</span>요구사항 분석 문서(게이트)</a></li>
+      <li><a href="#s6"><span class="sn">§6</span>승인 이후 규칙</a></li>
+      <li><a href="#s7"><span class="sn">§7</span>QA</a></li>
+      <li><a href="#s8"><span class="sn">§8</span>진행 프로그램(코어)</a></li>
+      <li><a href="#s9"><span class="sn">§9</span>비용</a></li>
+      <li><a href="#s10"><span class="sn">§10</span>평가와 점진적 개선</a></li>
+      <li><a href="#s11"><span class="sn">§11</span>기존 hew 에서 가져올 것</a></li>
+      <li><a href="#s12"><span class="sn">§12</span>구축 순서</a></li>
+      <li><a href="#s13"><span class="sn">§13</span>미결·실측 목록</a></li>
+      <li><a href="#s14"><span class="sn">§14</span>결정 기록(2026-11-13)</a></li>
+      <li><a href="#s15"><span class="sn">§15</span>근거 자료</a></li>
+      <li><a href="#s16"><span class="sn">§16</span>적용하는 heka 규칙</a></li>
+    </ul>
+  </details>
+</nav>
+
+<main class="doc" id="doc">
+<section id="s0">
+  <h2><span class="sn">§0</span>한눈에 보기</h2>
+
+  <p>PRD 하나(또는 작은 Jira 티켓 하나)를 넣으면 요구사항을 분석해 사람에게 한 번 확인받고, 그 뒤 티켓 생성·구현·리뷰·기기 QA 를 거쳐 draft PR 을 올리는 데까지 사람 없이 진행한다.</p>
+
+  <pre class="code"><code>입력(PRD URL | Jira 티켓 URL)
+  → [1]   테크니컬 매니저: 요구 분석 + 코드 수준 영향 분석
+          QA 전문가(설계): 시나리오·모킹 초안
+  → [1-1] 매니저 사수: 누락·환각 대조
+  → [G]   게이트(답변): 사람이 질문에 답하고 PRD–Figma 차이를 결정
+  → [2]   티켓 메이커: 티켓 분해·PR 묶음안 → [2-1] 티켓 사수
+  → [G]   게이트(승인): 사람이 분해안까지 확인하고 승인      ← 사람 개입은 이 게이트 한 곳
+  → [W]   쓰기 단계: 승인된 티켓을 Jira 에 생성
+  → 티켓마다   [3] 프로덕트 빌더 → [3-3] 빌더 사수 → [3-2] 코드 리뷰어
+  → PR 묶음마다 [4] QA 전문가(실행, iOS·Android) → [3-1] PR 작성자 → [W] draft PR
+  → (사람) ready 전환·리뷰어 지정</code></pre>
+
+  <p>사람이 하는 일은 세 가지다. 게이트에서 답변·확인·승인, 종료 보고서의 보류 질문에 답, draft PR 을 ready 로 전환.</p>
+
+  <hr>
+
+</section>
+
+<section id="s1">
+  <h2><span class="sn">§1</span>주장과 요구</h2>
+
+  <ul>
+    <li class="m" data-m="결정">주장 <span class="chip c-d" data-k="결정">결정</span>: &quot;요구사항이 잘 전달되었다면 이후 작업은 손을 대지 않아도 알아서 잘 만들어준다.&quot; 그래서 1번 단계가 이 워크플로우의 핵심이다.</li>
+    <li><span class="m" data-m="가정">운영 해석 <span class="chip c-g" data-k="가정">가정</span>: 요구가 <strong>검증 가능한 형태</strong>(인수 조건·검증 수단·QA 시나리오)로 확정되면 하류는 그 검증을 통과시키는 문제가 된다. 이 주장은 &quot;승인 이후 사람 개입 횟수&quot;와 &quot;사후 결함의 원인 단계 분포&quot;로 검증한다.</span>
+      <ul>
+        <li class="m" data-m="사실">근거 <span class="chip c-s" data-k="사실">사실</span>: 이전 구현의 과거 일감 대조에서 결함이 분석 단계에서 났다. 요구만으로 막지 못하는 결함도 있다.</li>
+      </ul>
+    </li>
+    <li><span class="m" data-m="결정">요구 <span class="chip c-d" data-k="결정">결정</span></span>
+      <ol>
+        <li>성공 지표를 맞추기 위해 성능 우선으로 하되 가능한 한 비용을 최적화한다.</li>
+        <li>요구 확인·승인 이후는 완전 자동화한다. 단 세션 자체가 죽는 중단은 요구에서 제외한다.</li>
+        <li>각 단계의 산출물은 일관된 형태를 유지한다.</li>
+        <li>실수는 로그나 지식으로 기록하고 주기적으로 프롬프트·스킬·하니스를 고친다(개선 루프 자체는 추후 구축).</li>
+      </ol>
+    </li>
+    <li class="m" data-m="결정 가정">대상 일감 <span class="chip c-d" data-k="결정">결정</span>: PRD 가 있는 기능 개발과 작은 Jira 티켓. 입력이 PRD URL 이면 전체 경로, Jira 티켓 URL 이면 작은 티켓 경로다 <span class="chip c-g" data-k="가정">가정</span>.</li>
+    <li class="m" data-m="결정">사용 범위 <span class="chip c-d" data-k="결정">결정</span>: 먼저 혼자 쓰고 나중에 팀으로 넓힌다. 개인 습관(PR 본문·커밋·주석 규칙)은 설정으로 분리한다.</li>
+  </ul>
+
+  <hr>
+
+</section>
+
+<section id="s2">
+  <h2><span class="sn">§2</span>성공 지표</h2>
+
+  <div class="tw">
+    <table class="w4">
+      <thead><tr><th class="num">#</th><th>지표 <span class="chip c-d">결정</span></th><th>집계 규칙</th><th>기준선 <span class="chip c-s">사실</span></th></tr></thead>
+      <tbody>
+        <tr class="m" data-m="가정"><td class="num">1</td><td>PRD 요구 누락 0건(작업 중 바뀐 요구 포함)</td><td>사후에 리뷰·QA·PO 지적 중 &quot;요구 누락&quot;으로 분류된 건수 + 리플레이의 요구 재현율. 판정 기준은 승인된 문서와 승인 뒤 접수된 변경 <span class="chip c-g" data-k="가정">가정</span></td><td>없음(리플레이로 측정)</td></tr>
+        <tr class="m" data-m="결정"><td class="num">2</td><td>사람 QA 이슈 0건</td><td>해당 일감의 QA 이슈를 원인별로 분류해 <strong>모바일 쪽 요구 누락·구현 결함·회귀</strong>만 센다. 서버·기획 변경·환경·결함 아님은 따로 기록한다. AI 1차 분류 뒤 사람 확인 <span class="chip c-d" data-k="결정">결정</span></td><td>—</td></tr>
+        <tr class="m" data-m="결정"><td class="num">3</td><td>PR 에 p4 이상 댓글 0건</td><td>사람이 p1~p4 를 붙인 댓글 + Copilot 의 변경필요(⛔️)·확인필요(⚠️) 댓글 + 리뷰 뒤 코드 수정 커밋이 생겼는지 <span class="chip c-d" data-k="결정">결정</span></td><td>—</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <ul>
+    <li>지표 2·3 은 사람이 작업한 결과도 이미 0 근처다. <strong>지켜야 할 하한선</strong>으로 쓰고, 개선됐는지는 리플레이와 아래 보조 지표로 본다.</li>
+    <li><span class="m" data-m="가정">보조 지표 <span class="chip c-g" data-k="가정">가정</span></span>
+      <ul>
+        <li>승인 이후 사람 개입 횟수(보류 질문 수). 주장과 요구 2 의 직접 지표다.</li>
+        <li>사후에 틀린 것으로 드러난 &quot;확정&quot; 항목 수, 지어낸 요구 수, 질문 수율(문서에 이미 답이 있던 질문의 비율).</li>
+        <li>게이트 체류 시간(문서 게시부터 승인까지).</li>
+        <li>수락된 변경당 비용, 단계별 비용.</li>
+        <li>단계별 결함 봉쇄(결함이 어느 단계에서 잡혔는가).</li>
+      </ul>
+    </li>
+    <li>누락만 재면 요구를 부풀리거나 질문을 쏟아내는 쪽으로 쏠린다. 그래서 지표 1 은 정밀도·질문 수율과 같이 본다.</li>
+  </ul>
+
+  <hr>
+
+</section>
+
+<section id="s3">
+  <h2><span class="sn">§3</span>원칙</h2>
+
+  <ol>
+    <li class="m" data-m="결정">사람 게이트는 요구 확인 1회다. <span class="chip c-d" data-k="결정">결정</span> 게이트 안에서 답변과 승인으로 두 번 보지만(<a href="#s4-4">§4.4</a>) 승인은 한 번이고, 승인 뒤에는 사람을 기다리지 않는다.</li>
+    <li class="m" data-m="결정 가정">승인 이후 단계 진행은 프로그램(코어)이 정한다. <span class="chip c-d" data-k="결정">결정</span> 에이전트의 완료 선언은 상태를 바꾸지 않는다. 완료와 approve 는 코어가 직접 돌린 검사와 구조화된 지적에서 계산한 값이다. <span class="chip c-g" data-k="가정">가정</span></li>
+    <li class="m" data-m="가정">결정적으로 검사할 수 있는 것에 LLM 을 쓰지 않는다. <span class="chip c-g" data-k="가정">가정</span></li>
+    <li class="m" data-m="결정 가정">검증자의 이름은 &quot;사수&quot;로 통일하고 작은 모델을 쓴다. <span class="chip c-d" data-k="결정">결정</span> 사수의 일은 좁고 검사 가능한 대조로 만들고, 그 모델이 실제로 잡는지 결함 주입으로 확인한다. <span class="chip c-g" data-k="가정">가정</span></li>
+    <li class="m" data-m="가정">산출물의 원본은 스키마로 검증되는 JSON 하나다. 사람용 페이지와 AI용 패킷은 그 원본에서 그린다. 단계마다 같은 틀(입력 revision, 항목, 근거, 미해결, 판정, 비용)을 쓴다. <span class="chip c-g" data-k="가정">가정</span></li>
+    <li class="m" data-m="결정 가정">사람용 문장과 AI용 문장을 나눈다. <span class="chip c-d" data-k="결정">결정</span> AI용 문장에는 근거 인용, 코드 위치, 검증 방법, 적용 규칙만 담고 새 동작·조건은 담지 않는다. 승인 해시는 두 문장을 모두 포함한다. <span class="chip c-g" data-k="가정">가정</span></li>
+    <li class="m" data-m="가정">역할은 이름이 아니라 입력·출력·도구·권한으로 정의한다. <span class="chip c-g" data-k="가정">가정</span></li>
+    <li class="m" data-m="가정">모든 루프에 상한을 두고, 상한 도달은 통과가 아니라 보류다. <span class="chip c-g" data-k="가정">가정</span></li>
+    <li class="m" data-m="가정">실수 기록의 형식은 처음부터 남긴다. <span class="chip c-g" data-k="가정">가정</span></li>
+    <li class="m" data-m="결정">heka 에 남은 규칙을 그대로 적용한다. <span class="chip c-d" data-k="결정">결정</span> 분석·게이트 규칙(출처 우선순위 Figma &gt; PRD &gt; ADR·티켓, 화면 우선 구성, 운영자(사내 어드민) 행 제외, PRD–시안 차이의 관점별 비교표, id 표기 <code>요구-n</code>·<code>화면-n</code>·<code>Q-n</code>·<code>D-n</code>·<code>A-n</code>)뿐 아니라 티켓·커밋·주석·PR 본문·리뷰·리플레이 규칙도 가져온다. 단계별 목록은 <a href="#s16">§16</a> 이다.</li>
+  </ol>
+
+  <hr>
+
+</section>
+
+<section id="s4">
+  <h2><span class="sn">§4</span>단계와 역할</h2>
+
+  <p class="m" data-m="가정">모델과 effort 는 모두 <span class="chip c-g" data-k="가정">가정</span>이고 평가(<a href="#s10">§10</a>)로 조정한다.</p>
+
+  <div class="tw">
+    <table class="w6">
+      <thead><tr><th>단계</th><th>역할</th><th>하는 일</th><th>입력</th><th>출력</th><th>모델·effort</th></tr></thead>
+      <tbody>
+        <tr class="m" data-m="결정"><td>1</td><td>테크니컬 매니저</td><td>PRD·Figma·관련 자료를 읽어 화면 목록 → 요구 → 인수 조건과 검증 수단을 만든다. PRD–Figma 차이, 미정 사항, 질문을 뽑는다. <strong>코드 수준 영향 분석</strong>(걸리는 화면·컴포넌트·API·에셋, 막힐 것)을 해서 AI용 문장에 남긴다 <span class="chip c-d" data-k="결정">결정</span></td><td>PRD URL, Figma, 저장소, heka</td><td>요구사항 분석 문서</td><td>Opus 5.5 <code>high</code>. Fable 5.2 <code>medium</code> 과 리플레이로 견줘 나은 쪽(<a href="#s4-5">§4.5</a>)</td></tr>
+        <tr><td>1</td><td>QA 전문가(설계)</td><td>요구와 인수 조건에서 사용자 여정 기준의 시나리오, 기대 결과, 실서버/모킹 표기를 만든다</td><td>분석 문서 초안, OpenAPI</td><td>시나리오 초안</td><td>테크니컬 매니저와 같다(<a href="#s4-5">§4.5</a>)</td></tr>
+        <tr><td>1-1</td><td>매니저 사수</td><td>누락·환각을 원문과 대조한다(<a href="#s5-3">§5.3</a>)</td><td>원문, 분석 문서</td><td>지적 목록</td><td>코드 + Haiku 5.5</td></tr>
+        <tr><td>G</td><td>사람(답변)</td><td>질문에 답하고 차이를 결정하고 시나리오·모킹을 확인한다</td><td>게이트 문서</td><td>답과 결정</td><td>—</td></tr>
+        <tr class="m" data-m="결정"><td>2</td><td>티켓 메이커</td><td>답이 반영된 요구 문서를 티켓·PR 묶음·순서로 나눈 분해안을 만든다. Jira 양식을 따르고 코드 줄 수준의 내용은 쓰지 않는다 <span class="chip c-d" data-k="결정">결정</span>. Jira 에 쓰지는 않는다</td><td>답이 반영된 요구 문서</td><td>분해안(티켓, SP, PR 묶음, 순서)</td><td>Sonnet 5.5</td></tr>
+        <tr class="m" data-m="가정"><td>2-1</td><td>티켓 사수</td><td>요구→티켓 매핑 100%, 고아 티켓 0, 양식 검사는 코드로. 티켓이 요구와 모순되는지만 모델로 <span class="chip c-g" data-k="가정">가정</span></td><td>요구 문서, 분해안</td><td>지적 목록</td><td>코드 + Haiku 5.5</td></tr>
+        <tr class="m" data-m="결정"><td>G</td><td>사람(승인)</td><td>분해안(티켓 분해, PR 묶음, 순서)을 확인하고 승인한다 <span class="chip c-d" data-k="결정">결정</span></td><td>분해안이 실린 게이트 문서</td><td>승인(revision 잠금)</td><td>—</td></tr>
+        <tr><td>W</td><td>쓰기 단계</td><td>승인된 티켓을 Jira 에, QA 를 통과한 PR 을 GitHub 에 쓴다. 내용은 바꾸지 못한다(<a href="#s4-3">§4.3</a>)</td><td>코어가 검증한 쓰기 내용</td><td>티켓 키, PR 번호</td><td>좁은 세션(Haiku 5.5) + 훅, <code>gh</code></td></tr>
+        <tr class="m" data-m="결정"><td>3</td><td>프로덕트 빌더</td><td>티켓 하나를 전용 worktree 에서 구현한다. 한 명이다 <span class="chip c-d" data-k="결정">결정</span></td><td>요구 문서 조각 + 티켓 <span class="chip c-d" data-k="결정">결정</span></td><td>커밋</td><td>Sonnet 5.5, medium</td></tr>
+        <tr><td>3-3</td><td>빌더 사수</td><td>린트·타입·커밋·주석 규칙은 코드로. 남는 관행과 환각만 모델로 보고, 지적에는 규칙 id 와 file:line 을 붙인다</td><td>diff, 규칙</td><td>지적 목록</td><td>코드 + Haiku 5.5</td></tr>
+        <tr class="m" data-m="결정 가정"><td>3-2</td><td>코드 리뷰어</td><td>둘 이상 <span class="chip c-d" data-k="결정">결정</span>. 관점을 나눈다(요구 적합 / 결함·회귀). 차단 지적마다 반박 검증을 거친다 <span class="chip c-g" data-k="가정">가정</span></td><td>요구, diff, 저장소, REVIEW.md</td><td>지적 목록</td><td>Opus 5.5</td></tr>
+        <tr class="m" data-m="미결"><td>4</td><td>QA 전문가(실행)</td><td>승인된 시나리오를 iOS 시뮬레이터와 Android 에뮬레이터에서 실행하고 스크린샷과 보고서를 남긴다(<a href="#s7">§7</a>)</td><td>시나리오, 빌드</td><td>QA 보고서, 스크린샷</td><td>탐색은 모델, 재실행은 스크립트 <span class="chip c-m" data-k="미결">미결</span></td></tr>
+        <tr><td>3-1</td><td>PR 작성자</td><td>사용자의 PR 습관대로 본문을 쓰고 AS-IS·TO-BE 스크린샷을 붙인다. 본문 린트와 &quot;본문 주장 = diff&quot; 대조를 거친다</td><td>diff, QA 보고서</td><td>draft PR</td><td>Sonnet 5.5</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <ul>
+    <li class="m" data-m="결정">외부 쓰기(Jira 티켓 생성·상태 전이, PR 생성)는 쓰기 단계가 한다. 내용은 에이전트가 파일로 만들고 코어가 검증하며, 쓰기 호출의 입력은 코어의 훅이 검증된 내용으로 고정한다. <span class="chip c-d" data-k="결정">결정</span><span class="note">전달된 내용을 그대로 쓴다는 보장이 있을 때 한함. §4.3</span></li>
+    <li class="m" data-m="결정 가정">티켓 분해와 PR 묶음은 게이트에서 사람이 승인한다. <span class="chip c-d" data-k="결정">결정</span><span class="note">§4.4</span> 묶음 규칙은 규칙 파일과 결정적 검사로 고정한다. <span class="chip c-g" data-k="가정">가정</span></li>
+  </ul>
+
+  <h3 id="s4-1"><span class="sn">§4.1</span>빌더</h3>
+
+  <ul>
+    <li class="m" data-m="결정 가정">입력은 요구 문서 조각(요구, 인수 조건, AI용 문장)과 티켓 둘 다다. <span class="chip c-d" data-k="결정">결정</span> 둘이 어긋나면 요구 문서가 우선한다. <span class="chip c-d" data-k="결정">결정</span> 어긋난 내용은 빌더가 기록하고, 실행이 끝날 때 쓰는 종료 보고서(<a href="#s6-1">§6.1</a>)에 빠짐없이 싣는다. <span class="chip c-d" data-k="결정">결정</span> 티켓은 그 기록으로 고친다. <span class="chip c-g" data-k="가정">가정</span></li>
+    <li class="m" data-m="가정 사실">effort 는 <code>medium</code> 으로 시작한다. <span class="chip c-g" data-k="가정">가정</span> <code>low</code> 는 기본값으로 쓰지 않는다. Sonnet 5.5 는 <code>low</code> 에서 끝내기 전에 멈춰 사용자에게 확인을 구하거나 실제 검사 없이 완료로 보고하는 일이 늘기 때문이다. <span class="chip c-s" data-k="사실">사실</span></li>
+    <li>완료 판정은 빌더의 보고가 아니라 코어가 직접 돌린 검사(prettier, eslint, tsc, jest)다. 빌더 지시문에는 &quot;실제 검사를 돌린 뒤 완료 보고&quot;와 &quot;끝까지 진행&quot; 문구를 넣는다.</li>
+    <li>승급: 검사 실패가 반복되거나 리뷰에서 반송되면 <code>high</code>, 그래도 안 되면 상위 모델.</li>
+    <li class="m" data-m="결정">건드린 화면의 조작 요소에는 testID 를 붙인다. <span class="chip c-d" data-k="결정">결정</span></li>
+    <li>빌더를 분석 담당과 코드 담당으로 나누는 안은 채택하지 않았다. 티켓 한 장 크기의 일에서는 비용이 줄지 않기 때문이다. 큰 반복 작업에 한해 다시 볼 수 있다(<a href="#s10">§10</a> 실험).</li>
+  </ul>
+
+  <h3 id="s4-2"><span class="sn">§4.2</span>리뷰와 approve</h3>
+
+  <ul>
+    <li class="m" data-m="가정">approve 는 에이전트의 판단이 아니라 &quot;증거(실행 결과 또는 file:line 인용)가 있는 차단 지적 0건&quot;을 코어가 계산한 값이다. <span class="chip c-g" data-k="가정">가정</span></li>
+    <li>증거 없는 지적은 차단하지 않고 목록으로만 남긴다.</li>
+    <li class="m" data-m="미결">리뷰-수정 라운드는 상한을 둔다(값은 <span class="chip c-m" data-k="미결">미결</span>, 출발점 3회).</li>
+    <li>리뷰 기준은 대상 저장소의 <code>REVIEW.md</code> 다(⛔️ 변경필요, ⚠️ 확인필요, 🟢 제안). PR 생성이 QA 뒤이므로 Copilot 리뷰는 PR 이 올라간 뒤에야 받는다. 내부 리뷰어가 같은 기준으로 먼저 걸러야 지표 3 을 지킬 수 있다.</li>
+  </ul>
+
+  <h3 id="s4-3"><span class="sn">§4.3</span>외부 쓰기: 쓰기 전용 단계</h3>
+
+  <ul>
+    <li class="m" data-m="결정"><span class="chip c-d" data-k="결정">결정</span> 쓰기 전용 단계를 따로 둔다. 조건은 &quot;전달된 내용을 100% 그대로 실행한다는 보장&quot;이고, 보장이 깨지면 에이전트가 직접 쓰는 방식으로 돌아간다.</li>
+    <li>배경: v0 은 &quot;코어가 Jira REST·gh 로 쓴다&quot;를 2026-10-20 결정에서 다시 따져 보지 않고 이어받았다. 사용자는 에이전트가 쓰는 것으로 생각했고 Jira 개인 API 토큰도 쓰지 않기로 했다(<a href="#s14">§14</a> 의 26). 토큰 없이는 코어가 Jira REST 를 부를 수 없다.</li>
+    <li>보장의 근거: LLM 세션이 내용을 그대로 옮겨 적는다는 것은 보장할 수 없다. 그래서 내용을 세션에 맡기지 않는다. 쓰기 호출이 실행되기 직전에 코어의 훅(PreToolUse)이 도구 입력 전체를 검증된 내용으로 <strong>교체</strong>한다. 세션이 무엇을 적어 보내든 실행되는 입력은 코어가 정한 것이다.</li>
+    <li><span class="m" data-m="가정">구성 <span class="chip c-g" data-k="가정">가정</span></span>
+      <ol>
+        <li>내용은 에이전트(티켓 메이커, PR 작성자)가 파일로 내고 코어가 스키마·양식·매핑을 검증한다.</li>
+        <li>코어가 쓰기 한 건마다 의도를 먼저 기록한다(중복 방지용 고유 키 포함).</li>
+        <li>Jira: 코어가 좁은 세션을 띄운다. 이 세션은 쓰기 도구를 허용 목록에 넣지 않고, 훅이 &quot;허용 + 입력 교체&quot;를 돌려줄 때만 호출이 실행된다. 훅이 돌지 않으면 호출은 승인받지 못해 거부된다. 훅은 의도 기록에 있는 건만, 한 번만 통과시킨다.</li>
+        <li>실행된 입력은 사후 훅(PostToolUse)이 기록하고, 코어가 검증된 내용과 같은지 대조한다. 이어서 Jira 를 다시 읽어 저장된 값을 확인한다. 세션의 보고 문장은 근거로 쓰지 않는다.</li>
+        <li>PR: 모델을 거치지 않고 코어가 <code>gh</code> 로 올린다(본문 파일, <code>--attach</code>).</li>
+        <li>평가 모드에서는 쓰기 단계를 띄우지 않는다(<a href="#s10">§10</a> 의 외부 쓰기 0).</li>
+      </ol>
+    </li>
+    <li class="m" data-m="사실">실험 <span class="chip c-s" data-k="사실">사실</span><span class="note">2026-11-13, Claude Code 2.1.323, <code>claude -p</code>, Haiku 5.5, 로컬 임시 파일과 heka 검색만 사용</span></li>
+  </ul>
+
+  <div class="tw">
+    <table class="w4">
+      <thead><tr><th class="num">실험</th><th>세션에 시킨 것</th><th>훅</th><th>결과</th></tr></thead>
+      <tbody>
+        <tr><td class="num">1</td><td>검증된 내용과 다른 명령 실행</td><td>다르면 거부</td><td>두 번 모두 거부, 아무것도 실행되지 않음</td></tr>
+        <tr><td class="num">2</td><td>검증된 내용과 다른 명령 실행</td><td>입력 교체</td><td>실행된 입력이 검증된 내용과 일치</td></tr>
+        <tr><td class="num">3</td><td>MCP 도구(heka_search)를 다른 인자로 호출</td><td>입력 교체</td><td>실행된 입력이 검증된 내용과 일치. 세션은 자기가 보낸 인자로 실행된 줄 알고 보고함</td></tr>
+        <tr><td class="num">4</td><td>검증된 내용을 읽고 그대로 호출</td><td>다르면 거부</td><td>통과, 일치</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <ul>
+    <li class="m" data-m="사실">문서 근거 <span class="chip c-s" data-k="사실">사실</span>: PreToolUse 훅의 <code>updatedInput</code> 은 &quot;Modifies the tool's input parameters before execution. Replaces the entire input object&quot;, 권한 규칙도 &quot;against the input your hook returns, not the input Claude sent&quot; 로 평가한다. MCP 도구도 같은 훅 대상이고, <code>claude -p</code> 는 <code>--bare</code> 가 아니면 훅을 싣는다(<a href="https://code.claude.com/docs/en/hooks">hooks</a>, <a href="https://code.claude.com/docs/en/headless">headless</a>).</li>
+    <li>보장의 범위
+      <ul>
+        <li>보장하는 것: 실행되는 쓰기 호출의 입력이 검증된 내용과 같다. 다른 내용은 쓰이지 않는다.</li>
+        <li>보장하지 않는 것: 쓰기가 반드시 일어난다는 것(세션이 호출하지 않으면 쓰기는 없고 코어가 다시 띄운다). 그리고 Jira 가 받은 입력을 저장하면서 바꾸는 부분(본문 서식 변환 등)인데, 이는 어느 방식이든 같고 다시 읽기로 확인한다.</li>
+        <li>쓰기 직후 기록 전에 세션이 죽으면 쓰였는지 알 수 없다. 다시 쓰기 전에 고유 키로 조회해 중복을 막는다.</li>
+      </ul>
+    </li>
+    <li class="m" data-m="사실">Atlassian MCP(claude.ai 커넥터) <span class="chip c-s" data-k="사실">사실</span><span class="note">2026-11-14</span>: 무인 세션에서 <code>getJiraIssue</code> 를 <code>APP-1</code> 로 부르게 하고 훅이 <code>APP-3008</code> 로 바꿔 넣었더니 <code>APP-3008</code> 이 조회됐다. 읽기 호출에서는 입력 교체가 같게 동작한다. 쓰기 호출은 실제로 써 봐야 하므로 첫 실제 쓰기 때 저장된 값을 다시 읽어 확인한다.</li>
+  </ul>
+
+  <h3 id="s4-4"><span class="sn">§4.4</span>티켓 분해와 PR 묶음: 게이트에서 승인</h3>
+
+  <ul>
+    <li class="m" data-m="결정"><span class="chip c-d" data-k="결정">결정</span> 티켓을 몇 장으로 어떻게 나누는지, 어느 티켓을 한 PR 로 묶는지, 어떤 순서로 쌓는지는 게이트에서 사람이 승인한다(v0 의 &quot;게이트에서 보지 않는다&quot;를 뒤집음. 2026-10-20 결정 6 과 같은 방향).</li>
+    <li class="m" data-m="가정">시점 <span class="chip c-g" data-k="가정">가정</span>: 분해안은 질문이 모두 답해지고 차이가 결정된 뒤에 만든다. 답에 따라 요구가 바뀌면 분해를 다시 해야 하기 때문이다. 그래서 게이트는 같은 페이지에서 두 번 본다. 먼저 답변, 그다음 분해안 확인과 승인이다. 승인은 한 번이다.</li>
+    <li class="m" data-m="가정">게이트에 싣는 것 <span class="chip c-g" data-k="가정">가정</span>: 티켓 목록(제목, 덮는 요구, SP), PR 묶음, 의존 순서 그래프(heka <code>hew-gate-layout-decisions-2026-11-11</code>), base 브랜치와 피처플래그 사용 여부.</li>
+    <li class="m" data-m="가정">고치는 방법 <span class="chip c-g" data-k="가정">가정</span>: 사람은 분해안에 수정 요청을 적고, 티켓 메이커가 다시 만들어 같은 페이지에 재게시한다. 요구 자체는 이 단계에서 바뀌지 않는다.</li>
+    <li>승인 해시는 분해안을 포함한다. Jira 티켓은 승인 뒤 쓰기 단계가 만든다.</li>
+    <li class="m" data-m="가정">승인 뒤 요구 변경으로 생기는 추가 티켓(<a href="#s6-2">§6.2</a>)은 다시 승인받지 않고 종료 보고서에 적는다. <span class="chip c-g" data-k="가정">가정</span></li>
+  </ul>
+
+  <h3 id="s4-5"><span class="sn">§4.5</span>설계 단계(테크니컬 매니저, QA 설계)의 모델</h3>
+
+  <ul>
+    <li class="m" data-m="결정"><span class="chip c-d" data-k="결정">결정</span> 설계 단계에는 Fable 5.2 를 써도 된다. 단 effort 는 <code>medium</code> 이다. Opus 5.5 <code>high</code> 보다 성능이 좋을 때 적용한다.</li>
+    <li class="m" data-m="가정">현재 판정 <span class="chip c-g" data-k="가정">가정</span>: 공개된 측정만으로는 &quot;더 좋다&quot;가 확인되지 않는다. 그래서 출발점은 Opus 5.5 <code>high</code> 로 두고, 1번 단계 완료 기준을 재는 리플레이(<a href="#s12">§12</a>)에서 같은 과거 PRD 를 두 구성으로 돌려 요구 재현율과 사후에 틀린 확정 항목 수가 나은 쪽을 쓴다.</li>
+    <li class="m" data-m="사실">공개 측정 <span class="chip c-s" data-k="사실">사실</span><span class="note">Anthropic 내부 벤치마크, 2026-11-13 확인</span></li>
+  </ul>
+
+  <div class="tw">
+    <table class="w4">
+      <thead><tr><th>과제</th><th>Fable 5.2 <code>medium</code></th><th>Opus 5.5 <code>high</code></th><th>비고</th></tr></thead>
+      <tbody>
+        <tr><td>저장소 코딩 과제 370개</td><td>88.9%, 시도당 $1.34</td><td>88.4%, 시도당 $1.38</td><td>Fable 은 1회 실행</td></tr>
+        <tr><td>약 2,200만 토큰 코드에서 심어 둔 결함 찾기(F1)</td><td>0.877, 실행당 $378</td><td>0.850, 실행당 $236</td><td>설정당 10회. 2.7점 높고 비용 1.6배</td></tr>
+        <tr><td>여러 자료를 읽고 종합하는 연구 과제</td><td>55.0%, 과제당 $2.16</td><td>미측정(<code>medium</code> 은 59.6%, $1.61)</td><td>Fable 은 출시 전 측정</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <ul>
+    <li class="m" data-m="사실">낮은 effort 의 위험 <span class="chip c-s" data-k="사실">사실</span>: Fable 5.2 는 긴 다단계 작업에서 일이 끝나기 전에 턴을 마치는 일이 있고 <code>low</code>·<code>medium</code> 에서 더 잦다. &quot;끝까지 진행&quot; 문구를 넣으면 미완 종료가 절반쯤으로 줄고 출력 토큰은 약 30% 는다. 무인 실행이므로 Fable <code>medium</code> 을 쓸 때는 이 문구와 코어의 산출물 검증(스키마, 범위 장부 완결성)을 함께 둔다.</li>
+    <li class="m" data-m="사실">공식 권고 <span class="chip c-s" data-k="사실">사실</span>: &quot;Start with Claude Opus 5.5 for most workloads. Use Claude Fable 5.2 for demanding reasoning and long-horizon agentic work, or when your evals on Claude Opus 5.5 at higher effort still fall short.&quot;</li>
+    <li class="m" data-m="미결">구독 요금제에서 두 모델의 한도 차이는 확인하지 못했다. <span class="chip c-m" data-k="미결">미결</span></li>
+  </ul>
+
+  <hr>
+
+</section>
+
+<section id="s5">
+  <h2><span class="sn">§5</span>요구사항 분석 문서(게이트)</h2>
+
+  <h3 id="s5-1"><span class="sn">§5.1</span>구성</h3>
+
+  <p class="m" data-m="가정">화면 우선으로 구성한다. 형식은 Artifact 페이지다. <span class="chip c-g" data-k="가정">가정</span></p>
+
+  <ol>
+    <li>헤더: 일감, 원천 버전, 진행(질문 n개 중 m개 답변), 승인 버튼(모든 질문에 답해야 활성).</li>
+    <li>화면 카드: 시안 이미지(AS-IS·TO-BE), 그 화면의 요구와 변경 목록, 인수 조건.</li>
+    <li>PRD–Figma 차이: 관점별 비교표와 결정(시안대로 / PRD 대로 / 구현 안 함 / 보류).</li>
+    <li>질문: 추천안과 근거, &quot;이 답이 바꾸는 구현&quot;. 추정 답으로 닫지 않는다.</li>
+    <li>가정과 범위 밖: 범위 밖은 원문 인용이 있어야 한다.</li>
+    <li>영향 분석 요약: 걸리는 코드 영역과 막힐 것(없는 에셋, 없는 API 필드 등). 막힐 것은 질문으로 올린다.</li>
+    <li class="m" data-m="결정">QA 시나리오와 모킹 표기. 모킹은 AI 가 정하고 사람은 여기서 바꾼다. <span class="chip c-d" data-k="결정">결정</span></li>
+    <li class="m" data-m="결정">티켓 분해와 PR 묶음. 질문이 모두 답해진 뒤 실리고, 사람이 확인해 승인한다(<a href="#s4-4">§4.4</a>). <span class="chip c-d" data-k="결정">결정</span></li>
+  </ol>
+
+  <ul>
+    <li>사람이 &quot;모호한 곳만&quot; 보면 실패는 모호하다고 표시되지 않은 오류에서 난다. 그래서 확정으로 표시된 항목도 화면별로 훑어볼 수 있게 싼 형태(이미지와 변경 목록)로 보인다.</li>
+    <li class="m" data-m="가정">작은 티켓은 같은 형식의 축소판을 쓴다. <span class="chip c-g" data-k="가정">가정</span></li>
+    <li class="m" data-m="가정">차이가 많으면 PO·디자이너 확인 요청서를 함께 만든다. <span class="chip c-g" data-k="가정">가정</span><span class="note">2026-10-23·28 결정 계승</span></li>
+  </ul>
+
+  <h3 id="s5-2"><span class="sn">§5.2</span>사람용 문장과 AI용 문장</h3>
+
+  <ul>
+    <li>사람용: 짧은 변경 문장. 사람이 승인하는 대상이다.</li>
+    <li>AI용: 그 변경의 근거 인용, 코드 위치, 검증 방법, 적용할 규칙. 새 동작이나 조건을 추가하지 못한다.</li>
+    <li>사수는 &quot;AI용 문장에만 있는 동작&quot;을 지적 대상으로 삼는다.</li>
+    <li class="m" data-m="제안">요구 문장은 검증 가능한 형식(예: WHEN … THE SYSTEM SHALL …)으로 쓴다. <span class="chip c-j" data-k="제안">제안</span></li>
+  </ul>
+
+  <h3 id="s5-3"><span class="sn">§5.3</span>매니저 사수의 일</h3>
+
+  <div class="tw">
+    <table>
+      <thead><tr><th>일</th><th>수단</th></tr></thead>
+      <tbody>
+        <tr><td>인용이 원문에 실제로 있는가, 범위 장부가 원문 전체를 덮는가</td><td>코드</td></tr>
+        <tr><td>요구가 인용한 근거로 뒷받침되는가(환각)</td><td>작은 모델, 요구 단위</td></tr>
+        <tr><td>원문 단위(PRD 표의 행·문장, Figma 앱 화면)마다 덮는 요구가 있는가(누락)</td><td>원문 단위 열거는 코드, 단위별 판정은 작은 모델</td></tr>
+        <tr><td>&quot;확정&quot;으로 표시된 항목이 정말 확정인가</td><td>작은 모델</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <ul>
+    <li class="m" data-m="가정">수정이 필요하면 테크니컬 매니저에게 되돌린다(상한 2회 <span class="chip c-g" data-k="가정">가정</span>). 남은 불일치는 게이트 질문으로 올린다.</li>
+    <li class="m" data-m="미결">작은 모델로 부족할 수 있는 곳 <span class="chip c-m" data-k="미결">미결</span>: 시안 이미지의 시각 차이(아이콘·컴포넌트 교체)와 어느 원문 단위에도 적혀 있지 않은 암묵 요구. 결함 주입에서 못 잡는 것으로 나오면 그 항목만 상위 모델로 올린다.</li>
+  </ul>
+
+  <h3 id="s5-4"><span class="sn">§5.4</span>승인</h3>
+
+  <ul>
+    <li>승인은 문서의 해시(revision)를 잠근다. 사람용·AI용 문장, 시나리오, 티켓 분해와 PR 묶음을 모두 포함한다.</li>
+    <li>승인 뒤 문서가 바뀌면 revision 이 달라지고, 바뀐 부분에 대해서만 <a href="#s6-2">§6.2</a> 의 규칙으로 처리한다.</li>
+  </ul>
+
+  <hr>
+
+</section>
+
+<section id="s6">
+  <h2><span class="sn">§6</span>승인 이후 규칙</h2>
+
+  <h3 id="s6-1"><span class="sn">§6.1</span>새 모호성</h3>
+
+  <ul>
+    <li class="m" data-m="결정">구현 중 모호성이 발견되면 <strong>해당 작업만 보류</strong>한다. <span class="chip c-d" data-k="결정">결정</span> 독립 작업은 계속한다.</li>
+    <li class="m" data-m="결정">물을 수 있는 것은 계획 단계(게이트)에서 미리 묻는다. <span class="chip c-d" data-k="결정">결정</span> 영향 분석에서 드러난 막힐 것(없는 에셋, 없는 API 필드 등)을 게이트 질문으로 올리는 것이 그 수단이다.</li>
+    <li class="m" data-m="결정 가정">실행 도중 생긴 보류는 중간에 알리지 않는다. 나머지 작업이 모두 끝난 뒤 세션에 <strong>종료 보고서</strong>를 쓴다. <span class="chip c-d" data-k="결정">결정</span> 보고서에는 보류된 작업과 그 질문, 요구 문서와 티켓의 불일치(<a href="#s4-1">§4.1</a>), 경험 우려(<a href="#s7">§7</a>), 자동 반영한 요구 변경(<a href="#s6-2">§6.2</a>)을 싣는다. <span class="chip c-g" data-k="가정">가정</span></li>
+    <li class="m" data-m="가정">사람이 보고서의 질문에 답하면 보류된 작업을 다시 띄운다. <span class="chip c-g" data-k="가정">가정</span></li>
+    <li>보류 건수는 1번 단계의 놓침으로 기록한다.</li>
+  </ul>
+
+  <h3 id="s6-2"><span class="sn">§6.2</span>요구 변경</h3>
+
+  <p class="m" data-m="결정">판정 단위는 티켓이고 기준은 단계다. <span class="chip c-d" data-k="결정">결정</span></p>
+
+  <div class="tw">
+    <table>
+      <thead><tr><th>변경이 닿는 티켓의 상태</th><th>처리</th></tr></thead>
+      <tbody>
+        <tr><td>시작 전</td><td>티켓과 요구 조각을 고친다</td></tr>
+        <tr><td>구현 중(제출 전)</td><td>티켓을 고치고 빌더에게 변경분을 전달한다</td></tr>
+        <tr><td>제출됨(사수·리뷰·QA 중) 또는 완료</td><td>그대로 끝내고 변경분은 추가 티켓으로 만든다</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <ul>
+    <li class="m" data-m="가정">감지: 단계 경계마다 PRD 버전과 Figma 를 다시 읽어 승인 시점과 비교한다. Slack·구두 변경은 사람이 접수한다. <span class="chip c-g" data-k="가정">가정</span></li>
+    <li class="m" data-m="가정">뜻이 분명한 변경은 자동 반영하고 종료 보고서에 적는다. 모호하면 <a href="#s6-1">§6.1</a> 대로 해당 작업만 보류한다. <span class="chip c-g" data-k="가정">가정</span></li>
+    <li>변경은 문서 revision, 시나리오, 티켓에 함께 반영한다.</li>
+  </ul>
+
+  <h3 id="s6-3"><span class="sn">§6.3</span>중단</h3>
+
+  <ul>
+    <li class="m" data-m="결정 가정">세션 자체가 죽는 중단(크래시, 재부팅)은 요구에서 제외한다. <span class="chip c-d" data-k="결정">결정</span> 다만 상태는 파일에 남겨서 사람이 다시 띄우면 이어서 간다. <span class="chip c-g" data-k="가정">가정</span></li>
+    <li class="m" data-m="가정">사용량 한도에 걸리면 프로그램이 리셋 시각까지 기다렸다 같은 단계를 다시 띄운다. <span class="chip c-g" data-k="가정">가정</span></li>
+  </ul>
+
+  <hr>
+
+</section>
+
+<section id="s7">
+  <h2><span class="sn">§7</span>QA</h2>
+
+  <ul>
+    <li class="m" data-m="결정">목적 <span class="chip c-d" data-k="결정">결정</span>: <strong>인간 사용자의 경험에 문제 되는 부분을 없애는 것</strong>이다. 과거 결함 유형 목록은 그 목적을 위한 수단이다.</li>
+    <li>판정은 두 층이다.
+      <ol>
+        <li>기능: 승인된 시나리오의 통과 여부.</li>
+        <li>경험 점검: 시나리오의 각 화면과 전환을 사람 관점의 점검표로 본다. 점검표는 과거 QA 결함에서 뽑는다(예: 잘림, 겹침, 눌리지 않음, 빈 화면, 오류 문구 없음, 뒤로 가기 이상, 키보드 가림). 근거는 스크린샷이나 녹화다.</li>
+      </ol>
+    </li>
+    <li><span class="m" data-m="결정">처리 <span class="chip c-d" data-k="결정">결정</span></span>
+      <ul>
+        <li>명백한 결함(깨짐, 잘림, 겹침, 먹통, 크래시)은 빌더가 고치고 다시 검증한다. 통과할 때까지 반복하되 상한과 환경 실패/결함 분류를 둔다.</li>
+        <li>시안·요구대로지만 불편해 보이는 것(&quot;경험 우려&quot;)은 고치지 않고 QA 보고서와 PR 본문에 근거 화면과 함께 남긴다.</li>
+      </ul>
+    </li>
+    <li><span class="m" data-m="결정">시나리오 <span class="chip c-d" data-k="결정">결정</span></span>
+      <ul>
+        <li>설계는 승인 전, 실행은 구현 후.</li>
+        <li>기대 결과는 잠근다. QA 가 고칠 수 있는 것은 절차(셀렉터, 대기)뿐이다.</li>
+        <li>에이전트 탐색은 처음 한 번만 하고, 통과한 경로는 결정적 스크립트로 고정해 재실행한다.</li>
+      </ul>
+    </li>
+    <li class="m" data-m="결정">모킹 <span class="chip c-d" data-k="결정">결정</span>: OpenAPI 에서 만든 mock 을 쓰고 시나리오마다 실서버/모킹을 표기한다. 모킹으로만 통과한 시나리오는 보고서에 &quot;통합 미검증&quot;으로 남긴다.</li>
+    <li class="m" data-m="결정">기기 <span class="chip c-d" data-k="결정">결정</span>: 처음부터 iOS 시뮬레이터와 Android 에뮬레이터 둘 다 통과해야 PR 을 올린다.</li>
+    <li class="m" data-m="결정 가정">테스트 계정 <span class="chip c-d" data-k="결정">결정</span>: 사용자가 준 테스트 계정으로 워크플로우가 직접 로그인한다. 계정이 여러 개 필요하면(역할·구매 이력이 다른 상태 등) QA 설계 단계가 필요한 상태를 적어 게이트에서 요청한다. 계정 정보는 저장소 밖 파일에 두고 문서·heka·로그에 비밀번호를 남기지 않는다. <span class="chip c-g" data-k="가정">가정</span><span class="note">2026-10-20 결정 8 계승</span></li>
+    <li class="m" data-m="결정 가정">서버 <span class="chip c-d" data-k="결정">결정</span>: 일감마다 쓰는 서버가 다르므로 워크플로우가 직접 고른다. 변경된 API 가 반영돼 있는 환경을 찾는 것이 기준이다. 방법 <span class="chip c-g" data-k="가정">가정</span>: 영향 분석에서 뽑은 변경 API 경로·필드를 환경별 <code>openapi.json</code>(staging, dev-N)과 대조해 모두 있는 환경을 고르고, 고른 환경과 근거를 게이트 문서와 QA 보고서에 적는다. 어느 환경에도 없으면 해당 시나리오는 모킹으로 표기한다.</li>
+    <li>산출물: 시나리오별 스크린샷, 사람에게 가는 QA 보고서, PR 에 붙는 AS-IS·TO-BE.</li>
+    <li><span class="m" data-m="결정">PR 스크린샷 <span class="chip c-d" data-k="결정">결정</span><span class="note">과거 PR 을 따른다</span></span>
+      <ul>
+        <li class="m" data-m="사실">형식 <span class="chip c-s" data-k="사실">사실</span>: 본문의 <code>## 스크린샷</code> 절에 화면 묶음별 소제목을 두고, 상태 이름을 머리글로 한 HTML 표에 <code>&lt;img src=&quot;…&quot; width=300 /&gt;</code> 로 넣는다(PR #1749 등, heka <code>pr-300px-img-width-300</code>).</li>
+        <li class="m" data-m="사실">올리는 방법 <span class="chip c-s" data-k="사실">사실</span>: <code>gh pr create|edit --attach</code> 로 올린다(gh 2.99.0 이상, 이 머신은 2.103.3). 치환은 마크다운 이미지 참조에만 되므로 ① 마크다운 참조로 올려 asset URL 을 받고 ② 본문을 HTML 표로 다시 써서 저장하는 두 단계다(heka <code>github-image-upload-no-documented-api-gh-attach-2026-10</code>). 올린 asset 은 지울 수 없다.</li>
+      </ul>
+    </li>
+    <li class="m" data-m="사실">도구 후보 <span class="chip c-s" data-k="사실">사실</span>: Maestro 2.12.1 은 MCP 를 내장한다(화면 계층 조회, 스크린샷, YAML 실행). agent-device 는 탐색 세션을 기록해 호환 흐름을 Maestro YAML 로 내보낸다. Maestro 의 AI 단언은 실험 기능이고 화면이 Maestro Cloud 로 나가므로 게이트로 쓰지 않는다. Maestro 에는 네트워크 모킹이 없다.</li>
+    <li class="m" data-m="사실">알려진 어려움 <span class="chip c-s" data-k="사실">사실</span>: 대상 앱에 testID 와 E2E 자산이 거의 없다. 과거 Maestro 시도는 딥링크 이동을 한 번도 확인하지 못했다. 모달·바텀시트·에러·빈 상태는 딥링크로 도달하지 못한다. 에이전트의 QA 판단은 보정 없이는 관대하다.</li>
+  </ul>
+
+  <hr>
+
+</section>
+
+<section id="s8">
+  <h2><span class="sn">§8</span>진행 프로그램(코어)</h2>
+
+  <ul>
+    <li class="m" data-m="결정 가정">프로그램이 상태 파일을 보고 다음 단계의 에이전트를 하나씩 새 세션(<code>claude -p</code>)으로 띄운다. <span class="chip c-d" data-k="결정">결정</span> 구독 로그인을 쓴다. <span class="chip c-g" data-k="가정">가정</span></li>
+    <li>에이전트는 자기 단계의 패킷만 받는다. 산출물은 파일로 내고, 코어가 스키마와 참조 무결성을 검증한 뒤에만 상태가 바뀐다.</li>
+    <li>단계별 비용은 실행 결과의 <code>total_cost_usd</code> 로 집계한다.</li>
+    <li class="m" data-m="사실"><code>claude -p</code> 는 권한 모드를 정하지 않으면 Manual 로 시작한다. 허용 규칙을 명시해야 한다. <span class="chip c-s" data-k="사실">사실</span></li>
+    <li class="m" data-m="미결">승인 전 단계(분석, 게이트 게시, 답 반영)를 어떤 세션에서 돌릴지는 <span class="chip c-m" data-k="미결">미결</span>이다. 무인 세션에서 Artifact 게시와 답 읽기가 되는지 실측해야 한다.</li>
+  </ul>
+
+  <hr>
+
+</section>
+
+<section id="s9">
+  <h2><span class="sn">§9</span>비용</h2>
+
+  <ul>
+    <li>순서 [사실 기반 가정]: ① LLM 이 할 필요 없는 검사를 코드로 → ② 캐시와 컨텍스트(패킷만 전달) → ③ effort → ④ 모델. 모델을 낮추는 것은 마지막이다.</li>
+    <li>비교 단위는 토큰 단가가 아니라 수락된 변경당 비용이다.</li>
+    <li>아끼지 않는 곳: 테크니컬 매니저, 결함 리뷰. 아끼는 곳: 사수(좁은 대조), 양식 점검, QA 재실행(스크립트).</li>
+    <li class="m" data-m="가정">구독 요금제에서는 API 단가보다 세션·주간 한도가 실제 제약이다. <span class="chip c-g" data-k="가정">가정</span></li>
+    <li class="m" data-m="사실">API 가격 <span class="chip c-s" data-k="사실">사실</span><span class="note">2026-11-13</span></li>
+  </ul>
+
+  <div class="tw">
+    <table>
+      <thead><tr><th>모델</th><th class="num">입력 $/MTok</th><th class="num">출력 $/MTok</th></tr></thead>
+      <tbody>
+        <tr><td>Fable 5.2</td><td class="num">8</td><td class="num">40</td></tr>
+        <tr><td>Opus 5.5</td><td class="num">4</td><td class="num">20</td></tr>
+        <tr><td>Sonnet 5.5</td><td class="num">2</td><td class="num">10</td></tr>
+        <tr><td>Haiku 5.5 (프롬프트 10만 토큰 이하)</td><td class="num">0.10</td><td class="num">0.50</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <ul>
+    <li class="m" data-m="결정 가정">Fable 5.2 는 설계 단계에 한해 <code>medium</code> 으로 쓸 수 있고, Opus 5.5 <code>high</code> 보다 나은 것이 리플레이에서 확인될 때 적용한다(<a href="#s4-5">§4.5</a>). <span class="chip c-d" data-k="결정">결정</span> 그 밖의 단계에는 쓰지 않는다. <span class="chip c-g" data-k="가정">가정</span></li>
+    <li>Haiku 5.5 는 프롬프트가 10만 토큰을 넘으면 5배 가격이다. 사수의 요청은 단위별로 잘라 그 아래로 유지한다.</li>
+  </ul>
+
+  <hr>
+
+</section>
+
+<section id="s10">
+  <h2><span class="sn">§10</span>평가와 점진적 개선</h2>
+
+  <p class="m" data-m="결정">&quot;같은 일감은 반복할 수 없다&quot;는 제약은 평가 장치로 푼다. <span class="chip c-d" data-k="결정">결정</span><span class="note">동의</span></p>
+
+  <ul>
+    <li>리플레이: 과거 일감을 당시 base SHA, PRD 버전, 지식 시점으로 복원해 여러 번 다시 돌린다.</li>
+    <li>결함 주입
+      <ul>
+        <li>매니저 사수: 요구 하나를 지우거나 바꾼 문서를 주고 잡는지 본다.</li>
+        <li>코드 리뷰어: 인수 조건 위반을 심고 잡는지, 정상 코드를 결함으로 오판하지 않는지 본다.</li>
+        <li>QA: 앱에 알려진 버그를 심고 시나리오가 잡는지 본다.</li>
+      </ul>
+    </li>
+    <li>병행 실행: 사람이 실제 업무를 하는 동안 외부 쓰기 없이 같이 돌려 비교한다.</li>
+    <li class="m" data-m="결정 가정">외부 쓰기 0 <span class="chip c-d" data-k="결정">결정</span>: 리플레이·결함 주입·병행 실행에서는 Confluence·Jira·GitHub 에 실제 결과물을 올리지 않는다(이미 있는 결과물과 중복되기 때문이다). 티켓은 파일로, PR 은 로컬 브랜치와 본문 파일로만 남긴다. 평가 모드에서는 쓰기 단계 자체를 띄우지 않아 구조로 막는다. <span class="chip c-g" data-k="가정">가정</span></li>
+    <li><span class="m" data-m="결정 가정">컨텍스트 차단 <span class="chip c-d" data-k="결정">결정</span>: 이미 작업된 PRD 를 다시 돌릴 때는 그 일감의 기존 작업을 모르는 상태로 진행한다(편향 방지). 차단 대상 <span class="chip c-g" data-k="가정">가정</span></span>
+      <ul>
+        <li>코드: 저장소를 당시 base SHA 로 복원하고 이력을 단일 커밋으로 다시 만든다. base 는 PR 의 <code>base.sha</code> 가 아니라 first-parent 이력에서 직접 계산한다(heka <code>github-pr-base-sha-not-creation-time-r2</code>).</li>
+        <li>문서: PRD 는 당시 버전을 읽는다(heka <code>confluence-version-history-via-atlassian-mcp-prd-d9-r3</code>). 그 일감의 [MO] 하위 작업, PR, QA 티켓은 읽지 못하게 한다.</li>
+        <li class="m" data-m="미결">지식: heka 는 당시 시점(<code>known_at</code>)까지만 보이게 하고, 그 일감에서 나온 노트(게이트 결정, 대조 기록)는 뺀다. 세션에 자동으로 붙는 heka 주입 훅도 같은 시점으로 고정하거나 끈다. <span class="chip c-m" data-k="미결">미결</span><span class="note">방법 실측</span></li>
+        <li>기록: 과거 세션 원문(recall)과 메모리는 읽지 못하게 한다. 실행 에이전트는 모두 새 세션으로 띄운다.</li>
+        <li>채점표(gold)는 에이전트가 볼 수 없는 곳에 두고, 사람이 에이전트 산출물을 보기 전에 교정한다(heka <code>hew-slice1-decisions-2026-10-20</code>).</li>
+        <li class="m" data-m="미결">한계 <span class="chip c-m" data-k="미결">미결</span>: Figma 는 과거 버전을 읽는 수단을 확인하지 못했다. 현재 시안을 읽으면 그 뒤의 수정이 섞인다.</li>
+      </ul>
+    </li>
+    <li class="m" data-m="제안">프롬프트를 고치며 들여다본 케이스와 채점에만 쓰는 케이스를 나눈다. <span class="chip c-j" data-k="제안">제안</span> APP-3008·APP-2513 은 실패 내용이 이미 설계와 heka 규칙에 반영돼 있어, 이 둘의 점수만으로는 새 일감에서도 통하는지 알 수 없다.</li>
+    <li>회귀 케이스는 실제 실패에서 뽑는다. 이미 가진 실패(시안 instance 교체 누락, 추정으로 닫은 범위, 운영자 행 인용)가 첫 케이스다.</li>
+    <li>비결정적이므로 케이스마다 여러 번 돌리고, LLM 채점기는 사람 판정과 맞춘다.</li>
+    <li>좁은 행동 회귀는 <code>claude plugin eval</code> 로(케이스당 기본 3회, 플러그인 없는 기준선 비교, MCP mock). 요구 재현율처럼 계산이 필요한 채점은 자체 러너로.</li>
+    <li>평가로 정할 실험
+      <ol>
+        <li>사수의 모델 등급(Haiku 5.5 로 충분한가, 시안 시각 대조 포함).</li>
+        <li>빌더 effort: <code>medium</code> 대 <code>low</code>.</li>
+        <li>빌더 단일 대 분석·코드 분리(큰 반복 작업에 한해).</li>
+        <li>설계 단계(테크니컬 매니저, QA 설계): Opus 5.5 <code>high</code> 대 Fable 5.2 <code>medium</code>(<a href="#s4-5">§4.5</a>).</li>
+      </ol>
+    </li>
+    <li>실수 기록 형식(처음부터 남긴다): 발견 단계, 원인 단계, 유형, 근거, 당시 프롬프트·에이전트 정의 버전(git SHA), 실행 id.</li>
+    <li><span class="m" data-m="가정">프롬프트를 고치는 규칙 <span class="chip c-g" data-k="가정">가정</span></span>
+      <ul>
+        <li>규칙을 하나 넣을 때 그 규칙을 낳은 실패를 회귀 케이스로 같이 넣는다.</li>
+        <li>고치는 순서는 코드 검사 &gt; 스키마·패킷 &gt; 절차 &gt; 프롬프트 문장이다.</li>
+        <li>주기적으로 규칙을 빼 보고 점수가 안 떨어지면 지운다.</li>
+      </ul>
+    </li>
+  </ul>
+
+  <hr>
+
+</section>
+
+<section id="s11">
+  <h2><span class="sn">§11</span>기존 hew 에서 가져올 것</h2>
+
+  <ul>
+    <li class="m" data-m="결정">원칙 <span class="chip c-d" data-k="결정">결정</span>: 새로 만든다. 새 워크플로우에 완벽하게 그대로 쓸 수 있는 것만 가져온다.</li>
+    <li class="m" data-m="제안">판정 기준 <span class="chip c-j" data-k="제안">제안</span>: 새 계약과 입출력이 같고, hew 고유 스키마에 묶여 있지 않고, 테스트가 있다.</li>
+    <li>시점: 구현 명세가 나온 뒤 코드를 읽고 판정한다. 지금은 코드를 읽지 않았으므로 아래는 후보일 뿐이다.
+      <ul>
+        <li>화면 AS-IS·TO-BE 차이 상자, 결정적 검사 러너와 기준선, 커밋·PR 본문 린트, Jira 쓰기의 의도 기록·실행·정리, worktree 관리, 리플레이 base 복원, 가드 훅.</li>
+      </ul>
+    </li>
+    <li class="m" data-m="가정">규칙과 지식(heka 결정 노트, 대상 저장소의 <code>REVIEW.md</code>·<code>AGENTS.md</code>)은 코드가 아니므로 그대로 쓴다. <span class="chip c-g" data-k="가정">가정</span></li>
+  </ul>
+
+  <hr>
+
+</section>
+
+<section id="s12">
+  <h2><span class="sn">§12</span>구축 순서</h2>
+
+  <ul>
+    <li class="m" data-m="결정">순서 <span class="chip c-d" data-k="결정">결정</span>: 요구 분석과 게이트부터 깊게 만든다.</li>
+    <li class="m" data-m="가정">1번 단계의 범위: 테크니컬 매니저(영향 분석 포함), QA 전문가(설계), 매니저 사수, 게이트 문서, 승인. 분해안이 게이트에 실리게 됐으므로 티켓 메이커와 티켓 사수도 이 범위에 넣는다. <span class="chip c-g" data-k="가정">가정</span> Jira 쓰기 단계는 넣지 않는다.</li>
+    <li class="m" data-m="결정 미결"><span class="chip c-d" data-k="결정">결정</span> 1번 단계의 완료 기준을 미리 정한다. 과거 PRD 2~3건을 다시 돌려 요구 재현율, 사후에 틀린 확정 항목 수, 게이트 체류 시간이 기준을 넘으면 다음 단계로 넘어간다. 옛 hew 는 같은 경로에서 뒤 단계를 한 번도 돌려 보지 못했다. 이 리플레이는 <a href="#s10">§10</a> 의 외부 쓰기 0 과 컨텍스트 차단을 지킨다. 기준 수치는 <span class="chip c-m" data-k="미결">미결</span>(<a href="#s13">§13</a> 의 8)이다.</li>
+    <li class="m" data-m="결정"><span class="chip c-d" data-k="결정">결정</span> QA 는 작은 확인만 먼저 한다. 두 플랫폼에서 화면 하나에 도달해 캡처하는 것까지다. 가장 불확실한 단계가 가장 넓은 범위로 맨 뒤에 놓여 있기 때문이다.</li>
+    <li class="m" data-m="제안">이후 순서 <span class="chip c-j" data-k="제안">제안</span>: 진행 프로그램과 빌더·사수·리뷰 → QA 실행 → PR 작성.</li>
+  </ul>
+
+  <hr>
+
+</section>
+
+<section id="s13">
+  <h2><span class="sn">§13</span>미결·실측 목록</h2>
+
+  <div class="tw">
+    <table>
+      <thead><tr><th class="num">#</th><th>항목</th><th>해소 방법</th></tr></thead>
+      <tbody>
+        <tr><td class="num">1</td><td>무인 세션에서 게이트 Artifact 게시와 답 읽기가 되는가</td><td>실측</td></tr>
+        <tr><td class="num">2</td><td>Haiku 5.5 사수가 누락·환각을 실제로 잡는가. 시안 시각 대조는 되는가</td><td>결함 주입</td></tr>
+        <tr><td class="num">3</td><td>QA: 두 플랫폼의 로그인, 딥링크 도달, 시스템 대화상자(ATT), 도달 불가 상태</td><td>사전 확인(<a href="#s12">§12</a> 제안)</td></tr>
+        <tr><td class="num">4</td><td>QA 도구 선택과 모킹 서버 방식. 테스트 계정과 서버 고르는 기준은 정해졌다(<a href="#s7">§7</a>)</td><td>사전 확인 뒤 결정</td></tr>
+        <tr><td class="num">5</td><td>요구 변경 감지에 쓸 비대화형 읽기 수단(PRD 버전, Figma)</td><td>실측</td></tr>
+        <tr><td class="num">6</td><td>리뷰 라운드와 QA 반복의 상한 값</td><td>리플레이 곡선</td></tr>
+        <tr><td class="num">7</td><td>지표 2 의 원인 분류 절차(AI 1차 + 사람 확인)의 실제 운영</td><td>첫 일감에서 정함</td></tr>
+        <tr><td class="num">8</td><td>1번 단계 완료 기준의 수치</td><td>리플레이 기준선 측정 뒤</td></tr>
+        <tr><td class="num">9</td><td><del>보류 질문의 알림 수단</del> 해소: 알리지 않고 종료 보고서에 싣는다(<a href="#s6-1">§6.1</a>)</td><td>—</td></tr>
+        <tr><td class="num">10</td><td>작은 티켓 경로의 게이트 축소판 범위</td><td>명세에서 정함</td></tr>
+        <tr><td class="num">11</td><td>팀으로 넓힐 때 설정으로 분리할 지점</td><td>명세에서 정함</td></tr>
+        <tr><td class="num">12</td><td><del>Jira 개인 API 토큰, PR 스크린샷 첨부 방식</del> 해소: 토큰은 쓰지 않고, 스크린샷은 과거 PR 방식(<a href="#s7">§7</a>)</td><td>—</td></tr>
+        <tr><td class="num">13</td><td><del>쓰기 전용 단계의 입력 교체 훅이 Atlassian MCP 에서도 동작하는가</del> 해소: 2026-11-14 읽기 호출(<code>getJiraIssue</code>)에서 훅이 넣은 입력으로 실행됨을 확인했다(명세 §14 의 8). 쓰기 호출 자체는 첫 실제 쓰기 때 다시 읽어 확인한다</td><td>—</td></tr>
+        <tr><td class="num">14</td><td><del>티켓 분해와 PR 묶음을 사람이 보는 시점</del> 해소: 게이트에서 승인(<a href="#s4-4">§4.4</a>)</td><td>—</td></tr>
+        <tr><td class="num">15</td><td>리플레이의 컨텍스트 차단 방법: heka 주입 훅의 시점 고정, Figma 과거 버전</td><td>실측</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <hr>
+
+</section>
+
+<section id="s14">
+  <h2><span class="sn">§14</span>결정 기록(2026-11-13)</h2>
+
+  <div class="tw">
+    <table>
+      <thead><tr><th class="num">#</th><th>결정</th></tr></thead>
+      <tbody>
+        <tr><td class="num">1</td><td>세션 자체가 죽는 중단은 요구에서 제외한다</td></tr>
+        <tr><td class="num">2</td><td>작업 중 요구 변경: 절반 이상 진행됐으면 끝낸 뒤 추가 티켓, 이하면 기존 작업 수정. 판정은 티켓 단위·단계 기준</td></tr>
+        <tr><td class="num">3</td><td>프로덕트 빌더는 한 명이다. 코드 수준 분석은 승인 전에 한다</td></tr>
+        <tr><td class="num">4</td><td>검증자 이름은 &quot;사수&quot;로 통일하고 작은 모델을 쓴다</td></tr>
+        <tr><td class="num">5</td><td>QA 의 주 목적은 인간 사용자의 경험에 문제 되는 부분을 없애는 것이다. 시나리오 설계는 승인 전, 기대 결과 잠금, 탐색 뒤 스크립트 고정, OpenAPI 기반 모킹과 표기, testID 를 빌더 완료 조건에</td></tr>
+        <tr><td class="num">6</td><td>점진적 개선과 평가(리플레이, 결함 주입, 병행 실행, 기록 형식 선행)에 동의</td></tr>
+        <tr><td class="num">7</td><td>새로 만든다. 그대로 쓸 수 있는 것만 hew 에서 가져온다.</td></tr>
+        <tr><td class="num">8</td><td>승인 뒤 모호성은 해당 작업만 보류한다</td></tr>
+        <tr><td class="num">9</td><td>QA 를 통과해야 PR 을 올린다. QA 통과 뒤 draft PR 을 자동 생성하고 ready 전환은 사람이 한다</td></tr>
+        <tr><td class="num">10</td><td>대상 일감은 PRD 기능과 작은 티켓이다</td></tr>
+        <tr><td class="num">11</td><td>경험 우려는 고치지 않고 보고한다</td></tr>
+        <tr><td class="num">12</td><td>빌더에게 요구 문서 조각과 티켓을 둘 다 전달한다</td></tr>
+        <tr><td class="num">13</td><td>승인 이후 단계 진행은 프로그램이 한다</td></tr>
+        <tr><td class="num">14</td><td>지표 3: 사람 p1~p4 댓글 + Copilot 변경필요·확인필요 + 리뷰 뒤 수정 커밋 여부</td></tr>
+        <tr><td class="num">15</td><td>지표 2: 모바일 쪽 요구 누락·구현 결함·회귀로 판정된 이슈만</td></tr>
+        <tr><td class="num">16</td><td>구축 순서: 요구 분석과 게이트부터 깊게</td></tr>
+        <tr><td class="num">17</td><td>사용 범위: 먼저 혼자, 나중에 팀</td></tr>
+        <tr><td class="num">18</td><td>QA 기기: 처음부터 iOS 시뮬레이터와 Android 에뮬레이터 둘 다</td></tr>
+        <tr><td class="num">19</td><td>요구 문서와 티켓이 어긋나면 요구 문서가 우선한다. 어긋난 내용은 반드시 보고한다</td></tr>
+        <tr><td class="num">20</td><td>heka 규칙을 그대로 적용하고, 적용할 수 있는 것은 더 가져온다(<a href="#s16">§16</a>)</td></tr>
+        <tr><td class="num">21</td><td>1번 단계의 완료 기준을 미리 정한다</td></tr>
+        <tr><td class="num">22</td><td>평가 실행은 Confluence·Jira·GitHub 에 실제 결과물을 올리지 않는다</td></tr>
+        <tr><td class="num">23</td><td>이미 작업된 PRD 를 다시 돌릴 때는 기존 작업의 컨텍스트 없이 진행한다</td></tr>
+        <tr><td class="num">24</td><td>QA 는 두 플랫폼에서 화면 하나 도달·캡처까지만 먼저 확인한다</td></tr>
+        <tr><td class="num">25</td><td>보류: 물을 수 있는 것은 계획 단계에서 미리 묻고, 실행 중 보류는 작업이 모두 끝난 뒤 세션의 보고서로 알린다</td></tr>
+        <tr><td class="num">26</td><td>Jira 개인 API 토큰은 쓰지 않는다. PR 스크린샷은 과거 PR 방식을 따른다</td></tr>
+        <tr><td class="num">27</td><td>QA 는 사용자가 준 테스트 계정을 쓰고, 서버는 변경 API 가 반영된 환경을 워크플로우가 직접 고른다</td></tr>
+        <tr><td class="num">28</td><td>설계 단계에는 Fable 5.2 를 <code>medium</code> 으로 쓸 수 있다. Opus 5.5 <code>high</code> 보다 성능이 좋을 때 적용한다</td></tr>
+        <tr><td class="num">29</td><td>외부 쓰기는 쓰기 전용 단계가 한다. 전달된 내용을 100% 그대로 실행한다는 보장이 있을 때에 한하고, 아니면 에이전트가 직접 쓴다</td></tr>
+        <tr><td class="num">30</td><td>티켓 분해와 PR 묶음은 게이트에서 사람이 승인한다</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>heka 노트: <code>prd-pr-workflow-new-decisions-2026-11-13</code>, <code>…-round2</code>, <code>…-round3-4</code>, <code>…-round5</code>.</p>
+
+  <hr>
+
+</section>
+
+<section id="s15">
+  <h2><span class="sn">§15</span>근거 자료</h2>
+
+  <ul>
+    <li>사내 사실(heka)
+      <ul>
+        <li><code>hew-usage-status-2026-11-08</code>: 옛 hew 로 끝까지 돈 실행 0건</li>
+        <li><code>app-3008-hew-vs-actual-2026-10-08</code>: 결함이 분석 단계에서 난 대조 기록</li>
+        <li><code>qa-ticket-count-metric-limits-2026-10</code>, <code>mobile-pr-baseline-stats-2026-10</code>, <code>mobile-app-pr-pn-2026</code>: 지표 기준선</li>
+        <li><code>hew-l3-maestro-run-evidence-2026-09-11</code>: 과거 Maestro 시도</li>
+        <li>옛 hew 저장소의 <code>docs/REHEARSAL-2026-10-28.md</code>: 조각 2 리허설</li>
+      </ul>
+    </li>
+    <li>하니스와 평가
+      <ul>
+        <li><a href="https://www.anthropic.com/engineering/harness-design-long-running-apps">Harness design for long-running application development</a> (Anthropic, 2026-03-24): 작업자와 판정자 분리, 평가자 보정, 구현 전 완료 기준 합의, 구성요소는 가정이므로 걷어내며 검증</li>
+        <li><a href="https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents">Demystifying evals for AI agents</a> (Anthropic, 2026-01-09): 실제 실패에서 뽑은 20~50개로 시작, 회귀 평가, 여러 번 실행, 채점기 보정</li>
+        <li><a href="https://www.anthropic.com/engineering/building-effective-agents">Building effective agents</a> (Anthropic, 2024-12-19): 순서가 정해진 일은 코드로 진행, 단순한 것부터</li>
+        <li><a href="https://code.claude.com/docs/en/workflows">Dynamic workflows</a>, <a href="https://code.claude.com/docs/en/sub-agents">서브에이전트</a>, <a href="https://code.claude.com/docs/en/headless">헤드리스 실행</a>, <a href="https://code.claude.com/docs/en/plugin-evals">플러그인 평가</a> (Claude Code 문서)</li>
+      </ul>
+    </li>
+    <li>비용과 effort
+      <ul>
+        <li><a href="https://platform.claude.com/docs/en/about-claude/models/optimizing-for-cost-and-intelligence">Optimizing for cost and intelligence</a>, <a href="https://platform.claude.com/docs/en/build-with-claude/effort">Effort</a>, <a href="https://platform.claude.com/docs/en/about-claude/pricing">Pricing</a> (Claude 플랫폼 문서)</li>
+      </ul>
+    </li>
+    <li>검증자와 리뷰
+      <ul>
+        <li><a href="https://arxiv.org/abs/2404.10774">MiniCheck</a>: 근거 문서 대조형 검증은 작은 모델로 충분</li>
+        <li><a href="https://arxiv.org/abs/2410.12784">JudgeBench</a>: 어려운 판정은 강한 모델도 무작위에 가까움</li>
+        <li><a href="https://arxiv.org/abs/2603.00539">Jin &amp; Chen 2026</a>: LLM 리뷰어의 정상 코드 오판과 수정안 실행 검증의 효과</li>
+        <li><a href="https://arxiv.org/abs/2601.04886">Gong 2026</a>: 에이전트 PR 본문과 실제 변경의 불일치</li>
+        <li><a href="https://arxiv.org/abs/2510.20270">ImpossibleBench</a>: 테스트를 통과시키려는 부정행위와 읽기 전용 테스트의 효과</li>
+      </ul>
+    </li>
+    <li>QA 도구
+      <ul>
+        <li><a href="https://docs.maestro.dev/get-started/maestro-mcp">Maestro MCP</a>, <a href="https://docs.maestro.dev/get-started/supported-platform/react-native">Maestro React Native</a>, <a href="https://github.com/callstackincubator/agent-device">agent-device</a>, <a href="https://github.com/stoplightio/prism">Prism</a></li>
+      </ul>
+    </li>
+  </ul>
+
+  <hr>
+
+</section>
+
+<section id="s16">
+  <h2><span class="sn">§16</span>적용하는 heka 규칙</h2>
+
+  <p class="m" data-m="결정">heka 에 남은 규칙을 단계별로 가져온다. <span class="chip c-d" data-k="결정">결정</span> 각 단계의 패킷에는 그 단계의 규칙 id 만 싣고, 에이전트는 본문을 <code>heka_expand</code> 로 읽는다. 아래 목록은 2026-11-13 검색 결과이고, 명세를 쓸 때 단계별로 다시 검색해 보탠다. &quot;(추론)&quot;은 사람이 말한 것이 아니라 AI 가 뽑아 검수되지 않은 노트라서 적용 전에 본문을 확인한다.</p>
+
+  <h3 id="s16-1"><span class="sn">§16.1</span>요구 분석과 게이트</h3>
+
+  <div class="tw">
+    <table>
+      <thead><tr><th>id</th><th>내용</th></tr></thead>
+      <tbody>
+        <tr><td><code>requirement-source-priority-figma-first</code></td><td>출처 우선순위 Figma &gt; PRD &gt; ADR·티켓</td></tr>
+        <tr><td><code>hew-2026-10-21-figma-prd</code></td><td>화면 우선: Figma 앱 레인 화면 목록을 먼저 만들고 요구를 화면 아래에 둔다. 상태 변형은 그룹+변형, &quot;기대 동작&quot;은 변경 목록</td></tr>
+        <tr><td><code>hew-scope-operator-journeys-excluded-2026-10-29</code></td><td>주체가 운영자·관리자인 PRD 행은 앱 요구의 근거로 쓰지 않는다</td></tr>
+        <tr><td><code>hew-delta-comparison-rows-2026-10-28</code></td><td>PRD–시안 차이는 관점별 3열 표(관점, PRD, 시안)</td></tr>
+        <tr><td><code>hew-2026-10-21-follow-figma</code></td><td>차이 결정은 네 값(시안대로, PRD 대로, 구현 안 함, 보류). 보류는 승인을 막지 않되 계획에서 뺀다</td></tr>
+        <tr><td><code>hew-2026-10-21-requirement-ids</code></td><td>차이는 대표 요구 아래 한 번만 그리고 다른 관련 요구에는 링크만 둔다</td></tr>
+        <tr><td><code>hew-6-2026-10-23-mismatch</code></td><td>차이 비중이 10%를 넘으면 PO·디자이너 확인 요청서를 함께 만든다. AS-IS·TO-BE 차이는 붉은 상자, 차이 하나에 결정 하나, 게이트 결정은 heka 에 기록</td></tr>
+        <tr><td><code>hew-review-request-page-decisions-2026-10-28</code></td><td>확인 요청서에서 바로 선택하고, 선택지는 게이트와 같다</td></tr>
+        <tr class="m" data-m="가정"><td><code>hew-gate-layout-decisions-2026-11-11</code></td><td>노드 번호는 숨기고 시안 링크로, 화면은 탭, 시안은 왼쪽 고정·요구는 오른쪽, 의존 순서는 그래프. 이미지 크기는 이 노트(250px)와 10-23 노트(2배)가 다르므로 나중 결정인 이 노트를 따른다 <span class="chip c-g" data-k="가정">가정</span></td></tr>
+        <tr><td><code>hew-id-labels-korean</code></td><td>id 는 <code>요구-n</code>, <code>화면-n</code>, <code>화면-n.m</code>, <code>Q-n</code>, <code>D-n</code>, <code>A-n</code></td></tr>
+        <tr><td><code>hew-superseded-79fa26</code> (추론)</td><td>요구가 바뀌어 무효가 된 질문은 다시 답해야 승인된다</td></tr>
+        <tr><td><code>figma-mcp-read-procedure</code></td><td>Figma 읽기 절차: 메타데이터는 줄 단위, 문구는 스크린샷, as-is/to-be 는 좌표로 짝짓기</td></tr>
+        <tr><td><code>figma-instance-app-3099</code></td><td>문구만 대조하면 아이콘·그래픽 instance 교체를 놓친다</td></tr>
+        <tr><td><code>figma-to-mobile-component-lookup</code> (추론)</td><td>시안의 변경 대상은 as-is 문구 grep 으로 코드에서 찾는다(영향 분석)</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 id="s16-2"><span class="sn">§16.2</span>티켓</h3>
+
+  <div class="tw">
+    <table>
+      <thead><tr><th>id</th><th>내용</th></tr></thead>
+      <tbody>
+        <tr><td><code>jira-ticket-title-format</code></td><td>제목은 <code>[MO] {일감명} / {작업 요약}</code>, 본문에 코드 내용 없음</td></tr>
+        <tr><td><code>app-feature-story-role-prefixed-subtasks</code> (추론)</td><td>에픽 → 기능 스토리 → 역할 접두 하위 작업 구조</td></tr>
+        <tr><td><code>jira-subtask-story-points-field-10008-r2</code></td><td>하위 작업의 Story Points 필드</td></tr>
+        <tr><td><code>app-team-feature-flag-replaces-epic-branch</code></td><td>피처플래그가 에픽 브랜치를 대신한다. 플래그 제거가 마지막 작업</td></tr>
+        <tr><td><code>prd-to-pr-pipeline-decisions-2026-09-r2</code></td><td>1SP=1h, 티켓 2~4SP. 이 노트의 &quot;PR 1개=티켓 1개&quot;는 2026-10-20 결정 6(티켓 1≠PR 1)으로 바뀌었다</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 id="s16-3"><span class="sn">§16.3</span>구현(빌더, 빌더 사수)</h3>
+
+  <div class="tw">
+    <table>
+      <thead><tr><th>id</th><th>내용</th></tr></thead>
+      <tbody>
+        <tr><td><code>hee-commit-message-convention</code></td><td><code>[티켓ID] type: 한국어 요약</code></td></tr>
+        <tr><td><code>mobile-commit-hooks</code></td><td>commitlint type 13종, 티켓 ID 자동 주입, 브랜치명 검증</td></tr>
+        <tr><td><code>small-commits</code>, <code>commit-split-ui-and-feature</code></td><td>커밋은 화면·작업 단위로 잘게, UI 와 기능은 나눈다</td></tr>
+        <tr><td><code>hee-comment-convention</code>, <code>comment-exception-clause-abuse</code> (추론)</td><td>변경 동기는 주석이 아니라 커밋 메시지에</td></tr>
+        <tr><td><code>no-ticket-id-in-code-comments</code>, <code>hee-jsdoc-and-branch-style</code></td><td>주석의 티켓 ID, JSDoc·분기 스타일</td></tr>
+        <tr><td><code>no-api-function-tests</code></td><td><code>app/api/*</code> 함수에는 테스트를 쓰지 않는다</td></tr>
+        <tr><td><code>provider-customer-guest-role</code> (추론)</td><td>역할 값은 provider·customer·guest</td></tr>
+        <tr><td><code>no-destructive-git-for-verification</code></td><td>검증 목적으로 전역·파괴적 git 조작을 쓰지 않는다</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 id="s16-4"><span class="sn">§16.4</span>리뷰</h3>
+
+  <div class="tw">
+    <table>
+      <thead><tr><th>id</th><th>내용</th></tr></thead>
+      <tbody>
+        <tr><td><code>review-md-pr</code></td><td><code>REVIEW.md</code> 우선순위로 분류하고, PR 이 재정의한 줄의 기존 결함도 이번 PR 결함으로 본다</td></tr>
+        <tr><td><code>copilot-code-review-instruction-sources</code> (추론), <code>copilot-review-request-async-and-limits</code> (추론)</td><td>Copilot 리뷰가 읽는 지침 파일과 요청 방식(지표 3 집계)</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 id="s16-5"><span class="sn">§16.5</span>PR</h3>
+
+  <div class="tw">
+    <table>
+      <thead><tr><th>id</th><th>내용</th></tr></thead>
+      <tbody>
+        <tr><td><code>hee-pr-body-style</code>, <code>hee-pr-background-business-context</code></td><td>배경은 공통 문장 + 이 PR 의 변경, <code>## 변경점</code> 절은 쓰지 않는다</td></tr>
+        <tr><td><code>hee-pr-body-bugfix-format</code></td><td>bugfix PR 만 <code>## 문제</code> / <code>## 기대결과</code></td></tr>
+        <tr><td><code>hee-pr-body-no-adr-link</code>, <code>pr-body-no-claude-code-generated-line</code></td><td>상단 링크는 Jira 티켓만, 생성 도구 표기 줄은 붙이지 않는다</td></tr>
+        <tr><td><code>hee-pr-body-change-type-must-match-diff-r2</code></td><td>묶음 PR 본문은 커밋별 diff 를 다시 보고 사실대로 쓴다</td></tr>
+        <tr><td><code>pr-300px-img-width-300</code>, <code>github-image-upload-no-documented-api-gh-attach-2026-10</code> (추론)</td><td>스크린샷은 HTML 표·가로 300px, <code>gh --attach</code> 두 단계</td></tr>
+        <tr><td><code>github-work-account</code></td><td>사내 GitHub 은 gh CLI(업무용 계정)로 한다</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 id="s16-6"><span class="sn">§16.6</span>QA</h3>
+
+  <div class="tw">
+    <table>
+      <thead><tr><th>id</th><th>내용</th></tr></thead>
+      <tbody>
+        <tr><td><code>mobile-repo-debug-app-cache-metro-port</code></td><td>디버그 앱 캐시 재사용과 Metro 포트 분리(worktree 병렬 검증)</td></tr>
+        <tr><td><code>hew-l3-maestro-run-evidence-2026-09-11</code> (추론)</td><td>통과와 원하는 화면 캡처는 별개다. 과거 스모크 통과 화면은 ATT 대화상자였다</td></tr>
+        <tr><td><code>e2e-2026-11-13-maestro-2</code> (추론)</td><td>Maestro MCP, agent-device 현황</td></tr>
+        <tr><td><code>note-7d7419</code> (추론)</td><td>디버그·스테이징 빌드에서는 Android 인앱결제를 테스트할 수 없다</td></tr>
+        <tr><td><code>app-2970-dev10-openapi-check-2026-11-10</code> (추론)</td><td>환경별 openapi 로 API 반영 여부를 확인한 사례</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 id="s16-7"><span class="sn">§16.7</span>평가와 하니스</h3>
+
+  <div class="tw">
+    <table>
+      <thead><tr><th>id</th><th>내용</th></tr></thead>
+      <tbody>
+        <tr><td><code>github-pr-base-sha-not-creation-time-r2</code> (추론)</td><td>리플레이 base 는 first-parent 이력에서 직접 계산한다</td></tr>
+        <tr><td><code>confluence-version-history-via-atlassian-mcp-prd-d9-r3</code> (추론)</td><td>PRD 당시 버전 읽기와 버전 선택의 함정</td></tr>
+        <tr><td><code>hew-slice1-decisions-2026-10-20</code></td><td>채점표는 Claude 초안을 사용자가 산출물을 보기 전에 교정한다</td></tr>
+        <tr><td><code>subagent-tools-allowlist-excludes-mcp-heka</code> (추론), <code>mcp-figma-users-hee-claude-ai</code> (추론)</td><td>에이전트 도구 허용 목록에 MCP 를 명시해야 하고, 헤드리스에서는 claude.ai 커넥터 이름만 보인다</td></tr>
+        <tr><td><code>claude-plugin-eval-3-2026-11</code> (추론)</td><td><code>claude plugin eval</code> 의 기능과 한계</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+</section>
+</main>
+</div>
+</div>
+<script>
+(function () {
+  /* 절 목차: 넓은 화면에서는 항상 펼치고, 좁은 화면에서는 접어 둔다 */
+  var tocd = document.getElementById("tocd");
+  if (tocd) {
+    var mq = window.matchMedia("(min-width: 1000px)");
+    var syncToc = function () { tocd.open = mq.matches; };
+    syncToc();
+    if (mq.addEventListener) mq.addEventListener("change", syncToc);
+    tocd.addEventListener("click", function (e) {
+      if (!mq.matches && e.target.closest && e.target.closest("a")) tocd.open = false;
+    });
+  }
+
+  /* 표기 필터: 고른 표기가 달린 블록만 또렷하게 두고 나머지는 흐리게 한다 */
+  var buttons = document.querySelectorAll(".filters button");
+  var items = document.querySelectorAll(".m[data-m]");
+  function apply(f) {
+    buttons.forEach(function (b) { b.setAttribute("aria-pressed", b.getAttribute("data-f") === f ? "true" : "false"); });
+    items.forEach(function (it) {
+      var on = f === "전체" || it.getAttribute("data-m").split(" ").indexOf(f) !== -1;
+      it.classList.toggle("dim", !on);
+    });
+  }
+  buttons.forEach(function (b) {
+    b.addEventListener("click", function () { apply(b.getAttribute("data-f")); });
+  });
+  apply("전체");
+})();
+</script>
+</body>
+</html>

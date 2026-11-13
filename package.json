@@ -14,7 +14,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "hew": "tsx src/cli/main.ts"
+    "hew": "tsx src/cli/main.ts",
+    "docs": "node scripts/md-page.mjs docs/DESIGN.md && node scripts/md-page.mjs docs/SPEC-stage-1.md && node scripts/md-page.mjs docs/AUTO-DECISIONS-2026-11-14.md"
   },
   "dependencies": {
     "commander": "^12.1.0",
