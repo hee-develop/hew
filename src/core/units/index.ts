@@ -32,9 +32,14 @@ export function sourceMarkdown(runDir: string, source: SourceEntry): string {
   return markdownFromSource(text, basename(source.path ?? ""));
 }
 
-function fileKeyOf(source: SourceEntry): string | undefined {
+const KEY_DASH_NODE = /^([0-9A-Za-z]{22,128}):\d{1,7}-\d{1,7}$/;
+
+/** figma_meta 원천의 파일 키. meta.file_key, ref(`<키>`, `<키>:<a>-<b>`, 노드 참조), 파일 이름 순으로 찾는다. */
+export function fileKeyOf(source: SourceEntry): string | undefined {
   const fromMeta = typeof source.meta.file_key === "string" ? source.meta.file_key : undefined;
   if (fromMeta) return fromMeta;
+  const fromDash = KEY_DASH_NODE.exec(source.ref)?.[1];
+  if (fromDash) return fromDash;
   const fromRef = asFileKey(source.ref) ?? parseNodeRef(source.ref)?.key;
   if (fromRef) return fromRef;
   const fromName = /^figma-([0-9A-Za-z]{22,128})-/.exec(basename(source.path ?? ""));

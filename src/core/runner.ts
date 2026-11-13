@@ -5,6 +5,7 @@ import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import type { ProducedBy } from "./envelope.js";
 import { HewError, usageError } from "./errors.js";
+import { loadCollectConfig } from "./collect/config.js";
 import { appendEvent } from "./events.js";
 import { readJsonFile, writeJsonAtomic } from "./fsx.js";
 import { nextAction, type NextAction } from "./next.js";
@@ -23,6 +24,8 @@ export const DEFAULT_MAX_STEPS = 40;
 const RESULT_LIMIT = 2000;
 const KILL_GRACE_MS = 3000;
 const GUARD_MATCHER = "Read|Write|Edit|NotebookEdit|Bash|Task|Agent|WebFetch|WebSearch|Skill|mcp__.*";
+const COLLECTOR_GUARD_MATCHER = `${GUARD_MATCHER}|ToolSearch`;
+const RECORD_MATCHER = "mcp__.*";
 const FIXED_PROMPT_TAIL = "를 읽고 그대로 수행하라. 끝까지 진행하고, 제출이 통과하면 한 문단으로 보고하라.";
 
 export interface RunnerOptions {
@@ -67,7 +70,6 @@ export type RunOutcome =
   | "until_reached"
   | "stopped"
   | "max_steps"
-  | "collection_needed"
   | "role_missing"
   | "dry";
 
@@ -136,9 +138,15 @@ export function buildSpawnPlan(
     ...(config.isolated ? ["--setting-sources", "project,local", "--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}'] : []),
   ];
   const sasu = role === "manager-sasu" || role === "ticket-sasu";
+  const collector = role === "collector";
+  const collect = collector ? loadCollectConfig() : null;
+  if (collect !== null) {
+    const names = collect.mcp_allow.filter((n) => /^[A-Za-z0-9_-]+$/.test(n));
+    args.push("--allowedTools", ["ToolSearch", ...names].join(","));
+  }
   const readRoots = [
     runDir,
-    ...(!sasu && run.repo.path !== null ? [resolve(expandHome(run.repo.path))] : []),
+    ...(!sasu && !collector && run.repo.path !== null ? [resolve(expandHome(run.repo.path))] : []),
     join(HEW_ROOT, "refs"),
     ...(role === "ticket-maker" ? [join(HEW_ROOT, "rules")] : []),
   ];
@@ -154,6 +162,16 @@ export function buildSpawnPlan(
       HEW_GUARD_HEW_BIN: hewBinPath(),
       HEW_GUARD_LOG: join(packet.workDir, "guard.jsonl"),
       HEW_PRODUCED_BY: JSON.stringify(producedBy),
+      ...(collect === null
+        ? {}
+        : {
+            HEW_RECORD_DIR: join(packet.workDir, "calls"),
+            HEW_GUARD_PROFILE: "collector",
+            HEW_GUARD_MODE: run.mode,
+            HEW_GUARD_BLOCK: JSON.stringify({ jira_keys: run.case_info?.block.jira_keys ?? [], pr_numbers: run.case_info?.block.pr_numbers ?? [] }),
+            HEW_GUARD_MCP_ALLOW: collect.mcp_allow.join(","),
+            HEW_GUARD_CURL_HOSTS: collect.curl_hosts.join(","),
+          }),
     },
     role,
     purpose,
@@ -166,10 +184,15 @@ export function buildSpawnPlan(
   };
 }
 
-/** 실행용 설정 파일(PreToolUse 훅)을 쓴다. */
-function writeSettings(path: string): void {
-  const command = `node "${join(HEW_ROOT, "hooks", "guard.mjs")}"`;
-  writeJsonAtomic(path, { hooks: { PreToolUse: [{ matcher: GUARD_MATCHER, hooks: [{ type: "command", command }] }] } });
+/** 실행용 설정 파일을 쓴다. PreToolUse(범위 훅)를 넣고, 수집 역할에는 도구 결과를 받아 적는 PostToolUse 도 넣는다. */
+function writeSettings(path: string, role: RoleName): void {
+  const guard = `node "${join(HEW_ROOT, "hooks", "guard.mjs")}"`;
+  const collector = role === "collector";
+  const hooks: Record<string, unknown> = {
+    PreToolUse: [{ matcher: collector ? COLLECTOR_GUARD_MATCHER : GUARD_MATCHER, hooks: [{ type: "command", command: guard }] }],
+  };
+  if (collector) hooks.PostToolUse = [{ matcher: RECORD_MATCHER, hooks: [{ type: "command", command: `node "${join(HEW_ROOT, "hooks", "record.mjs")}"` }] }];
+  writeJsonAtomic(path, { hooks });
 }
 
 function execClaude(plan: SpawnPlan, parentEnv: NodeJS.ProcessEnv): Promise<ExecOutcome> {
@@ -310,7 +333,7 @@ export async function runLoop(opts: RunnerOptions): Promise<RunnerResult> {
     const packet = buildPacket({ runDir: opts.runDir, role, purpose, env, batch });
     mkdirSync(packet.workDir, { recursive: true });
     const plan = buildSpawnPlan(opts.runDir, before, role, purpose, config, packet, env, opts.timeoutMs);
-    writeSettings(plan.settings);
+    writeSettings(plan.settings, role);
     const exec = await execClaude(plan, env);
     writeFileSync(join(packet.workDir, "stdout.json"), exec.stdout, "utf8");
     writeFileSync(join(packet.workDir, "stderr.txt"), exec.spawnError !== null ? `${exec.stderr}${exec.spawnError}\n` : exec.stderr, "utf8");
@@ -403,7 +426,6 @@ export async function runLoop(opts: RunnerOptions): Promise<RunnerResult> {
       continue;
     }
     if (next.action !== "spawn") return result("stopped", run, next, describeStop(next));
-    if (next.role === "collector") return result("collection_needed", run, next, "수집이 필요합니다. 이 조각에서는 수집 역할을 띄우지 않습니다");
     const role = next.role;
     if (!existsSync(join(HEW_ROOT, "agents", `${role}.md`))) {
       return result("role_missing", run, next, `역할 정의 파일(agents/${role}.md)이 없어 ${role} 를 띄울 수 없습니다`);

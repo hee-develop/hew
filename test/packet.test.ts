@@ -223,11 +223,11 @@ describe("패킷: 따를 규칙(heka)", () => {
     expect(text).not.toContain("가".repeat(1501));
   });
 
-  it("replay 에서 known_at 이후에 기록된 노트는 빼고 이유를 적는다", () => {
+  it("replay 에서도 known_at 으로 거르지 않고 역할별 규칙을 항상 싣는다", () => {
     const { dir } = makeRun("collected", { mode: "replay", case: "c.yaml", known_at: "2026-10-01" });
     const text = read(buildPacket({ runDir: dir, role: "technical-manager", env: env({ FAKE_HEKA_LATE: "hew-id-labels-korean" }) }).path);
-    expect(text).toMatch(/### hew-id-labels-korean\n\n시점 이후라 제외/);
-    expect(text).not.toContain("본문 hew-id-labels-korean");
+    expect(text).toContain("본문 hew-id-labels-korean");
+    expect(text).not.toContain("시점 이후라 제외");
     expect(text).toContain("본문 hew-2026-10-21-figma-prd");
   });
 
@@ -235,6 +235,28 @@ describe("패킷: 따를 규칙(heka)", () => {
     const { dir } = makeRun("collected", { known_at: "2026-10-01" });
     const text = read(buildPacket({ runDir: dir, role: "technical-manager", env: env({ FAKE_HEKA_LATE: "hew-id-labels-korean" }) }).path);
     expect(text).toContain("본문 hew-id-labels-korean");
+  });
+
+  it("사례의 차단 heka id 만 빼고 이유를 적는다", () => {
+    const { dir } = makeRun("collected", {
+      mode: "replay",
+      case: "c.yaml",
+      case_info: { block: { jira_keys: [], pr_numbers: [], heka_ids: ["hew-id-labels-korean"] } },
+    });
+    const r = buildPacket({ runDir: dir, role: "technical-manager", env: env() });
+    const text = read(r.path);
+    expect(text).toMatch(/### hew-id-labels-korean\n\n사례의 차단 목록에 있어 제외/);
+    expect(text).not.toContain("본문 hew-id-labels-korean");
+    expect(text).toContain("본문 hew-2026-10-21-figma-prd");
+    expect(text).toContain("본문 figma-to-mobile-component-lookup");
+    expect(r.warnings).toEqual([]);
+  });
+
+  it("차단 id 는 모드와 상관없이 case_info 가 있으면 뺀다", () => {
+    const { dir } = makeRun("collected", { case_info: { block: { jira_keys: [], pr_numbers: [], heka_ids: ["small-commits"] } } });
+    const text = read(buildPacket({ runDir: dir, role: "ticket-maker", env: env() }).path);
+    expect(text).toMatch(/### small-commits\n\n사례의 차단 목록에 있어 제외/);
+    expect(text).toContain("본문 jira-ticket-title-format");
   });
 
   it("heka 도구가 실패하면 id 와 '본문을 읽지 못함' 만 싣고 경고를 낸다(생성은 성공)", () => {
@@ -253,6 +275,67 @@ describe("패킷: 따를 규칙(heka)", () => {
     expect(bad.warnings).toHaveLength(10);
     const missing = buildPacket({ runDir: dir, role: "technical-manager", env: env({ HEW_HEKA_BIN: join(tempDir("hew-nobin-"), "nope.js") }) });
     expect(missing.warnings[0]?.message).toContain("heka 도구가 없습니다");
+  });
+});
+
+describe("패킷: collector", () => {
+  let seq = 0;
+  const collectorPacket = (patch: Parameters<typeof makeRun>[1] = {}) => {
+    const { dir } = makeRun("init", patch, `col-${++seq}`);
+    const r = buildPacket({ runDir: dir, role: "collector", env: env() });
+    return { dir, r, text: read(r.path) };
+  };
+
+  it("실행 폴더, 모드, 수집 계획 표, 쓸 명령(정확한 형태와 예시)이 있다", () => {
+    const { dir, r, text } = collectorPacket();
+    const hew = hewBinPath();
+    expect(r).toMatchObject({ n: 1, purpose: "first", role: "collector" });
+    expect(text).toContain(`실행 폴더: \`${dir}\``);
+    expect(text).toContain("live");
+    expect(text).toContain("| 항목 id | 처리 | 무엇 | 도구 | 등록 값 | 비고 |");
+    expect(text).toContain("| prd:123 | 가져옴 | Confluence PRD 페이지 123 |");
+    expect(text).toContain("--kind prd --ref 123");
+    for (const sub of ["plan", "calls", "done"]) expect(text).toContain(`\`${hew} --json source ${sub} --run ${dir}\``);
+    expect(text).toContain(`${hew} --json source add --run ${dir} <등록 값> --from-call <번호>`);
+    expect(text).toContain(`${hew} --json source add --run ${dir} <등록 값> --file ${r.workDir}/shots/<이름>.png`);
+    expect(text).toContain(`${hew} --json source fail --run ${dir} --item <항목 id> --reason "<사유>"`);
+    expect(text).toContain(`--kind prd --ref 123456 --version 22 --from-call 1`);
+    expect(existsSync(join(r.workDir, "shots"))).toBe(true);
+  });
+
+  it("읽기 도구 이름, cloudId, 지정 버전 조회 방법, 스크린샷 내려받기 형태", () => {
+    const { text } = collectorPacket();
+    expect(text).toContain("cloudId: `example.atlassian.net`");
+    expect(text).toContain("`getConfluencePage`(cloudId, pageId, contentFormat: markdown)");
+    expect(text).toContain("`getConfluenceContentVersion`(contentId, versionNumber, content_format: markdown)");
+    expect(text).toContain("`responseFields` 를 주지 않는다");
+    expect(text).toContain("`ToolSearch` 로 `get_metadata`·`get_screenshot` 을 찾은 뒤");
+    expect(text).toContain("`get_screenshot`(fileKey, nodeId, maxDimension)");
+    expect(text).toMatch(/curl -sS -L -f --max-time 60 -o \S+\/shots\/12-34\.png "https:\/\/<주소>"/);
+  });
+
+  it("사례의 PRD 버전은 계획 표에 지정 버전만 가져오라는 비고로 실린다", () => {
+    const { text } = collectorPacket({ case_info: { prd_version: "22", block: { jira_keys: [], pr_numbers: [], heka_ids: [] } } });
+    expect(text).toContain("지정 버전만. 현재 버전으로 대신하지 않는다");
+    expect(text).toContain("--kind prd --ref 123 --version 22");
+  });
+
+  it("차단 목록이 있으면 읽지 않을 것 표를 싣고 없으면 절이 없다", () => {
+    const blocked = collectorPacket({ case_info: { block: { jira_keys: ["APP-3094"], pr_numbers: [1054], heka_ids: [] } } }).text;
+    expect(blocked).toContain("## 읽지 않을 것");
+    expect(blocked).toContain("| Jira | APP-3094 |");
+    expect(blocked).toContain("| PR | #1054 |");
+    expect(collectorPacket().text).not.toContain("## 읽지 않을 것");
+  });
+
+  it("역할 규칙(heka)을 싣는다", () => {
+    const { text } = collectorPacket();
+    expect(text).toContain("### figma-mcp-read-procedure — 제목 figma-mcp-read-procedure");
+    expect(text).toContain("### confluence-page-version-body-via-atlassian-mcp");
+  });
+
+  it("code 원천이 없으면 대상 저장소가 지정되지 않음을 막힌 일로 싣는다", () => {
+    expect(collectorPacket().text).toContain("대상 저장소가 지정되지 않음");
   });
 });
 

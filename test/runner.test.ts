@@ -232,11 +232,12 @@ describe("실행기: --dry, --until, 멈추는 곳", () => {
     await expect(runLoop({ runDir: dir, until: "nope" })).rejects.toThrow(/--until/);
   });
 
-  it("init 은 수집이 필요하다며 멈춘다", async () => {
+  it("init 에서는 collector 를 띄울 명령을 만든다(--dry)", async () => {
     const { dir } = makeRun("init");
     const { env, log } = fakeEnv("submit");
-    const result = await runLoop({ runDir: dir, until: "analyzed", env });
-    expect(result.outcome).toBe("collection_needed");
+    const result = await runLoop({ runDir: dir, dry: true, env });
+    expect(result.outcome).toBe("dry");
+    expect(result.dry?.args).toContain("hew:collector");
     expect(existsSync(log) ? readdirSync(log) : []).toEqual([]);
   });
 

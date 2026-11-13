@@ -3,6 +3,8 @@ import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
+import { loadCollectConfig } from "./collect/config.js";
+import { computePlan, type PlanItem } from "./collect/plan.js";
 import { usageError, type Issue } from "./errors.js";
 import { groupDuplicateFindings } from "./findings/group.js";
 import { readJsonFile } from "./fsx.js";
@@ -89,13 +91,12 @@ interface HekaNote {
   id: string;
   title: string | null;
   body: string | null;
-  recordedAt: string | null;
   error: string | null;
 }
 
 /** heka 명령줄 도구로 노트 하나를 읽는다. 실패하면 error 에 사유를 담는다. */
 function readHekaNote(bin: string, id: string, env: NodeJS.ProcessEnv): HekaNote {
-  const fail = (error: string): HekaNote => ({ id, title: null, body: null, recordedAt: null, error });
+  const fail = (error: string): HekaNote => ({ id, title: null, body: null, error });
   if (!existsSync(bin)) return fail(`heka 도구가 없습니다: ${bin}`);
   const r = spawnSync(process.execPath, [bin, "expand", id, "--level", "2"], { encoding: "utf8", timeout: 15000, env });
   if (r.error !== undefined) return fail(`heka 도구 실행 실패: ${r.error.message}`);
@@ -112,34 +113,25 @@ function readHekaNote(bin: string, id: string, env: NodeJS.ProcessEnv): HekaNote
     id,
     title: typeof rec.title === "string" ? rec.title : null,
     body: rec.body,
-    recordedAt: typeof rec.recorded_at === "string" ? rec.recorded_at : null,
     error: null,
   };
-}
-
-/** 기록 시각이 기준 시점보다 늦은가. 기준이 날짜만이면 날짜 단위로 비교한다. */
-function isAfter(recordedAt: string, knownAt: string): boolean {
-  if (/^\d{4}-\d{2}-\d{2}$/.test(knownAt)) return recordedAt.slice(0, 10) > knownAt;
-  const a = Date.parse(recordedAt);
-  const b = Date.parse(knownAt);
-  return Number.isNaN(a) || Number.isNaN(b) ? false : a > b;
 }
 
 function rulesSection(ids: string[], run: Run, env: NodeJS.ProcessEnv, warnings: Issue[]): string[] {
   if (ids.length === 0) return ["이 역할에 따로 지정된 규칙이 없습니다."];
   const home = env.HOME ?? homedir();
   const bin = env.HEW_HEKA_BIN && env.HEW_HEKA_BIN.length > 0 ? env.HEW_HEKA_BIN : join(home, "heka", "bin", "heka.js");
-  const cutoff = run.mode === "replay" && run.known_at ? run.known_at : null;
+  const blocked = new Set(run.case_info?.block.heka_ids ?? []);
   const out: string[] = [];
   for (const id of ids) {
+    if (blocked.has(id)) {
+      out.push(`### ${id}`, "", "사례의 차단 목록에 있어 제외", "");
+      continue;
+    }
     const note = readHekaNote(bin, id, env);
     if (note.error !== null) {
       warnings.push({ code: "heka_unreadable", severity: "warn", ref: id, message: `규칙 ${id} 의 본문을 읽지 못했습니다: ${note.error}` });
       out.push(`### ${id}`, "", "본문을 읽지 못함", "");
-      continue;
-    }
-    if (cutoff !== null && note.recordedAt !== null && isAfter(note.recordedAt, cutoff)) {
-      out.push(`### ${id}`, "", `시점 이후라 제외(기록 ${note.recordedAt}, 사례 시점 ${cutoff})`, "");
       continue;
     }
     const body = note.body ?? "";
@@ -367,6 +359,101 @@ function renderSasuPacket(
   return { text: `${lines.join("\n")}\n`, purpose: "first", role, warnings };
 }
 
+
+/** 계획 항목의 등록 값을 `hew source add` 인자로 쓴다(제목은 싣지 않는다). */
+function registerArgs(item: PlanItem): string {
+  const r = item.register;
+  return [`--kind ${r.kind}`, `--ref ${r.ref}`, ...(r.version === undefined ? [] : [`--version ${r.version}`]), ...(r.node === undefined ? [] : [`--node ${r.node}`])].join(" ");
+}
+
+/** 수집 역할 패킷: 실행 폴더, 모드, 지금의 수집 계획, 쓸 명령, 읽기 도구, 차단 목록. */
+function renderCollectorPacket(opts: PacketOptions & { plan: PacketPlan }, run: Run): { text: string; purpose: Purpose; role: RoleName; warnings: Issue[] } {
+  const env = opts.env ?? process.env;
+  const config = roleConfig("collector", env);
+  const collect = loadCollectConfig();
+  const hew = hewBinPath();
+  const warnings: Issue[] = [];
+  const plan = computePlan(opts.runDir, collect);
+  const base = `${hew} --json source`;
+  const shots = join(opts.plan.workDir, "shots");
+  const lines: string[] = [];
+
+  lines.push(`# 패킷: collector ${opts.plan.n}번째`, "");
+  lines.push("## 이번 일", "");
+  lines.push(
+    "- 역할: collector",
+    "- 목적: first — 수집 계획의 항목을 읽기 도구로 가져와 원천으로 등록한다. 내용을 요약하거나 분석하지 않는다.",
+    `- 실행 모드: ${MODE_TEXT[run.mode]}`,
+    `- 실행 id: ${run.run_id}`,
+    `- 현재 상태: ${run.state}`,
+    `- 실행 폴더: \`${opts.runDir}\``,
+    `- 입력: ${run.input.kind === "prd" ? "PRD" : "Jira 티켓"} ${run.input.url}`,
+    "",
+  );
+
+  lines.push("## 수집 계획", "", "지금 계산된 계획이다. 항목을 등록하거나 실패로 남길 때마다 `hew source plan` 으로 다시 본다(문서를 등록하면 새 항목이 생길 수 있다).", "");
+  const rows = plan.items.map((i) => [i.id, i.skip === true ? "건너뜀" : "가져옴", i.what, i.tool_hint, registerArgs(i), i.note ?? ""]);
+  lines.push(...table(["항목 id", "처리", "무엇", "도구", "등록 값", "비고"], rows), "");
+  if (plan.failed.length > 0) lines.push("실패로 빠진 항목(다시 시도하지 않는다):", "", ...table(["항목 id", "무엇", "횟수", "사유"], plan.failed.map((f) => [f.id, f.what, f.attempts, f.reasons.join("; ")])), "");
+  if (plan.blocked.length > 0) lines.push("막힌 일:", "", ...plan.blocked.map((b) => `- ${b}`), "");
+  if (plan.notes.length > 0) lines.push(...plan.notes.map((n) => `- ${n}`), "");
+
+  lines.push("## 쓸 명령", "");
+  lines.push(
+    `- 계획 보기: \`${base} plan --run ${opts.runDir}\``,
+    `- 받아 적힌 도구 결과 보기(번호, 도구, 입력, 크기, 등록 여부): \`${base} calls --run ${opts.runDir}\``,
+    `- 도구 결과를 원천으로 등록: \`${base} add --run ${opts.runDir} <등록 값> --from-call <번호>\``,
+    `- 내려받은 이미지를 원천으로 등록: \`${base} add --run ${opts.runDir} <등록 값> --file ${shots}/<이름>.png\``,
+    `- 실패 기록(두 번까지 시도한 뒤): \`${base} fail --run ${opts.runDir} --item <항목 id> --reason "<사유>"\``,
+    `- 수집 끝 확인: \`${base} done --run ${opts.runDir}\``,
+    "",
+    "예시:",
+    "",
+    "```sh",
+    `${base} add --run ${opts.runDir} --kind prd --ref 123456 --version 22 --from-call 1`,
+    `${base} add --run ${opts.runDir} --kind figma_shot --ref <파일 키> --node 12:34 --file ${shots}/12-34.png`,
+    `${base} fail --run ${opts.runDir} --item related:98765 --reason "권한 없음"`,
+    "```",
+    "",
+    "등록 값(`--kind`, `--ref`, `--version`, `--node`)은 계획 표의 값을 그대로 쓴다. 호출 번호는 방금 부른 도구의 번호를 `calls` 로 확인해서 쓴다. 본문을 직접 타이핑해 파일을 만들지 않는다.",
+    "`done` 이 종료 3 으로 거부되면 출력된 항목을 가져와 등록하거나 실패로 남긴다.",
+    "",
+  );
+
+  lines.push("## 읽기 도구", "");
+  lines.push(
+    `- cloudId: \`${collect.atlassian_cloud_id}\``,
+    "- Confluence 현재 버전: `getConfluencePage`(cloudId, pageId, contentFormat: markdown)",
+    "- Confluence 지정 버전: `executeRead` 로 `getConfluenceContentVersion`(contentId, versionNumber, content_format: markdown). `responseFields` 를 주지 않는다(주면 빈 값이 온다)",
+    "- Jira: `getJiraIssue`(cloudId, issueIdOrKey)",
+    "- Figma: `ToolSearch` 로 `get_metadata`·`get_screenshot` 을 찾은 뒤 부른다. `get_metadata`(fileKey, nodeId), `get_screenshot`(fileKey, nodeId, maxDimension). 호출 한도 응답이 오면 같은 호출을 한 번 다시 시도한다",
+    "- 검색 도구(JQL·CQL 검색 등)와 쓰기 도구는 거부된다.",
+    "",
+    "스크린샷은 도구가 돌려준 주소를 `curl` 로 작업 폴더에 내려받는다. 형식은 이것만 허용된다(옵션은 `-s` `-S` `-L` `-f` `-o` `--max-time <초>` 뿐):",
+    "",
+    "```sh",
+    `mkdir -p ${shots}`,
+    `curl -sS -L -f --max-time 60 -o ${shots}/12-34.png "https://<주소>"`,
+    "```",
+    "",
+  );
+
+  const block = run.case_info?.block;
+  if (block !== undefined && (block.jira_keys.length > 0 || block.pr_numbers.length > 0)) {
+    lines.push("## 읽지 않을 것", "", "아래는 이 실행의 평가를 위해 차단돼 있다. 도구 입력에 들어 있으면 거부된다. 계획에 없는 것을 따라가지 않는다.", "");
+    lines.push(...table(["종류", "값"], [...block.jira_keys.map((k) => ["Jira", k]), ...block.pr_numbers.map((n) => ["PR", `#${n}`])]), "");
+  }
+
+  lines.push("## 따를 규칙", "", ...rulesSection(config.heka, run, env, warnings));
+  lines.push("## 쓰는 곳", "");
+  lines.push(`- 작업 폴더(여기에만 쓸 수 있다): \`${opts.plan.workDir}\``, `- 도구 결과 받아 적는 곳(훅이 쓴다. 읽을 수 있다): \`${join(opts.plan.workDir, "calls")}\``, `- hew 실행 파일: \`${hew}\``, "");
+  lines.push(
+    "쓸 수 있는 Bash 명령: `hew source plan|calls|add|fail|done|list|request`(위 형식), 위 `curl` 형식, 그리고 목록·보기 명령(`ls`, `cat`, `head`, `wc`, `jq`, `file`, `stat`, `mkdir -p`(작업 폴더 안에서만)).",
+    "",
+  );
+  return { text: `${lines.join("\n")}\n`, purpose: "first", role: "collector", warnings };
+}
+
 /** 패킷 본문과 경고를 만든다. 파일은 쓰지 않는다. */
 export function renderPacket(opts: PacketOptions & { plan: PacketPlan }): { text: string; purpose: Purpose; role: RoleName; warnings: Issue[] } {
   if (!isRoleName(opts.role)) throw usageError(`알 수 없는 역할입니다: ${opts.role}`);
@@ -374,6 +461,7 @@ export function renderPacket(opts: PacketOptions & { plan: PacketPlan }): { text
   const env = opts.env ?? process.env;
   const run = loadRun(opts.runDir);
   if (role === "manager-sasu" || role === "ticket-sasu") return renderSasuPacket(opts, run, role);
+  if (role === "collector") return renderCollectorPacket(opts, run);
   const purpose = ((): Purpose => {
     if (opts.purpose === undefined) return defaultPurpose(run, role);
     if (!(PURPOSES as readonly string[]).includes(opts.purpose)) throw usageError(`--purpose 는 ${PURPOSES.join("|")} 중 하나여야 합니다: ${opts.purpose}`);
@@ -444,5 +532,6 @@ export function buildPacket(opts: PacketOptions): PacketResult {
   mkdirSync(runPaths(runDir).packets, { recursive: true });
   writeFileSync(plan.path, rendered.text, "utf8");
   mkdirSync(plan.workDir, { recursive: true });
+  if (rendered.role === "collector") mkdirSync(join(plan.workDir, "shots"), { recursive: true });
   return { ...plan, role: rendered.role, purpose: rendered.purpose, warnings: rendered.warnings };
 }

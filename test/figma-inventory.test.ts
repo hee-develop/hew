@@ -64,6 +64,27 @@ describe("화면 목록", () => {
     expect(frame("5:1")?.pair).toBeUndefined();
   });
 
+  it("labeled 는 글자 없는 라벨이어도 라벨 규칙의 위치에 있으면 true 다", () => {
+    const text = [
+      '<canvas id="1:1" name="c" x="0" y="0" width="0" height="0">',
+      '  <section id="2:1" name="s" x="0" y="0" width="900" height="900">',
+      '    <instance id="3:1" name="asis_tobe_label" x="100" y="20" width="10" height="40" />',
+      '    <frame id="4:1" name="판매자 스토어" x="100" y="100" width="375" height="800" />',
+      '    <frame id="4:2" name="판매자 스토어 옆" x="100" y="400" width="375" height="800" />',
+      '    <frame id="4:3" name="앱/목록" x="600" y="100" width="375" height="800" />',
+      "  </section>",
+      "</canvas>",
+    ].join("\n");
+    const file = inventoryFileFromContent("S-1", undefined, text);
+    const by = (id: string) => file.frames.find((f) => f.node_id === id);
+    expect(by("4:1")).toMatchObject({ platform: "unknown", labeled: true });
+    expect(by("4:1")?.role).toBeUndefined();
+    expect(by("4:2")?.labeled).toBe(false);
+    expect(by("4:3")?.labeled).toBe(false);
+    expect(frame("4:1")?.labeled).toBe(true);
+    expect(frame("5:1")?.labeled).toBe(false);
+  });
+
   it("설명 카드는 is_desc 이고 text 는 숨김을 뺀 텍스트 노드 이름", () => {
     expect(frame("6:2")).toMatchObject({ is_desc: true, text: "첫 줄 설명\n둘째 줄 설명" });
     expect(inv.frames.some((f) => f.node_id === "6:1")).toBe(false);

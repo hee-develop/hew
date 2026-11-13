@@ -32,6 +32,7 @@ export interface RunPaths {
   sources: string;
   manifest: string;
   requests: string;
+  failures: string;
   inventory: string;
   units: string;
   packets: string;
@@ -63,6 +64,7 @@ export function runPaths(dir: string): RunPaths {
     sources,
     manifest: join(sources, "manifest.json"),
     requests: join(sources, "requests.jsonl"),
+    failures: join(sources, "failures.jsonl"),
     inventory: join(sources, "figma", "inventory.json"),
     units: join(sources, "units.json"),
     packets: join(dir, "packets"),
