@@ -25,3 +25,7 @@ export function hashJson(value: unknown): string {
 export function shortHash(hex: string): string {
   return hex.slice(0, 12);
 }
+/** 바이트열의 sha256. 파일 내용 해시에 쓴다. */
+export function sha256Bytes(bytes: Uint8Array): string {
+  return createHash("sha256").update(bytes).digest("hex");
+}

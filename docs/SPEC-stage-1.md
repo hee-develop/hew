@@ -234,7 +234,7 @@ heka `hew-id-labels-korean` 을 따른다. 새 종류는 [가정]이다.
 { "unit_id": "U-41", "quote": "원가가 입력되지 않은 팩은 판매가만 노출한다" }
 ```
 
-- 코어는 인용이 그 단위의 본문에 실제로 있는지 대조한다(공백과 줄바꿈만 정규화).
+- 코어는 인용이 그 단위의 본문에 실제로 있는지 대조한다. 대조 전에 양쪽에서 공백·줄바꿈과 Markdown 강조 표시(`**`, `__`, 백틱)를 지운다.
 - 시안이 근거이면 단위는 Figma 화면이나 설명 카드이고, 인용 대신 `image`(스냅샷 경로)와 필요하면 `box`(좌표)를 쓴다.
 
 ### 2.4 revision
@@ -275,7 +275,9 @@ heka `hew-id-labels-korean` 을 따른다. 새 종류는 [가정]이다.
 | 코드 | 대상 저장소 경로와 base SHA | 예 |
 | OpenAPI | 환경별 `openapi.json`(staging, dev-N) | 변경 API 가 있으면 |
 
-- Figma 는 heka `figma-mcp-read-procedure` 를 따른다. 메타데이터는 파일로 받아 코어가 줄 단위 정규식으로 파싱하고, 플랫폼은 프레임 이름 접두사(`앱/`, `app/`, `모웹/`, `웹/`, `web/`)로 가르며, AS-IS·TO-BE 는 라벨 좌표로 짝짓는다. 같은 그림은 해시로 하나만 남긴다.
+- Figma 는 heka `figma-mcp-read-procedure` 를 따른다. 메타데이터는 파일로 받아 코어가 줄 단위 정규식으로 파싱하고, 플랫폼은 프레임 이름 접두사(`앱/`, `app/`, `모웹/`, `웹/`, `web/`. 구분자는 `/` 와 `_`)로 가른다. 같은 그림은 해시로 하나만 남긴다.
+- AS-IS 인지 TO-BE 인지는 메타데이터만으로 알 수 없다. 라벨(`asis_tobe_label`)은 글자가 없는 인스턴스로만 나오기 때문이다. [사실: 2026-11-14 APP-3008 시안의 메타데이터에서 확인] 그래서 코어의 화면 목록은 역할을 비워 두고, 분석 단계가 스크린샷을 보고 화면의 이미지에 역할을 적는다(§4.2).
+- 접두사가 없는 프레임은 `unknown` 으로 싣는다. 옛 분석이 화면으로 쓴 프레임 27개 중 7개가 접두사 없는 이름이었다. [사실] 분석 단계는 `unknown` 프레임도 범위 장부에서 처리해야 한다.
 - AS-IS 는 TO-BE 옆뿐 아니라 "제거 대상 UI" 같은 다른 섹션에서도 찾는다(heka `hew-gate-layout-decisions-2026-11-11` 의 4).
 - 수집이 끝나면 코어가 `sources/figma/inventory.json`(프레임 목록, 플랫폼, 좌표, 짝, 스크린샷 경로)을 만든다.
 
@@ -385,13 +387,13 @@ heka `hew-id-labels-korean` 을 따른다. 새 종류는 [가정]이다.
 
 ### 4.5 범위 장부와 영향 분석
 
-범위 장부(`coverage`): 원문 단위마다 행이 정확히 하나 있다.
+범위 장부(`coverage`): 모든 원문 단위가 정확히 한 행에 들어 있다. 한 행이 같은 처리의 단위 여러 개를 묶을 수 있다. 웹·모웹 레인의 Figma 단위는 코어가 `not_app` 으로 자동 처리하므로 행을 쓰지 않아도 된다. [가정]
 
 | 칸 | 내용 |
 |---|---|
-| `id`, `unit_id` | `C-n`, 단위 |
+| `id`, `unit_ids[]` | `C-n`, 이 행이 처리하는 단위(1개 이상) |
 | `disposition` | `covered`, `out_of_scope`, `not_app`(운영자 주체, 웹 레인, 서버 몫), `duplicate`, `context`(배경 설명) |
-| `requirement_ids[]` | `covered` 일 때 필수 |
+| `requirement_ids[]`, `screen_ids[]` | `covered` 일 때 둘 중 하나는 필수. Figma 화면 단위는 화면으로, 문서 단위는 요구로 덮는다 |
 | `quote`, `reason` | `out_of_scope`·`not_app` 일 때 필수. 범위 밖은 원문 인용이 있어야 한다 |
 | `delta_id` | `drop` 결정으로 범위 밖이 된 경우 |
 
@@ -414,12 +416,14 @@ heka `hew-id-labels-korean` 을 따른다. 새 종류는 [가정]이다.
 
 | 코드 | 검사 | 결과 |
 |---|---|---|
-| `id_format`, `id_stable` | id 형식. 재제출에서 사라지거나 바뀐 id | 거부 |
+| `id_format` | id 형식 | 거부 |
+| `id_removed`, `withdraw_has_human_input` | 게이트 게시 뒤의 재제출에서 `--withdraw` 없이 사라진 질문·차이·가정, 사람 입력이 있는데 지우려는 항목 | 거부 |
+| `human_field_ignored` | 에이전트가 사람의 칸(`answer`, `decision`, 가정의 `status`)을 채워 냈다. 값은 버린다 | 경고 |
 | `ref_missing` | 없는 화면·요구·단위·질문을 가리키는 참조 | 거부 |
 | `quote_not_found` | 인용이 그 단위 본문에 없다 | 거부 |
 | `change_without_evidence` | 근거가 없는 변경 항목 | 거부 |
 | `confirmed_with_open` | `confirmed` 인데 열린 질문·차이·가정에 걸려 있다 | 거부 |
-| `coverage_incomplete` | 범위 장부에 행이 없는 원문 단위, 행이 둘 이상인 단위 | 거부 |
+| `coverage_incomplete` | 범위 장부의 어느 행에도 없는 원문 단위, 두 행 이상에 든 단위 | 거부 |
 | `scope_out_without_quote` | 인용 없는 범위 밖 처리 | 거부 |
 | `evidence_operator_row` | 주체가 운영자·관리자인 단위를 근거로 썼다 | 거부 |
 | `evidence_wrong_lane` | 웹·모웹 레인 프레임만을 근거로 한 앱 요구 | 경고 |
