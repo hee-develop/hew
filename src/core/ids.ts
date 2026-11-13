@@ -15,6 +15,7 @@ export const ID_PATTERNS = {
   impact: new RegExp(`^I-${N}$`),
   blocker: new RegExp(`^B-${N}$`),
   scenario: new RegExp(`^시나리오-${N}$`),
+  expectation: new RegExp(`^시나리오-${N}/E-${N}$`),
   ticket: new RegExp(`^T${N}$`),
   pr: new RegExp(`^PR-${N}$`),
   finding: new RegExp(`^F-${N}$`),

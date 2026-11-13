@@ -39,7 +39,7 @@ describe("전이 표의 각 줄", () => {
   });
 
   it("3줄: analyzed + scenarios 제출 통과 -> qa_designed", () => {
-    expect(transition("analyzed", { type: "scenarios_accepted" }, ctx())).toMatchObject({ state: "qa_designed", row: 3 });
+    expect(transition("analyzed", { type: "scenarios_accepted", open: 4 }, ctx())).toMatchObject({ state: "qa_designed", row: 3, changes: { open: 4 } });
   });
 
   it("4줄: qa_designed + 분석 findings, 차단 0건 -> checked", () => {
@@ -85,8 +85,15 @@ describe("전이 표의 각 줄", () => {
     });
 
     it("시나리오 재제출만으로는 상태가 그대로", () => {
-      const r = transition("answers_complete", { type: "scenarios_accepted" }, ctx());
+      const r = transition("answers_complete", { type: "scenarios_accepted", open: 0 }, ctx());
       expect(r.changes.progress).toEqual({ analysis: false, scenarios: true, sasu: false });
+    });
+
+    it("시나리오 재제출이 싣는 열린 항목 수가 run 의 열린 항목이 되고 완료 판정에 쓰인다", () => {
+      const r = transition("answers_complete", { type: "scenarios_accepted", open: 1 }, ctx({ progress: { analysis: true, scenarios: false, sasu: false } }));
+      expect(r.changes.open).toBe(1);
+      const done = transition("answers_complete", { type: "findings_complete", for: "analysis", blocking: 0 }, ctx({ progress: { analysis: true, scenarios: true, sasu: false }, open: r.changes.open ?? 0 }));
+      expect(done).toMatchObject({ state: "checked", row: 10 });
     });
 
     it("9줄: 셋이 모두 끝나고 열린 항목 0 -> answers_applied(진행 초기화)", () => {
@@ -162,7 +169,7 @@ describe("전이 표의 각 줄", () => {
 const ALL_EVENTS: TransitionEvent[] = [
   { type: "sources_complete" },
   { type: "analysis_accepted", open: 0 },
-  { type: "scenarios_accepted" },
+  { type: "scenarios_accepted", open: 0 },
   { type: "plan_accepted" },
   { type: "findings_complete", for: "analysis", blocking: 0 },
   { type: "findings_complete", for: "plan", blocking: 0 },

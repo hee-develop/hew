@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import { runPaths } from "../src/core/paths.js";
 import { loadRun } from "../src/core/run.js";
 import { PRD_URL, makeRun, useTempRunsDir, writeItemsFile } from "./helpers.js";
+import { buildScenarios, setupAnalyzed } from "./scenarios-fixtures.js";
 
 const runs = useTempRunsDir();
 const BIN = join(import.meta.dirname, "..", "bin", "hew");
@@ -74,8 +75,8 @@ describe("CLI 계약(자식 프로세스)", () => {
   });
 
   it("submit 통과는 종료 0, 상태에 맞지 않으면 종료 4", () => {
-    const { dir } = makeRun("analyzed", {}, "sub-1");
-    const file = writeItemsFile(dir, "in.json", { a: 1 });
+    const { dir } = setupAnalyzed({ runId: "sub-1" });
+    const file = writeItemsFile(dir, "in.json", buildScenarios());
     const ok = hew(["--json", "submit", "scenarios", "--run", "sub-1", "--file", file]);
     expect(ok.code).toBe(0);
     expect(parse(ok.stdout).data).toMatchObject({ kind: "scenarios", attempt: 1, previous_state: "analyzed", state: "qa_designed" });
@@ -93,10 +94,10 @@ describe("CLI 계약(자식 프로세스)", () => {
     expect(parse(r.stdout).errors.map((e: any) => e.code)).toContain("json_parse");
   });
 
-  it("submit --withdraw 는 경고를 낸다", () => {
-    const { dir } = makeRun("analyzed", {}, "sub-3");
-    const file = writeItemsFile(dir, "in.json", {});
-    const r = hew(["--json", "submit", "scenarios", "--run", "sub-3", "--file", file, "--withdraw", "Q-1,Q-2"]);
+  it("submit --withdraw 를 처리하지 않는 종류는 경고를 낸다", () => {
+    const { dir } = makeRun("qa_designed", {}, "sub-3");
+    const file = writeItemsFile(dir, "in.json", { findings: [] });
+    const r = hew(["--json", "submit", "findings", "--for", "analysis", "--run", "sub-3", "--file", file, "--withdraw", "Q-1,Q-2"]);
     expect(r.code).toBe(0);
     expect(parse(r.stdout).warnings.map((w: any) => w.code)).toEqual(["withdraw_unsupported"]);
   });

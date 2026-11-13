@@ -15,6 +15,7 @@ const GOOD: Record<IdKind, string> = {
   impact: "I-1",
   blocker: "B-2",
   scenario: "시나리오-5",
+  expectation: "시나리오-5/E-2",
   ticket: "T3",
   pr: "PR-2",
   finding: "F-9",
@@ -48,6 +49,10 @@ describe("ids", () => {
     ["pr", "PR1"],
     ["finding", "F-x"],
     ["scenario", "시나리오1"],
+    ["scenario", "시나리오-1/E-1"],
+    ["expectation", "시나리오-1"],
+    ["expectation", "시나리오-1/E-"],
+    ["expectation", "E-1"],
   ] as [IdKind, string][])("%s 형식은 %s 를 거부한다", (kind, value) => {
     expect(isId(kind, value)).toBe(false);
   });

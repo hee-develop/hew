@@ -11,8 +11,8 @@ registerKind("analysis", {
   schema: AnalysisItemsSchema as unknown as z.ZodType<Record<string, unknown>>,
   checks: [analysisCheck],
   collectOpen: (items, runDir) => {
-    const parsed = AnalysisItemsSchema.parse(items);
-    return openIdList(computeOpenItems(parsed, loadAnswers(runDir)));
+    const parsed = AnalysisItemsSchema.safeParse(items);
+    return parsed.success ? openIdList(computeOpenItems(parsed.data, loadAnswers(runDir))) : [];
   },
   sanitize: sanitizeAnalysis,
   supportsWithdraw: true,

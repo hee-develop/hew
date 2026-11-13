@@ -68,6 +68,29 @@ describe("패킷: 이번 일·읽을 것·쓰는 곳", () => {
     expect(text).toContain("따로 지정된 규칙이 없습니다");
   });
 
+  it("qa-designer 패킷은 분석 정본과 있으면 OpenAPI 폴더, 형식 안내 세 파일을 읽을 것에 싣고 scenarios 제출 줄을 쓴다", () => {
+    const { dir } = makeRun("analyzed");
+    const p = runPaths(dir);
+    writeFileSync(p.analysis, "{}");
+    mkdirSync(join(p.sources, "openapi"), { recursive: true });
+    writeFileSync(join(p.sources, "openapi", "dev.json"), "{}");
+    const text = read(buildPacket({ runDir: dir, role: "qa-designer", env: env() }).path);
+    const readSection = text.split("## 읽을 것")[1]!.split("## ")[0]!;
+    expect(readSection).toContain(`\`${p.analysis}\``);
+    expect(readSection).toContain(`\`${join(p.sources, "openapi")}\``);
+    for (const ref of ["scenarios-format.md", "scenarios.example.json", "analysis.example.json"]) expect(readSection).toContain(join(HEW_ROOT, "refs", ref));
+    const submitLine = /```sh\n(.+)\n```/.exec(text)?.[1] ?? "";
+    expect(submitLine).toContain("submit scenarios");
+    expect(submitLine).toContain(`--file ${join(runPaths(dir).work, "qa-designer-1", "scenarios.json")}`);
+  });
+
+  it("qa-designer 패킷은 OpenAPI 가 없으면 그 줄을 싣지 않는다", () => {
+    const { dir } = makeRun("analyzed");
+    writeFileSync(runPaths(dir).analysis, "{}");
+    const text = read(buildPacket({ runDir: dir, role: "qa-designer", env: env() }).path);
+    expect(text).not.toContain("환경별 OpenAPI");
+  });
+
   it("상태에서 목적을 정한다(collected 에서 반송 회차가 있으면 rework)", () => {
     const { dir } = makeRun("collected", { rework: { analysis: 1, plan: 0 } });
     expect(buildPacket({ runDir: dir, role: "technical-manager", env: env() }).purpose).toBe("rework");

@@ -14,7 +14,7 @@ export function register(program: Command): void {
     .requiredOption("--run <폴더|id>", "실행 폴더 경로 또는 run_id")
     .requiredOption("--file <경로>", "제출할 items JSON 파일")
     .option("--for <대상>", "findings 의 대상: analysis|plan")
-    .option("--withdraw <id,…>", "철회할 항목 id(analysis 에서만 처리)")
+    .option("--withdraw <id,…>", "철회할 항목 id(analysis·scenarios 에서 처리)")
     .action((kind: string, options: { run: string; file: string; for?: string; withdraw?: string }, command: Command) =>
       runAction(command, () => {
         if (!(SUBMIT_KINDS as readonly string[]).includes(kind)) {
