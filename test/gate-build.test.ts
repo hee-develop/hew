@@ -63,7 +63,7 @@ describe("gate build 상태 전이", () => {
 
   it("checked 보다 앞선 상태는 종료 4", () => {
     const { dir } = setupGateRun();
-    for (const state of ["init", "collected", "analyzed", "qa_designed"] as const) {
+    for (const state of ["init", "collected", "analyzed", "vetted"] as const) {
       setState(dir, state);
       expect(exitOf(() => buildGate({ runDir: dir }))).toBe(4);
     }

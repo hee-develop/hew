@@ -9,7 +9,7 @@ import { loadRun, saveRun } from "../src/core/run.js";
 import { respondToFindings } from "../src/core/sasu/respond.js";
 import { buildWorkUnits } from "../src/core/sasu/units.js";
 import { makeRun, useTempRunsDir, writeItemsFile } from "./helpers.js";
-import { planNow, readBatch, respond, setupQaDesigned, startNextRound, submitAll, type Overrides } from "./sasu-fixtures.js";
+import { planNow, readBatch, respond, setupAnalyzed, startNextRound, submitAll, type Overrides } from "./sasu-fixtures.js";
 
 const runs = useTempRunsDir();
 const BIN = join(import.meta.dirname, "..", "bin", "hew");
@@ -20,7 +20,7 @@ const issue = (kind: string, quote: string, action: string, unit = "U-4"): Overr
 
 /** 1회차에서 W2:요구-1(F-?) 이 fix, W3:U-1 이 ask 로 차단되어 반송 중인 실행. */
 function setupReturned(): { dir: string; fixId: string; askId: string } {
-  const { dir } = setupQaDesigned();
+  const { dir } = setupAnalyzed();
   submitAll(dir, planNow(dir), {
     "W2:요구-1": issue("unsupported", "홈 상단에 배너를 노출한다", "fix"),
     "W3:U-1": issue("missing", "배너를 노출한다", "ask", "U-1"),
@@ -129,23 +129,23 @@ describe("hew sasu respond: 검증", () => {
 });
 
 describe("hew sasu respond: 받을 수 있는 상태", () => {
-  it("반송 중이 아니면 종료 4(qa_designed, 반송 회차 0의 collected, 사수 차례의 answers_complete)", () => {
-    const { dir } = setupQaDesigned();
+  it("반송 중이 아니면 종료 4(analyzed, 반송 회차 0의 collected, 사수 차례의 answers_complete)", () => {
+    const { dir } = setupAnalyzed();
     const file = writeItemsFile(dir, "r.json", { responses: [] });
     expect(exit(() => respondToFindings({ runDir: dir, target: "analysis", file }))).toBe(4);
     const first = makeRun("collected", {}, "rs-1");
     const f1 = writeItemsFile(first.dir, "r.json", { responses: [] });
     expect(exit(() => respondToFindings({ runDir: first.dir, target: "analysis", file: f1 }))).toBe(4);
-    const sasuTurn = makeRun("answers_complete", { progress: { analysis: true, scenarios: true, sasu: false } }, "rs-2");
+    const sasuTurn = makeRun("answers_complete", { progress: { analysis: true, scenarios: false, sasu: false } }, "rs-2");
     const f2 = writeItemsFile(sasuTurn.dir, "r.json", { responses: [] });
     expect(exit(() => respondToFindings({ runDir: sasuTurn.dir, target: "analysis", file: f2 }))).toBe(4);
   });
 
-  it("answers_complete 에서 반송 중(분석 진행 false, 시나리오 진행 true)이면 받는다", () => {
-    const { dir } = setupQaDesigned();
-    saveRun(dir, { ...loadRun(dir), state: "answers_complete", progress: { analysis: true, scenarios: true, sasu: false } });
+  it("answers_complete 에서 반송 중(분석 진행 false, 이번 구간의 반송 회차 있음)이면 받는다", () => {
+    const { dir } = setupAnalyzed();
+    saveRun(dir, { ...loadRun(dir), state: "answers_complete", progress: { analysis: true, scenarios: false, sasu: false } });
     submitAll(dir, planNow(dir), { "W2:요구-1": issue("unsupported", "홈 상단에 배너를 노출한다", "ask") });
-    expect(loadRun(dir)).toMatchObject({ state: "answers_complete", progress: { analysis: false, scenarios: true, sasu: false } });
+    expect(loadRun(dir)).toMatchObject({ state: "answers_complete", rework: { analysis: 1 }, progress: { analysis: false, scenarios: false, sasu: false } });
     expect(respond(dir, [{ finding: "F-1", response: "asked", reason: "질문으로 올렸다" }])).toMatchObject({ round: 1, saved: 1 });
   });
 });
@@ -204,7 +204,7 @@ describe("다음 회차 계획: inputs.previous", () => {
     for (const u of plan2.units) expect(u.hash).toBe(plain.get(u.id));
     // 2회차에서 ok 가 된 단위는 3회차에 hash 가 같으면 재사용된다.
     submitAll(dir, plan2);
-    saveRun(dir, { ...loadRun(dir), state: "answers_complete", progress: { analysis: true, scenarios: true, sasu: false } });
+    saveRun(dir, { ...loadRun(dir), state: "answers_complete", progress: { analysis: true, scenarios: false, sasu: false } });
     const plan3 = startNextRound(dir);
     expect(plan3.units.every((u) => u.reuse === true)).toBe(true);
   });

@@ -1,4 +1,4 @@
-/** 사수 테스트 공용: qa_designed 상태 실행, 묶음별 지적 파일 만들기, 반송 한 바퀴 도우미. */
+/** 사수 테스트 공용: analyzed 상태 실행, 묶음별 지적 파일 만들기, 반송 한 바퀴 도우미. */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import "../src/core/analysis/index.js";
@@ -16,20 +16,18 @@ import { submitArtifact } from "../src/core/submit.js";
 import type { Unit } from "../src/core/units/types.js";
 import { buildAnalysis, buildUnits, clone, setupRun, type Doc } from "./analysis-fixtures.js";
 import { writeItemsFile } from "./helpers.js";
-import { buildScenarios } from "./scenarios-fixtures.js";
 
-export interface QaDesignedOptions {
+export interface AnalyzedOptions {
   analysis?: (doc: Doc) => void;
   units?: Unit[];
 }
 
-/** 분석·시나리오가 통과해 qa_designed 가 된 실행을 만든다. */
-export function setupQaDesigned(opts: QaDesignedOptions = {}): { dir: string } {
+/** 분석이 통과해 analyzed 가 된 실행을 만든다. */
+export function setupAnalyzed(opts: AnalyzedOptions = {}): { dir: string } {
   const { dir } = setupRun({ units: opts.units ?? buildUnits() });
   const analysis = buildAnalysis();
   opts.analysis?.(analysis);
   submitArtifact({ runDir: dir, kind: "analysis", file: writeItemsFile(dir, "analysis-in.json", analysis) });
-  submitArtifact({ runDir: dir, kind: "scenarios", file: writeItemsFile(dir, "scenarios-in.json", buildScenarios()) });
   return { dir };
 }
 
@@ -74,8 +72,8 @@ export function respond(dir: string, responses: Partial<Response>[], name = "res
   return respondToFindings({ runDir: dir, target: "analysis", file: writeItemsFile(dir, name, { responses }) });
 }
 
-/** 반송을 마친 것으로 보고 상태를 qa_designed 로 되돌려 다음 회차 사수 계획을 만든다(분석·시나리오 정본은 그대로). */
+/** 반송을 마친 것으로 보고 상태를 analyzed 로 되돌려 다음 회차 사수 계획을 만든다(분석 정본은 그대로). */
 export function startNextRound(dir: string): SasuPlan {
-  saveRun(dir, { ...loadRun(dir), state: "qa_designed" });
+  saveRun(dir, { ...loadRun(dir), state: "analyzed" });
   return createPlan(dir, "analysis").plan;
 }

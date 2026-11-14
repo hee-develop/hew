@@ -10,7 +10,8 @@ import type { BatchFile, SasuPlan } from "../src/core/sasu/types.js";
 import { submitArtifact, type SubmitResult } from "../src/core/submit.js";
 import { answersPath, clone, writeJson, type Doc } from "./analysis-fixtures.js";
 import { writeItemsFile } from "./helpers.js";
-import { readBatch, setupQaDesigned, type QaDesignedOptions } from "./sasu-fixtures.js";
+import { readBatch, setupAnalyzed, type AnalyzedOptions } from "./sasu-fixtures.js";
+import { buildScenarios } from "./scenarios-fixtures.js";
 
 export { clone, readBatch };
 
@@ -95,13 +96,15 @@ export function buildAnswers(): Doc {
   };
 }
 
-export interface AnswersAppliedOptions extends QaDesignedOptions {
+export interface AnswersAppliedOptions extends AnalyzedOptions {
   answers?: (doc: Doc) => void;
 }
 
 /** 분석·시나리오 정본과 답이 갖춰진 answers_applied 상태의 실행을 만든다. */
 export function setupAnswersApplied(opts: AnswersAppliedOptions = {}): { dir: string } {
-  const { dir } = setupQaDesigned(opts);
+  const { dir } = setupAnalyzed(opts);
+  saveRun(dir, { ...loadRun(dir), state: "vetted" });
+  submitArtifact({ runDir: dir, kind: "scenarios", file: writeItemsFile(dir, "scenarios-in.json", buildScenarios()) });
   const answers = buildAnswers();
   opts.answers?.(answers);
   writeJson(answersPath(dir), answers);

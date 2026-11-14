@@ -31,6 +31,8 @@ export const EnvelopeSchema = z.object({
     reasons: z.array(z.string()),
   }),
   cost: CostSchema.nullable(),
+  /** 시나리오 정본만: 제출 시점 분석의 요구별 해시. revision 계산에는 들어가지 않는다. */
+  basis: z.record(z.string()).optional(),
 });
 
 export type Envelope = z.infer<typeof EnvelopeSchema>;
@@ -47,6 +49,7 @@ export interface WrapInput {
   verdictReasons?: string[];
   producedBy?: ProducedBy | null;
   cost?: Cost | null;
+  basis?: Record<string, string>;
 }
 
 /** 에이전트가 낸 items 에 공통 틀을 씌운다. produced_by·cost 는 받은 값을 그대로 넣고 없으면 null. */
@@ -63,6 +66,7 @@ export function wrapEnvelope(input: WrapInput): Envelope {
     open: input.open ?? [],
     verdict: { status: "pass", reasons: input.verdictReasons ?? [] },
     cost: input.cost ?? null,
+    ...(input.basis === undefined ? {} : { basis: input.basis }),
   };
 }
 

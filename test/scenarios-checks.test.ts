@@ -7,7 +7,7 @@ import { submitArtifact } from "../src/core/submit.js";
 import { scenariosCheck } from "../src/core/scenarios/checks.js";
 import { answersPath, clone, setState, setupRun, writeJson, type Doc } from "./analysis-fixtures.js";
 import { useTempRunsDir, writeItemsFile } from "./helpers.js";
-import { buildScenarios, setupAnalyzed } from "./scenarios-fixtures.js";
+import { buildScenarios, setupVetted } from "./scenarios-fixtures.js";
 
 useTempRunsDir();
 
@@ -17,7 +17,7 @@ interface Case {
 }
 
 function make(): Case {
-  const { dir } = setupAnalyzed();
+  const { dir } = setupVetted();
   return { dir, run: (doc, withdraw) => scenariosCheck(doc, { kind: "scenarios", for: null, run: loadRun(dir), runDir: dir, withdraw }) };
 }
 

@@ -65,6 +65,7 @@ export interface GateRunOptions {
 export function setupGateRun(opts: GateRunOptions = {}): { dir: string } {
   const { dir } = setupRun({ units: exampleUnits() });
   submitArtifact({ runDir: dir, kind: "analysis", file: EXAMPLE_DOC });
+  setState(dir, "vetted");
   submitArtifact({ runDir: dir, kind: "scenarios", file: EXAMPLE_SCENARIOS });
   setState(dir, "checked");
   if (opts.images !== false) writeRunFile(dir, "sources/figma/s1.png", makePng(250, 520, [70, 110, 200]));

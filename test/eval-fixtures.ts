@@ -1,9 +1,10 @@
-/** 결함 주입 테스트용 합성 자료: 여섯 종류 모두 후보가 있는 분석 문서와 원문 단위, qa_designed 실행 준비 도우미. */
+/** 결함 주입 테스트용 합성 자료: 여섯 종류 모두 후보가 있는 분석 문서와 원문 단위, analyzed·checked 실행 준비 도우미. */
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import "../src/core/analysis/index.js";
 import "../src/core/scenarios/index.js";
 import { runPaths } from "../src/core/paths.js";
+import { loadRun, saveRun } from "../src/core/run.js";
 import { submitArtifact } from "../src/core/submit.js";
 import type { Unit } from "../src/core/units/types.js";
 import { IMG, buildAnalysis, buildUnits, clone, setupRun, type Doc } from "./analysis-fixtures.js";
@@ -92,9 +93,11 @@ export interface EvalSourceOptions {
   units?: Unit[];
   /** 시나리오 문서를 고친다. */
   scenarios?: (doc: Doc) => void;
+  /** true 이면 시나리오를 제출하지 않아 analyzed 상태로 둔다. */
+  withoutScenarios?: boolean;
 }
 
-/** buildEvalAnalysis 가 통과해 qa_designed 가 된 원본 실행을 만든다(이미지 파일도 둔다). */
+/** buildEvalAnalysis 가 통과해 checked(withoutScenarios 면 analyzed)가 된 원본 실행을 만든다(이미지 파일도 둔다). */
 export function setupEvalSource(opts: EvalSourceOptions = {}): { dir: string } {
   const { dir } = setupRun({ units: opts.units ?? buildEvalUnits() });
   const image = join(runPaths(dir).dir, IMG);
@@ -107,6 +110,8 @@ export function setupEvalSource(opts: EvalSourceOptions = {}): { dir: string } {
   scenarios.scenarios[1].ac_ids.push("요구-4/AC-1");
   opts.scenarios?.(scenarios);
   submitArtifact({ runDir: dir, kind: "analysis", file: writeItemsFile(dir, "analysis-in.json", analysis) });
+  if (opts.withoutScenarios === true) return { dir };
+  saveRun(dir, { ...loadRun(dir), state: "vetted" });
   submitArtifact({ runDir: dir, kind: "scenarios", file: writeItemsFile(dir, "scenarios-in.json", scenarios) });
   return { dir };
 }

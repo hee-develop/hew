@@ -34,6 +34,15 @@ function injected(kind: "w3_delete" | "w2_alter" = "w3_delete", seed = 1): { dir
 }
 
 describe("hew eval sasu", () => {
+  it("시나리오가 없는 원본에서 만든 주입 실행도 analyzed 에서 사수 1회차를 돌 수 있다", async () => {
+    const { dir: source } = setupEvalSource({ withoutScenarios: true });
+    const r = injectDefect({ source, kind: "w3_delete", seed: 1 });
+    expect(existsSync(runPaths(r.dir).scenarios)).toBe(false);
+    const result = await runEvalSasu({ run: r.dir, env: fakeEnv({ FAKE_CLAUDE_ISSUE_UNITS: r.expected }).env });
+    expect(result).toMatchObject({ expected: r.expected, caught: true });
+    expect(loadRun(r.dir).state).toBe("analyzed");
+  });
+
   it("심은 단위에 근거 있는 issue 를 내면 caught 이고, 회차 완료 처리는 일어나지 않는다", async () => {
     const { dir, expected } = injected();
     const { env, log } = fakeEnv({ FAKE_CLAUDE_ISSUE_UNITS: expected });
@@ -53,7 +62,7 @@ describe("hew eval sasu", () => {
 
     // 회차 완료 처리(상태 전이·합친 정본·질문 전환·실수 기록)가 없다.
     const after = loadRun(dir);
-    expect(after.state).toBe("qa_designed");
+    expect(after.state).toBe("analyzed");
     expect(after.rework).toEqual({ analysis: 0, plan: 0 });
     expect(after.submissions).toEqual(before.submissions);
     expect(after.open).toBe(before.open);
@@ -76,7 +85,7 @@ describe("hew eval sasu", () => {
     const { dir } = injected();
     const result = await runEvalSasu({ run: dir, env: fakeEnv({ FAKE_CLAUDE_MODE: "sasu_ok" }).env });
     expect(result).toMatchObject({ caught: false, caught_any: false, other_issues: { count: 0 } });
-    expect(loadRun(dir).state).toBe("qa_designed");
+    expect(loadRun(dir).state).toBe("analyzed");
   });
 
   it("다른 단위에만 지적하면 못 잡고 다른 단위 지적으로 센다", async () => {
@@ -143,7 +152,7 @@ describe("hew eval sasu", () => {
     expect(result.cost_usd).toBeCloseTo(0.0369, 4);
   });
 
-  it("주입 실행이 아니거나 qa_designed 가 아니면 거부한다", async () => {
+  it("주입 실행이 아니거나 analyzed 가 아니면 거부한다", async () => {
     const { dir: source } = setupEvalSource();
     await expect(runEvalSasu({ run: source, env: fakeEnv().env })).rejects.toMatchObject({ exitCode: 2 });
     const { dir } = injected();
@@ -153,10 +162,10 @@ describe("hew eval sasu", () => {
   });
 
   it("평가 실행이 아니면 마지막 묶음이 들어올 때 회차를 완료한다(기존 경로 그대로)", async () => {
-    const { dir: source } = setupEvalSource();
+    const { dir: source } = setupEvalSource({ withoutScenarios: true });
     const { runLoop } = await import("../src/core/runner.js");
-    const result = await runLoop({ runDir: source, until: "checked", env: fakeEnv({ FAKE_CLAUDE_MODE: "sasu_ok" }).env });
-    expect(result.state).toBe("checked");
+    const result = await runLoop({ runDir: source, until: "vetted", env: fakeEnv({ FAKE_CLAUDE_MODE: "sasu_ok" }).env });
+    expect(result.state).toBe("vetted");
     expect(existsSync(findingsPath(runPaths(source), "analysis", 1))).toBe(true);
   });
 });

@@ -16,7 +16,7 @@
 설계 문서 §12 의 "1번 단계"다. 입력(PRD URL 또는 Jira 티켓 URL)에서 사람의 승인까지, 그리고 이 구간의 완료 기준을 재는 평가 장치다.
 
 ```
-입력 → [0] 수집 → [1] 분석(테크니컬 매니저) → [1] QA 설계 → [1-1] 매니저 사수
+입력 → [0] 수집 → [1] 분석(테크니컬 매니저) → [1-1] 매니저 사수 → [1] QA 설계
      → 게이트(답변) → 답 반영 → [2] 티켓 메이커 → [2-1] 티켓 사수 → 게이트(승인) → 잠금
 ```
 
@@ -95,12 +95,12 @@ approval.json         승인 기록(잠근 revision)
 |---|---|---|
 | `init` | `hew init` | 수집 |
 | `collected` | 필수 원천이 모두 등록되고 원문 단위가 열거됨 | 분석 |
-| `analyzed` | `analysis` 제출이 결정적 검사를 통과 | QA 설계 |
-| `qa_designed` | `scenarios` 제출이 검사를 통과 | 매니저 사수 |
-| `checked` | 사수의 차단 지적이 0건이거나, 반송 상한(2회)에 닿아 남은 지적을 게이트 질문으로 바꿈 | 게이트 게시 |
+| `analyzed` | `analysis` 제출이 결정적 검사를 통과 | 매니저 사수 |
+| `vetted` | 사수의 차단 지적이 0건이거나, 반송 상한(2회)에 닿아 남은 지적을 게이트 질문으로 바꿈 | QA 설계 |
+| `checked` | `scenarios` 제출이 검사를 통과 | 게이트 게시 |
 | `gate_answering` | 게이트 페이지가 게시됨 | 사람의 답 |
 | `answers_complete` | 모든 질문에 답, 모든 차이에 결정, 모든 가정에 확인이 들어옴 | 답 반영 |
-| `answers_applied` | 답을 반영한 `analysis`·`scenarios` 재제출이 검사와 사수 재확인(바뀐 항목만)을 통과 | 티켓 메이커 |
+| `answers_applied` | 답을 반영한 `analysis`, 사수 재확인(바뀐 항목만), `scenarios` 재제출이 차례로 통과 | 티켓 메이커 |
 | `planned` | `plan` 제출이 검사를 통과 | 티켓 사수 |
 | `plan_checked` | 티켓 사수의 차단 지적 0건 또는 상한 도달 | 게이트 재게시 |
 | `gate_plan_review` | 분해안이 실린 게이트 페이지가 게시됨 | 사람의 승인 또는 수정 요청 |
@@ -113,29 +113,37 @@ approval.json         승인 기록(잠근 revision)
 
 전이 표(구현 기준). 표에 없는 (상태, 사건) 조합은 종료 4 로 거부한다. [가정]
 
-| 지금 상태 | 사건 | 조건 | 다음 상태 | `hew next` 가 알려 주는 일 |
-|---|---|---|---|---|
-| `init` | 필수 원천이 모두 등록됨 | — | `collected` | `collector` 띄우기 |
-| `collected` | `analysis` 제출 통과 | — | `analyzed` | `technical-manager` 띄우기(처음 또는 반송) |
-| `analyzed` | `scenarios` 제출 통과 | — | `qa_designed` | `qa-designer` 띄우기 |
-| `qa_designed` | 분석용 `findings` 가 모두 들어옴 | 차단 지적 0건, 또는 반송 2회를 채움(남은 지적은 질문으로 바뀜) | `checked` | 매니저 사수 돌리기 |
-| `qa_designed` | 분석용 `findings` 가 모두 들어옴 | 차단 지적(`fix`·`ask`·`drop` 모두)이 있고 반송이 2회 미만 | `collected`(반송 회차 +1) | 〃 |
-| `checked` | 게이트 게시됨 | — | `gate_answering` | 게이트 게시하기(답변) |
-| `gate_answering` | 답 들여옴 | 열린 항목 0 | `answers_complete` | 사람의 답 기다리기 |
-| `gate_answering` | 답 들여옴 | 열린 항목이 남음 | `gate_answering` | 〃 |
-| `answers_complete` | 답 반영 `analysis`·`scenarios` 제출 통과와 사수 재확인이 모두 끝남 | 열린 항목 0 | `answers_applied` | 답 반영으로 `technical-manager`, `qa-designer`, 사수를 차례로 |
-| `answers_complete` | 〃 | 새 질문이 생겨 열린 항목이 있음 | `checked` | 〃 |
-| `answers_complete` | 분석용 `findings` 가 모두 들어옴 | 차단 지적(`fix`·`ask`·`drop` 모두)이 있고 분석 반송이 2회 미만 | `answers_complete`(반송 회차 +1, 분석·사수 진행만 false) | `technical-manager` 를 반송으로 띄우기 |
-| `answers_applied` | `plan` 제출 통과 | — | `planned` | `ticket-maker` 띄우기 |
-| `planned` | 분해안용 `findings` 가 모두 들어옴 | 차단 지적 0건 또는 반송 2회를 채움 | `plan_checked` | 티켓 사수 돌리기 |
-| `planned` | 〃 | 차단 지적이 있고 반송이 2회 미만 | `answers_applied`(반송 회차 +1) | 〃 |
-| `plan_checked` | 게이트 게시됨 | — | `gate_plan_review` | 게이트 게시하기(승인) |
-| `gate_plan_review` | 분해안 수정 요청 들여옴 | — | `answers_applied`(반송 회차 0) | 사람의 승인 기다리기 |
-| `gate_plan_review` | 승인 요청 | revision 이 현재 값과 같고 열린 항목 0 | `approved` | 〃 |
-| `approved` | — | — | — | 끝 |
+| # | 지금 상태 | 사건 | 조건 | 다음 상태 | `hew next` 가 알려 주는 일 |
+|---|---|---|---|---|---|
+| 1 | `init` | 필수 원천이 모두 등록됨 | — | `collected` | `collector` 띄우기 |
+| 2 | `collected` | `analysis` 제출 통과 | — | `analyzed` | `technical-manager` 띄우기(처음 또는 반송) |
+| 3 | `analyzed` | 분석용 `findings` 가 모두 들어옴 | 차단 지적 0건, 또는 반송 2회를 채움(남은 지적은 질문으로 바뀜) | `vetted` | 매니저 사수 돌리기 |
+| 4 | `analyzed` | 〃 | 차단 지적(`fix`·`ask`·`drop` 모두)이 있고 반송이 2회 미만 | `collected`(반송 회차 +1) | 〃 |
+| 5 | `vetted` | `scenarios` 제출 통과 | — | `checked` | `qa-designer` 띄우기 |
+| 6 | `checked` | 게이트 게시됨 | — | `gate_answering` | 게이트 게시하기(답변) |
+| 7 | `gate_answering` | 답 들여옴 | 열린 항목 0 | `answers_complete`(진행 초기화, 분석 반송 회차 0) | 사람의 답 기다리기 |
+| 8 | `gate_answering` | 답 들여옴 | 열린 항목이 남음 | `gate_answering` | 〃 |
+| 9 | `answers_complete` | 아래 진행 규칙을 따라 `scenarios` 제출 통과로 끝남 | 열린 항목 0 | `answers_applied` | 답 반영으로 `technical-manager`, 사수, `qa-designer` 를 차례로 |
+| 10 | `answers_complete` | 〃 | 새 질문이 생겨 열린 항목이 있음 | `checked` | 〃 |
+| 11 | `answers_applied` | `plan` 제출 통과 | — | `planned` | `ticket-maker` 띄우기 |
+| 12 | `planned` | 분해안용 `findings` 가 모두 들어옴 | 차단 지적 0건 또는 반송 2회를 채움 | `plan_checked` | 티켓 사수 돌리기 |
+| 13 | `planned` | 〃 | 차단 지적이 있고 반송이 2회 미만 | `answers_applied`(반송 회차 +1) | 〃 |
+| 14 | `plan_checked` | 게이트 게시됨 | — | `gate_plan_review` | 게이트 게시하기(승인) |
+| 15 | `gate_plan_review` | 분해안 수정 요청 들여옴 | — | `answers_applied`(반송 회차 0) | 사람의 승인 기다리기 |
+| 16 | `gate_plan_review` | 승인 요청 | revision 이 현재 값과 같고 열린 항목 0 | `approved` | 〃 |
+| 17 | `approved` | — | — | — | 끝 |
+
+`answers_complete` 안의 진행(`run.json` 의 `progress` 의 `analysis`·`sasu`·`scenarios`)은 줄 번호가 없는 규칙이다. 순서는 분석, 사수, 시나리오이고 어긋나면 종료 4 다.
+
+- `analysis` 제출 통과: `analysis=true`, `sasu=false`, `scenarios=false`.
+- 분석용 `findings` 완료: `analysis` 가 true 여야 받는다. 차단 지적이 있고 분석 반송이 2회 미만이면 상태는 그대로, 반송 회차 +1, `analysis=false`, `sasu=false`(다음 일은 `technical-manager` 반송). 그 밖(차단 0건이거나 상한에 닿아 남은 지적이 질문으로 바뀜)이면 `sasu=true`.
+- `scenarios` 제출 통과: `sasu` 가 true 여야 받는다. `scenarios=true` 가 되면 끝이다. 열린 항목 전체가 0 이면 9줄, 아니면 10줄이다.
+- `hew next`: `analysis` 가 false 면 `technical-manager`(반송 회차가 있으면 반송, 아니면 답 반영), `analysis` 만 true 면 사수, `sasu` 가 true 이고 `scenarios` 가 false 면 `qa-designer`(답 반영).
 
 - 승인 요청의 revision 이 현재 값과 다르면 종료 3 으로 거부하고 상태는 그대로다.
-- 반송 회차와 `answers_complete` 안의 진행(분석·시나리오·사수 중 어디까지 끝났는지)은 `run.json` 에 적는다.
+- 반송 회차와 `answers_complete` 안의 진행(분석·사수·시나리오 중 어디까지 끝났는지)은 `run.json` 에 적는다.
+- 옛 실행 폴더에 남은 상태 `qa_designed` 는 `run.json` 을 읽을 때 `analyzed` 로 읽는다(시나리오 정본이 있어도 사수부터 다시 돈다).
+- 분석이 다시 제출돼 통과하면(반송·답 반영) 기존 `doc/scenarios.json` 은 그대로 두며, 다음 `scenarios` 제출 전까지는 낡은 채로 있다. `qa-designer` 패킷은 이전 시나리오가 있으면 그 경로와 "분석이 바뀐 부분에 걸린 시나리오만 고친다" 는 안내, 지난 제출 이후 바뀐 요구 표(정본 틀의 `basis`: 요구별 해시와 비교, 요구의 사람용 칸만으로 계산, revision 에는 들어가지 않음)를 싣는다.
 
 ### 1.4 에이전트 실행기
 
@@ -502,8 +510,9 @@ heka `hew-id-labels-korean` 을 따른다. 새 종류는 [가정]이다.
 | W6 | `actor` 가 빈 표 행 단위 | 행 전체 | 주체가 운영자·관리자인가 |
 | W7 | AS-IS·TO-BE 가 있는 화면 또는 변형 하나 | 두 이미지, 코어가 계산한 차이 상자, 변경 항목(변형: 그 변형에 직접 걸린 것 `changes_for_variant` 과 부모 화면에 걸린 것 `changes_for_screen`. 화면: 그 화면에 걸린 것 `changes_for_screen` 과 모든 변형에 걸린 것 `changes_for_variants`) | 이 변형과 그 화면 전체에 걸린 변경 항목 어디에도 없는 시각 차이(아이콘·그래픽·컴포넌트 교체)가 있는가 |
 | W8 | 차이 하나 | 비교 행, 양쪽 인용 | 한 행에 놓인 짝이 같은 조건·같은 대상인가 |
-| W9 | 질문 하나 | 질문, 관련 단위들 | 원문에 이미 답이 있는가 |
+| W9 | 분석 문서의 질문 하나 | 질문, 관련 단위들 | 원문에 이미 답이 있는가 |
 
+- W9 는 분석 문서의 질문만 대상으로 한다. 사수 시점에는 시나리오가 아직 없거나 낡았으므로 시나리오의 질문은 사수가 보지 않는다. W2·W3 의 `linked.questions` 도 분석 문서의 질문만 싣는다.
 - W1(인용이 원문에 있는가)은 코드 검사 `quote_not_found` 다.
 - W7 은 Haiku 5.5 로 되는지 확인되지 않았다(설계 §13 의 2). 결함 주입에서 못 잡으면 이 단위만 상위 모델로 올린다. 차이 상자 계산은 코드다.
 
@@ -640,7 +649,7 @@ PR 묶음(`prs[]`): `id`, `title`, `ticket_ids[]`, `base`(`develop` 또는 앞�
 
 1. 답변: 사람이 질문에 답하고, 차이를 결정하고, 가정을 확인하고, 필요하면 모킹을 바꾼다.
 2. 사람이 "답 내보내기"로 받은 파일을 `hew gate import --file` 로 넣는다. 코어는 `answers.json` 에 합치고, 모두 채워졌으면 `answers_complete` 로 간다.
-3. 코어가 테크니컬 매니저와 QA 설계를 "답 반영" 패킷으로 다시 띄운다. 요구의 `pending` 이 `confirmed` 로 바뀌고, 범위 밖·보류가 정리된다. 바뀐 항목만 사수가 다시 본다.
+3. 코어가 테크니컬 매니저, 사수, QA 설계를 차례로 "답 반영" 으로 다시 띄운다. 요구의 `pending` 이 `confirmed` 로 바뀌고, 범위 밖·보류가 정리된다. 바뀐 항목만 사수가 다시 본다.
 4. 답 반영에서 새 질문이 생기면 페이지를 다시 만들고 1로 돌아간다.
 5. 티켓 메이커와 티켓 사수가 돈다. 분해안이 실린 페이지를 같은 파일에 다시 만든다.
 6. 승인: 사람이 분해안을 확인한다. 수정 요청을 적으면 5로 돌아간다. 승인 버튼은 열린 항목이 없고 페이지의 revision 이 최신일 때만 켜진다.
@@ -683,7 +692,7 @@ PR 묶음(`prs[]`): `id`, `title`, `ticket_ids[]`, `base`(`develop` 또는 앞�
 | `hew approve --run <폴더> --revision <해시>` | revision 이 같으면 잠근다 | → `approved` |
 | `hew mistake add --run <폴더> …` | 실수 기록을 덧붙인다 | 없음 |
 | `hew replay prepare\|answer\|judge` | §11 | — |
-| `hew eval inject --run <원본> --kind <종류> [--seed <n>] [--out-id <run_id>]` | 원본 실행을 새 실행 폴더로 복사하고 분석 문서에 결함 하나를 심는다(§11.5). 후보가 없으면 종료 3 | 없음(새 실행은 `qa_designed`) |
+| `hew eval inject --run <원본> --kind <종류> [--seed <n>] [--out-id <run_id>]` | 원본 실행을 새 실행 폴더로 복사하고 분석 문서에 결함 하나를 심는다(§11.5). 후보가 없으면 종료 3 | 없음(새 실행은 `analyzed`) |
 | `hew eval inject-all --run <원본> [--per-kind <n=3>] [--seed <시작=1>]` | 종류 6개 × n 개의 주입 실행을 한꺼번에 만든다. 같은 대상이 다시 뽑히거나 후보가 없으면 건너뛴다 | 없음 |
 | `hew eval sasu --run <주입 실행> [--codes W3,W2] [--max-steps <n>]` | 주입 실행에서 사수 1회차만 돌리고 `eval/result.json` 을 쓴다. 회차 완료 처리는 하지 않는다 | 없음 |
 | `hew eval score --runs <id,…>\|--source <원본> [--out <파일>]` | `eval/result.json` 들을 모아 종류별 포착률 표를 낸다 | 없음 |
@@ -791,10 +800,11 @@ role: dev                        # dev(프롬프트를 고치며 본 사례) | h
 | `w8_pair` | 짝지어진(`prd`·`figma` 모두 있는) 비교 행이 둘 이상이고 그 `figma` 칸이 서로 다른 차이에서 두 행의 `figma` 칸을 맞바꾼다 | `W8:<차이 id>` |
 
 - 변형은 시드로 결정적이다. 후보를 id 순(숫자는 크기순)으로 늘어놓고 `seed % 개수` 번째를 고른다. 후보가 없으면 종료 3 이다.
-- 새 실행: `sources/` 전체, `doc/analysis.json`, `doc/scenarios.json`, `doc/answers.json`(있으면)만 복사한다. 모드는 `shadow`, 상태는 `qa_designed`, 반송 0, 제출 기록은 analysis·scenarios 를 attempt 1 로 둔다. `repo`·`input`·`case_info` 는 원본 그대로이고, `eval: { source_run, kind, seed }` 가 붙는다. revision·열린 항목은 다시 계산한다. 외부에 아무것도 쓰지 않는다.
+- 원본 조건: 상태가 `analyzed` 이후이고 `doc/analysis.json` 이 있다. `doc/scenarios.json` 은 필수가 아니다.
+- 새 실행: `sources/` 전체, `doc/analysis.json`, `doc/scenarios.json`(있으면), `doc/answers.json`(있으면)만 복사한다. 모드는 `shadow`, 상태는 `analyzed`, 반송 0, 제출 기록은 analysis(와 복사했다면 scenarios)를 attempt 1 로 둔다. `repo`·`input`·`case_info` 는 원본 그대로이고, `eval: { source_run, kind, seed }` 가 붙는다. revision·열린 항목은 다시 계산한다. 외부에 아무것도 쓰지 않는다.
 - 변형 뒤 분석 문서는 스키마를 통과해야 한다. 결정적 검사(§4.6)는 통과하지 않아도 되며, 거부 코드는 `eval/injection.json` 의 `checks_after` 에 적기만 한다.
 - `eval/injection.json`: `{ source_run, kind, seed, target, before, after, expected, candidates, checks_after }`.
-- `hew eval sasu` 는 `--codes`(없으면 `expected` 의 코드)의 단위만 계획에 넣고 묶음마다 `manager-sasu` 를 띄운다. `run.eval` 이 있는 실행은 마지막 묶음이 들어와도 회차 완료 처리(상태 전이, 질문 전환, 실수 기록)를 하지 않으므로 상태는 `qa_designed` 로 남는다. 묶음별 지적은 `eval/findings.json` 에 모으고 `eval/result.json` 에 `{ expected, caught, caught_any, other_issues, units, cost_usd, duration_ms }` 를 쓴다. `caught` 는 `expected` 단위에 차단 `issue`(근거가 묶음 본문과 맞는 것)가 있는가, `caught_any` 는 근거 없는 `issue` 까지 센 것이다.
+- `hew eval sasu` 는 `--codes`(없으면 `expected` 의 코드)의 단위만 계획에 넣고 묶음마다 `manager-sasu` 를 띄운다. `run.eval` 이 있는 실행은 마지막 묶음이 들어와도 회차 완료 처리(상태 전이, 질문 전환, 실수 기록)를 하지 않으므로 상태는 `analyzed` 로 남는다. 묶음별 지적은 `eval/findings.json` 에 모으고 `eval/result.json` 에 `{ expected, caught, caught_any, other_issues, units, cost_usd, duration_ms }` 를 쓴다. `caught` 는 `expected` 단위에 차단 `issue`(근거가 묶음 본문과 맞는 것)가 있는가, `caught_any` 는 근거 없는 `issue` 까지 센 것이다.
 - `hew eval score` 의 표: 종류별 주입 수, 잡은 수, 근거 없이 잡은 수(`caught_any` 이지만 `caught` 아님), 포착률, `expected` 가 아닌 단위에 난 지적 수의 평균, 비용 합. `--out` 이면 Markdown 표로 저장한다.
 
 지표는 포착률(심은 결함 중 잡은 비율)과 오탐률(결함을 심지 않은 원본에서 낸 차단 지적 중 사람이 틀렸다고 본 비율)이다. 오탐률은 이 명령이 재지 않는다(`other_issues` 는 사람이 판정할 목록일 뿐이다). 주입 한 건에 결함 하나만 심는다.
@@ -850,7 +860,7 @@ role: dev                        # dev(프롬프트를 고치며 본 사례) | h
 | 2 | 수집과 원문 단위: `source`, `units`, Figma 화면 목록, 수집 역할 | 끝남. 실제 수집은 Figma 만 확인(§14 의 9) |
 | 3 | `analysis` 스키마와 결정적 검사, `technical-manager` 정의 | 끝남. APP-3008 로 실제 제출까지 확인 |
 | 4 | `scenarios` 와 `qa-designer` | 끝남. 실제 제출까지 확인 |
-| 5 | 매니저 사수: 작업 단위, 묶음, `findings`, 반송, 답변 | 끝남. 실제 실행에서 소음이 커서 한 번 조정했다. 결함 주입 측정은 진행 중 |
+| 5 | 매니저 사수: 작업 단위, 묶음, `findings`, 반송, 답변 | 끝남. 2026-11-14 에 사수를 QA 설계보다 먼저 돌리도록 순서를 바꿨다(반송 때마다 QA 설계가 다시 돌던 비용을 없앤다). 실제 실행에서 소음이 커서 한 번 조정했다. 결함 주입 측정은 진행 중 |
 | 6 | 게이트(로컬 페이지), `gate import`, `approve` | 끝남. 실제 데이터로 페이지 생성 확인. 브라우저에서 눌러 보는 확인은 사람 몫 |
 | 7 | `plan`, `ticket-maker`, 티켓 사수, 게이트의 분해안 | 코드는 끝남. 실제 실행은 아직(사람의 답이 있어야 이 단계에 닿는다) |
 | 8 | 리플레이: `prepare`, 답안지, `judge`, 실행 뒤 감사 | 아직. 범위 훅과 결함 주입(`hew eval`)만 있다 |

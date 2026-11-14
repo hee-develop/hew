@@ -2,7 +2,7 @@
 import "../src/core/analysis/index.js";
 import "../src/core/scenarios/index.js";
 import { submitArtifact } from "../src/core/submit.js";
-import { buildAnalysis, setupRun, type Doc, type SetupOptions } from "./analysis-fixtures.js";
+import { buildAnalysis, setState, setupRun, type Doc, type SetupOptions } from "./analysis-fixtures.js";
 import { writeItemsFile } from "./helpers.js";
 
 /** 통과하는 완전한 시나리오 문서(items). 열린 항목은 Q-3 하나, 정보 지적은 accounts_unavailable. */
@@ -90,9 +90,10 @@ export function buildScenarios(): Doc {
   };
 }
 
-/** 분석 정본이 들어가 analyzed 상태가 된 실행을 만든다. */
-export function setupAnalyzed(opts: SetupOptions = {}): { dir: string } {
+/** 분석 정본이 들어가고 사수가 확인해 vetted 상태가 된 실행을 만든다. */
+export function setupVetted(opts: SetupOptions = {}): { dir: string } {
   const { dir } = setupRun({ ...opts, state: "collected" });
   submitArtifact({ runDir: dir, kind: "analysis", file: writeItemsFile(dir, "analysis-in.json", buildAnalysis()) });
+  setState(dir, "vetted");
   return { dir };
 }

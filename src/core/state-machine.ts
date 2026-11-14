@@ -5,7 +5,7 @@ export const RUN_STATES = [
   "init",
   "collected",
   "analyzed",
-  "qa_designed",
+  "vetted",
   "checked",
   "gate_answering",
   "answers_complete",
@@ -77,38 +77,35 @@ function transitionAnswersComplete(event: TransitionEvent, ctx: TransitionContex
   const progress = { ...ctx.progress };
   let open = ctx.open;
   if (event.type === "analysis_accepted") {
-    progress.analysis = true;
-    progress.sasu = false;
-    open = event.open;
-  } else if (event.type === "scenarios_accepted") {
-    progress.scenarios = true;
-    progress.sasu = false;
-    open = event.open;
-  } else if (event.type === "findings_complete" && event.for === "analysis") {
-    if (!progress.analysis || !progress.scenarios) {
-      throw stateError("분석과 시나리오 재제출이 끝나기 전에는 사수 재확인을 받을 수 없습니다");
-    }
+    return {
+      state: "answers_complete",
+      changes: { progress: { analysis: true, sasu: false, scenarios: false }, open: event.open },
+      row: null,
+    };
+  }
+  if (event.type === "findings_complete" && event.for === "analysis") {
+    if (!progress.analysis) throw stateError("분석 재제출이 끝나기 전에는 사수 재확인을 받을 수 없습니다");
     if (event.blocking > 0 && ctx.rework.analysis < REWORK_LIMIT) {
       return {
         state: "answers_complete",
         changes: {
           rework: { ...ctx.rework, analysis: ctx.rework.analysis + 1 },
-          progress: { ...progress, analysis: false, sasu: false },
+          progress: { analysis: false, sasu: false, scenarios: false },
           open,
         },
-        row: 18,
+        row: null,
       };
     }
-    progress.sasu = true;
-  } else {
-    return rejectEvent("answers_complete", event);
+    return { state: "answers_complete", changes: { progress: { ...progress, sasu: true }, open }, row: null };
   }
-  const allDone = progress.analysis && progress.scenarios && progress.sasu;
-  if (!allDone) return { state: "answers_complete", changes: { progress, open }, row: null };
-  const noOpenLeft = open === 0;
-  return noOpenLeft
-    ? { state: "answers_applied", changes: { progress: emptyProgress(), open }, row: 9 }
-    : { state: "checked", changes: { progress: emptyProgress(), open }, row: 10 };
+  if (event.type === "scenarios_accepted") {
+    if (!progress.sasu) throw stateError("사수 재확인이 끝나기 전에는 시나리오 재제출을 받을 수 없습니다");
+    open = event.open;
+    return open === 0
+      ? { state: "answers_applied", changes: { progress: emptyProgress(), open }, row: 9 }
+      : { state: "checked", changes: { progress: emptyProgress(), open }, row: 10 };
+  }
+  return rejectEvent("answers_complete", event);
 }
 
 /** 지금 상태와 사건으로 다음 상태와 run 변경분을 계산한다. 표에 없는 조합은 종료 4 오류. */
@@ -125,19 +122,19 @@ export function transition(state: RunState, event: TransitionEvent, ctx: Transit
       return rejectEvent(state, event);
     }
     case "analyzed": {
-      if (event.type === "scenarios_accepted") return { state: "qa_designed", changes: { open: event.open }, row: 3 };
-      return rejectEvent(state, event);
-    }
-    case "qa_designed": {
       if (event.type !== "findings_complete" || event.for !== "analysis") return rejectEvent(state, event);
       const noBlocking = event.blocking === 0;
       const reworkFull = ctx.rework.analysis >= REWORK_LIMIT;
-      if (noBlocking || reworkFull) return { state: "checked", changes: {}, row: 4 };
+      if (noBlocking || reworkFull) return { state: "vetted", changes: {}, row: 3 };
       return {
         state: "collected",
         changes: { rework: { ...ctx.rework, analysis: ctx.rework.analysis + 1 } },
-        row: 5,
+        row: 4,
       };
+    }
+    case "vetted": {
+      if (event.type === "scenarios_accepted") return { state: "checked", changes: { open: event.open }, row: 5 };
+      return rejectEvent(state, event);
     }
     case "checked": {
       if (event.type === "gate_published" && event.phase === "answer") {
@@ -149,7 +146,7 @@ export function transition(state: RunState, event: TransitionEvent, ctx: Transit
       if (event.type !== "answers_imported") return rejectEvent(state, event);
       const allClosed = event.open === 0;
       return allClosed
-        ? { state: "answers_complete", changes: { open: 0, progress: emptyProgress() }, row: 7 }
+        ? { state: "answers_complete", changes: { open: 0, progress: emptyProgress(), rework: { ...ctx.rework, analysis: 0 } }, row: 7 }
         : { state: "gate_answering", changes: { open: event.open }, row: 8 };
     }
     case "answers_complete":

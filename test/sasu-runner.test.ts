@@ -12,10 +12,10 @@ import { roleConfig } from "../src/core/roles.js";
 import { createPlan } from "../src/core/sasu/plan.js";
 import { loadPlan } from "../src/core/sasu/store.js";
 import { submitArtifact } from "../src/core/submit.js";
-import { buildAnalysis, setupRun } from "./analysis-fixtures.js";
+import { buildAnalysis, buildUnits, setupRun } from "./analysis-fixtures.js";
 import { makeRun, useTempRunsDir, writeItemsFile } from "./helpers.js";
 import { EXAMPLE_DOC, FAKE_HEKA, exampleUnits, makeFakeClaude, readCalls, tempDir } from "./runner-helpers.js";
-import { setupQaDesigned, submitAll } from "./sasu-fixtures.js";
+import { setupAnalyzed, submitAll } from "./sasu-fixtures.js";
 import { buildScenarios } from "./scenarios-fixtures.js";
 
 const runs = useTempRunsDir();
@@ -31,12 +31,12 @@ function fakeEnv(mode: string, extra: Record<string, string> = {}): { env: NodeJ
 
 const lines = (file: string): Record<string, any>[] => readFileSync(file, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l) as Record<string, any>);
 
-describe("실행기: 사수 단계(qa_designed -> checked)", () => {
-  it("묶음마다 manager-sasu 를 순서대로 하나씩 띄우고 모든 묶음이 끝나면 checked", async () => {
-    const { dir } = setupQaDesigned();
+describe("실행기: 사수 단계(analyzed -> vetted)", () => {
+  it("묶음마다 manager-sasu 를 순서대로 하나씩 띄우고 모든 묶음이 끝나면 vetted", async () => {
+    const { dir } = setupAnalyzed();
     const { env, log } = fakeEnv("sasu_ok");
-    const result = await runLoop({ runDir: dir, until: "checked", env });
-    expect(result).toMatchObject({ outcome: "until_reached", state: "checked", launches: 6 });
+    const result = await runLoop({ runDir: dir, until: "vetted", env });
+    expect(result).toMatchObject({ outcome: "until_reached", state: "vetted", launches: 6 });
     expect(result.steps.map((s) => [s.role, s.attempt, s.progressed])).toEqual(Array.from({ length: 6 }, () => ["manager-sasu", 1, true]));
 
     const calls = readCalls(log);
@@ -54,7 +54,7 @@ describe("실행기: 사수 단계(qa_designed -> checked)", () => {
       expect(packet).toContain(b.path);
       expect(packet).toContain(`submit findings --for analysis --batch ${b.k} --run ${dir} --file ${join(p.work, `manager-sasu-${b.k}`, "findings.json")}`);
     }
-    expect(loadRun(dir).state).toBe("checked");
+    expect(loadRun(dir).state).toBe("vetted");
     const costs = lines(p.costs);
     expect(costs).toHaveLength(6);
     expect(costs.map((c) => c.batch)).toEqual([1, 2, 3, 4, 5, 6]);
@@ -71,13 +71,13 @@ describe("실행기: 사수 단계(qa_designed -> checked)", () => {
   });
 
   it("패킷은 묶음 파일·형식 안내·제출 명령을 담고 대상 저장소를 주지 않는다", async () => {
-    const { dir } = setupQaDesigned();
+    const { dir } = setupAnalyzed();
     const repo = tempDir("hew-repo-");
     const raw = JSON.parse(readFileSync(runPaths(dir).runJson, "utf8"));
     raw.repo = { path: repo, base: "abc" };
     writeFileSync(runPaths(dir).runJson, JSON.stringify(raw));
     const { env, log } = fakeEnv("sasu_ok");
-    await runLoop({ runDir: dir, until: "checked", env, maxSteps: 1 });
+    await runLoop({ runDir: dir, until: "vetted", env, maxSteps: 1 });
     const call = readCalls(log)[0];
     expect(call?.env.HEW_GUARD_READ_ROOTS).toBe([dir, join(HEW_ROOT, "refs")].join(":"));
     expect(call?.env.HEW_GUARD_READ_ROOTS).not.toContain(repo);
@@ -89,7 +89,7 @@ describe("실행기: 사수 단계(qa_designed -> checked)", () => {
   });
 
   it("묶음 하나가 3회 시도해도 제출되지 않으면 종료 5(external)", async () => {
-    const { dir } = setupQaDesigned();
+    const { dir } = setupAnalyzed();
     const { env, log } = fakeEnv("noop");
     try {
       await runLoop({ runDir: dir, env });
@@ -101,17 +101,17 @@ describe("실행기: 사수 단계(qa_designed -> checked)", () => {
     }
     expect(readCalls(log)).toHaveLength(3);
     expect(readEvents(runPaths(dir).events).some((e) => e.type === "agent_failed")).toBe(true);
-    expect(loadRun(dir).state).toBe("qa_designed");
+    expect(loadRun(dir).state).toBe("analyzed");
   }, 30000);
 
   it("--max-steps 는 사수 묶음 실행도 센다", async () => {
-    const { dir } = setupQaDesigned();
+    const { dir } = setupAnalyzed();
     const { env, log } = fakeEnv("sasu_ok");
     const result = await runLoop({ runDir: dir, env, maxSteps: 2 });
     expect(result).toMatchObject({ outcome: "max_steps", launches: 2 });
     expect(readCalls(log)).toHaveLength(2);
     // 이어서 돌리면 남은 묶음만 띄운다.
-    const rest = await runLoop({ runDir: dir, until: "checked", env: fakeEnv("sasu_ok").env });
+    const rest = await runLoop({ runDir: dir, until: "vetted", env: fakeEnv("sasu_ok").env });
     expect(rest).toMatchObject({ outcome: "until_reached", launches: 4 });
   });
 
@@ -119,18 +119,20 @@ describe("실행기: 사수 단계(qa_designed -> checked)", () => {
     expect(DEFAULT_MAX_STEPS).toBe(40);
   });
 
-  it("다시 돌릴 단위가 0개이면 아무것도 띄우지 않고 회차를 완료한다", async () => {
-    const { dir } = setupQaDesigned();
+  it("다시 돌릴 단위가 0개이면 사수는 아무것도 띄우지 않고 회차를 완료하고, 이어서 qa-designer 만 띄운다", async () => {
+    const { dir } = setupAnalyzed();
     createPlan(dir, "analysis");
     submitAll(dir, loadPlan(dir, 1)!);
     const raw = JSON.parse(readFileSync(runPaths(dir).runJson, "utf8"));
     raw.state = "answers_complete";
-    raw.progress = { analysis: true, scenarios: true, sasu: false };
+    raw.progress = { analysis: true, scenarios: false, sasu: false };
     writeFileSync(runPaths(dir).runJson, JSON.stringify(raw));
-    const { env, log } = fakeEnv("sasu_ok");
+    const plan = { "qa-designer": [{ mode: "submit", doc: writeItemsFile(dir, "qa-doc.json", buildScenarios()) }] };
+    const { env, log } = fakeEnv("by_role", { FAKE_CLAUDE_PLAN: JSON.stringify(plan) });
     const result = await runLoop({ runDir: dir, until: "checked", env });
-    expect(result).toMatchObject({ outcome: "until_reached", state: "checked", launches: 0 });
-    expect(existsSync(log) ? readdirSync(log) : []).toEqual([]);
+    expect(result).toMatchObject({ outcome: "until_reached", state: "checked", launches: 1 });
+    expect(result.steps.map((s) => s.role)).toEqual(["qa-designer"]);
+    expect(readCalls(log)).toHaveLength(1);
   });
 
   it("분해안 정본이 없는 planned 에서는 종료 4 로 멈추고 아무것도 띄우지 않는다", async () => {
@@ -141,7 +143,7 @@ describe("실행기: 사수 단계(qa_designed -> checked)", () => {
   });
 
   it("--dry: 계획이 없으면 알리기만 하고, 있으면 첫 묶음의 명령을 만든다", async () => {
-    const { dir } = setupQaDesigned();
+    const { dir } = setupAnalyzed();
     const { env } = fakeEnv("sasu_ok");
     const none = await runLoop({ runDir: dir, env, dry: true });
     expect(none).toMatchObject({ outcome: "dry", dry: null });
@@ -154,15 +156,13 @@ describe("실행기: 사수 단계(qa_designed -> checked)", () => {
 });
 
 describe("실행기: 사수 반송 한 바퀴", () => {
-  it("qa_designed -> collected -> 가짜 TM 재제출 -> analyzed -> 가짜 QA 재제출 -> qa_designed -> 바뀐 단위만 다시 -> checked", async () => {
-    const { dir } = setupQaDesigned();
+  it("analyzed -> collected -> 가짜 TM 재제출 -> analyzed -> 바뀐 단위만 다시 -> vetted -> qa-designer -> checked", async () => {
+    const { dir } = setupAnalyzed();
     const tmDoc = buildAnalysis();
     tmDoc.requirements[0].title = "홈 상단에 배너를 노출한다";
-    const tmFile = writeItemsFile(dir, "tm-doc.json", tmDoc);
-    const qaFile = writeItemsFile(dir, "qa-doc.json", buildScenarios());
     const plan = {
-      "technical-manager": [{ mode: "submit", doc: tmFile }],
-      "qa-designer": [{ mode: "submit", doc: qaFile }],
+      "technical-manager": [{ mode: "submit", doc: writeItemsFile(dir, "tm-doc.json", tmDoc) }],
+      "qa-designer": [{ mode: "submit", doc: writeItemsFile(dir, "qa-doc.json", buildScenarios()) }],
       "manager-sasu": [{ mode: "sasu_issue_first" }, { mode: "sasu_ok" }],
     };
     const { env, log } = fakeEnv("by_role", { FAKE_CLAUDE_PLAN: JSON.stringify(plan) });
@@ -178,8 +178,8 @@ describe("실행기: 사수 반송 한 바퀴", () => {
     expect(roles).toEqual([
       ...Array.from({ length: firstBatches }, () => "manager-sasu"),
       "technical-manager",
-      "qa-designer",
       ...Array.from({ length: secondBatches }, () => "manager-sasu"),
+      "qa-designer",
     ]);
     expect(readCalls(log)).toHaveLength(roles.length);
 
@@ -202,8 +202,35 @@ describe("실행기: 사수 반송 한 바퀴", () => {
     expect(roleConfig("manager-sasu").model).toBe("claude-haiku-5-5");
   });
 
-  it("사수 ask 지적 -> 반송 -> TM 이 respond(rejected) 후 재제출 -> 사수 ok -> checked, 질문도 실수 기록도 없다", async () => {
-    const { dir } = setupQaDesigned();
+  it("collected -> checked: 사수 반송이 한 번 있어도 qa-designer 는 정확히 1번만 뜬다", async () => {
+    const { dir } = setupRun({ units: buildUnits() });
+    const first = buildAnalysis();
+    const second = buildAnalysis();
+    second.requirements[0].title = "홈 상단에 배너를 노출한다";
+    const plan = {
+      "technical-manager": [
+        { mode: "submit", doc: writeItemsFile(dir, "tm-1.json", first) },
+        { mode: "submit", doc: writeItemsFile(dir, "tm-2.json", second) },
+      ],
+      "manager-sasu": [{ mode: "sasu_issue_first" }, { mode: "sasu_ok" }],
+      "qa-designer": [{ mode: "submit", doc: writeItemsFile(dir, "qa-doc.json", buildScenarios()) }],
+    };
+    const { env, log } = fakeEnv("by_role", { FAKE_CLAUDE_PLAN: JSON.stringify(plan) });
+    const result = await runLoop({ runDir: dir, until: "checked", env });
+    expect(result).toMatchObject({ outcome: "until_reached", state: "checked" });
+    const roles = result.steps.map((s) => s.role);
+    expect(roles.filter((r) => r === "qa-designer")).toHaveLength(1);
+    expect(roles.filter((r) => r === "technical-manager")).toHaveLength(2);
+    expect(roles.at(-1)).toBe("qa-designer");
+    expect(roles.indexOf("qa-designer")).toBeGreaterThan(roles.lastIndexOf("manager-sasu"));
+    expect(readCalls(log).filter((c) => c.argv.includes("hew:qa-designer"))).toHaveLength(1);
+    expect(existsSync(join(runPaths(dir).packets, "qa-designer-2.md"))).toBe(false);
+    expect(readFileSync(join(runPaths(dir).packets, "technical-manager-2.md"), "utf8")).toContain("목적: rework");
+    expect(loadRun(dir).rework.analysis).toBe(1);
+  });
+
+  it("사수 ask 지적 -> 반송 -> TM 이 respond(rejected) 후 재제출 -> 사수 ok -> vetted -> qa-designer, 질문도 실수 기록도 없다", async () => {
+    const { dir } = setupAnalyzed();
     const plan = {
       "technical-manager": [{ mode: "tm_respond", response: "rejected", doc: writeItemsFile(dir, "tm-doc.json", buildAnalysis()) }],
       "qa-designer": [{ mode: "submit", doc: writeItemsFile(dir, "qa-doc.json", buildScenarios()) }],
@@ -239,24 +266,51 @@ describe("실행기: 사수 반송 한 바퀴", () => {
     expect(loadRun(dir)).toMatchObject({ state: "checked", rework: { analysis: 1, plan: 0 } });
   });
 
-  it("answers_complete 반송: 사수가 차단하면 technical-manager rework 를 띄우고 시나리오는 다시 만들지 않는다", async () => {
-    const { dir } = setupQaDesigned();
+  it("answers_complete: technical-manager(apply_answers) -> 사수 -> qa-designer(apply_answers) 순서로 뜬다", async () => {
+    const { dir } = setupAnalyzed();
     const raw = JSON.parse(readFileSync(runPaths(dir).runJson, "utf8"));
     raw.state = "answers_complete";
-    raw.progress = { analysis: true, scenarios: true, sasu: false };
+    raw.progress = { analysis: false, scenarios: false, sasu: false };
+    writeFileSync(runPaths(dir).runJson, JSON.stringify(raw));
+    const tmDoc = buildAnalysis();
+    tmDoc.requirements[0].title = "홈 상단에 배너를 노출한다";
+    const plan = {
+      "technical-manager": [{ mode: "submit", doc: writeItemsFile(dir, "tm-doc.json", tmDoc) }],
+      "manager-sasu": [{ mode: "sasu_ok" }],
+      "qa-designer": [{ mode: "submit", doc: writeItemsFile(dir, "qa-doc.json", buildScenarios()) }],
+    };
+    const { env } = fakeEnv("by_role", { FAKE_CLAUDE_PLAN: JSON.stringify(plan) });
+    const result = await runLoop({ runDir: dir, until: "checked", env });
+    expect(result.state).toBe("checked");
+    const roles = result.steps.map((s) => s.role);
+    const sasuCount = loadPlan(dir, 1)?.batches.length ?? 0;
+    expect(sasuCount).toBeGreaterThan(0);
+    expect(roles).toEqual(["technical-manager", ...Array.from({ length: sasuCount }, () => "manager-sasu"), "qa-designer"]);
+    expect(readFileSync(join(runPaths(dir).packets, "technical-manager-1.md"), "utf8")).toContain("목적: apply_answers");
+    expect(readFileSync(join(runPaths(dir).packets, "qa-designer-1.md"), "utf8")).toContain("목적: apply_answers");
+    expect(loadRun(dir)).toMatchObject({ state: "checked", progress: { analysis: false, scenarios: false, sasu: false } });
+  });
+
+  it("answers_complete 반송: 사수가 차단하면 technical-manager rework 를 띄우고, qa-designer 는 사수가 끝난 뒤 한 번만 뜬다", async () => {
+    const { dir } = setupAnalyzed();
+    const raw = JSON.parse(readFileSync(runPaths(dir).runJson, "utf8"));
+    raw.state = "answers_complete";
+    raw.progress = { analysis: true, scenarios: false, sasu: false };
     writeFileSync(runPaths(dir).runJson, JSON.stringify(raw));
     const tmDoc = buildAnalysis();
     tmDoc.requirements[0].title = "홈 상단에 배너를 노출한다";
     const plan = {
       "technical-manager": [{ mode: "submit", doc: writeItemsFile(dir, "tm-doc.json", tmDoc) }],
       "manager-sasu": [{ mode: "sasu_issue_first" }, { mode: "sasu_ok" }],
+      "qa-designer": [{ mode: "submit", doc: writeItemsFile(dir, "qa-doc.json", buildScenarios()) }],
     };
     const { env } = fakeEnv("by_role", { FAKE_CLAUDE_PLAN: JSON.stringify(plan) });
     const result = await runLoop({ runDir: dir, until: "checked", env });
     expect(result.state).toBe("checked");
     const roles = result.steps.map((s) => s.role);
     expect(roles.filter((r) => r === "technical-manager")).toHaveLength(1);
-    expect(roles).not.toContain("qa-designer");
+    expect(roles.filter((r) => r === "qa-designer")).toHaveLength(1);
+    expect(roles.at(-1)).toBe("qa-designer");
     const tmPacket = readFileSync(join(runPaths(dir).packets, "technical-manager-1.md"), "utf8");
     expect(tmPacket).toContain("목적: rework");
     expect(loadRun(dir).rework.analysis).toBe(1);
@@ -265,7 +319,7 @@ describe("실행기: 사수 반송 한 바퀴", () => {
 
 describe("실행기 인자 구성: 사수는 대상 저장소를 읽지 못한다", () => {
   it("sasu 역할은 읽기 뿌리가 실행 폴더와 refs 뿐이고 다른 역할은 저장소를 포함한다", () => {
-    const { dir, run } = makeRun("qa_designed", { repo: { path: "/some/repo", base: "x" } }, "sp-1");
+    const { dir, run } = makeRun("analyzed", { repo: { path: "/some/repo", base: "x" } }, "sp-1");
     const mk = (role: "manager-sasu" | "technical-manager") =>
       buildSpawnPlan(dir, run, role, "first", roleConfig(role), { path: "/p.md", workDir: "/w" }, { HEW_CLAUDE_BIN: "/bin/claude" });
     expect(mk("manager-sasu").env.HEW_GUARD_READ_ROOTS).toBe([dir, join(HEW_ROOT, "refs")].join(":"));
@@ -275,12 +329,12 @@ describe("실행기 인자 구성: 사수는 대상 저장소를 읽지 못한�
 
 describe("패킷: manager-sasu", () => {
   it("계획이 없으면 사용법 오류", () => {
-    const { dir } = setupQaDesigned();
+    const { dir } = setupAnalyzed();
     expect(() => buildPacket({ runDir: dir, role: "manager-sasu", env: { ...process.env, HEW_HEKA_BIN: FAKE_HEKA } })).toThrow(/사수 계획/);
   });
 
   it("묶음을 정하지 않으면 아직 제출되지 않은 첫 묶음, --batch 로 정하면 그 묶음", () => {
-    const { dir } = setupQaDesigned();
+    const { dir } = setupAnalyzed();
     const plan = createPlan(dir, "analysis").plan;
     const env = { ...process.env, HEW_HEKA_BIN: FAKE_HEKA };
     expect(readFileSync(buildPacket({ runDir: dir, role: "manager-sasu", env }).path, "utf8")).toContain("묶음 1 (종류 W2");
@@ -291,11 +345,11 @@ describe("패킷: manager-sasu", () => {
 });
 
 describe("hew run 명령: 예시 분석·시나리오 -> checked", () => {
-  it("예시 문서를 제출한 뒤 가짜 claude 로 --until checked 가 종료 0, status 가 checked", () => {
+  it("예시 분석을 제출한 뒤 가짜 claude 로 --until checked 가 종료 0, status 가 checked", () => {
     const { dir } = setupRun({ units: exampleUnits() });
     submitArtifact({ runDir: dir, kind: "analysis", file: EXAMPLE_DOC });
-    submitArtifact({ runDir: dir, kind: "scenarios", file: join(HEW_ROOT, "refs", "scenarios.example.json") });
-    const { env } = fakeEnv("sasu_ok");
+    const plan = { "manager-sasu": [{ mode: "sasu_ok" }], "qa-designer": [{ mode: "submit", doc: join(HEW_ROOT, "refs", "scenarios.example.json") }] };
+    const { env } = fakeEnv("by_role", { FAKE_CLAUDE_PLAN: JSON.stringify(plan) });
     const hew = (args: string[]) => spawnSync(join(HEW_ROOT, "bin", "hew"), args, { env, encoding: "utf8" });
     const r = hew(["--json", "run", "--run", dir, "--until", "checked"]);
     expect(r.status).toBe(0);
