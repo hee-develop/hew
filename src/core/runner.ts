@@ -15,6 +15,7 @@ import { roleConfig, type RoleConfig, type RoleName } from "./roles.js";
 import { loadRun, type Run } from "./run.js";
 import { createPlan } from "./sasu/plan.js";
 import type { SasuTarget } from "./sasu/types.js";
+import type { WorkCode } from "./findings/schema.js";
 import { currentRound, isBatchSubmitted, loadPlan, pendingBatches } from "./sasu/store.js";
 import { RUN_STATES, type RunState } from "./state-machine.js";
 
@@ -36,6 +37,8 @@ export interface RunnerOptions {
   env?: NodeJS.ProcessEnv;
   /** 역할 설정의 제한 시간을 덮어쓴다(밀리초). */
   timeoutMs?: number;
+  /** 지정하면 분석 사수 1회차만 그 종류의 단위로 돌고 멈춘다(결함 주입 평가). */
+  sasuCodes?: readonly WorkCode[];
 }
 
 export interface SpawnPlan {
@@ -367,7 +370,7 @@ export async function runLoop(opts: RunnerOptions): Promise<RunnerResult> {
   const runSasuRound = async (target: SasuTarget): Promise<"done" | "max_steps"> => {
     const role: RoleName = target === "analysis" ? "manager-sasu" : "ticket-sasu";
     const config = roleConfig(role, env);
-    const created = createPlan(opts.runDir, target, new Date(), null);
+    const created = createPlan(opts.runDir, target, new Date(), null, { codes: opts.sasuCodes });
     if (created.completed !== null) return "done";
     const round = created.plan.round;
     const costs: (number | null)[] = [];
@@ -423,6 +426,7 @@ export async function runLoop(opts: RunnerOptions): Promise<RunnerResult> {
         return result("dry", run, next, `${sasuRole}(묶음 ${first.k}) 를 띄울 명령을 출력만 합니다`, dry);
       }
       if ((await runSasuRound(target)) === "max_steps") return result("max_steps", loadRun(opts.runDir), next, `띄우는 횟수 상한(${maxSteps})에 닿아 멈춥니다`);
+      if (opts.sasuCodes !== undefined) return result("stopped", loadRun(opts.runDir), next, "사수 1회차를 마쳐 멈춥니다");
       continue;
     }
     if (next.action !== "spawn") return result("stopped", run, next, describeStop(next));

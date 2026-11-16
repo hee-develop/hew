@@ -43,7 +43,7 @@ export interface SubmitBatchResult {
 
 const reject = (code: string, ref: string | null, message: string): Issue => ({ code, severity: "reject", ref, message });
 
-/** 묶음 하나의 지적을 검사해 정본에 쓴다. 모든 묶음이 들어오면 회차를 완료 처리한다. */
+/** 묶음 하나의 지적을 검사해 정본에 쓴다. 모든 묶음이 들어오면 회차를 완료 처리한다(평가 실행은 완료 처리를 하지 않는다). */
 export function submitFindingsBatch(opts: SubmitBatchOptions): SubmitBatchResult {
   const now = opts.now ?? new Date();
   if (!existsSync(opts.file)) throw usageError(`제출 파일이 없습니다: ${opts.file}`);
@@ -106,7 +106,7 @@ export function submitFindingsBatch(opts: SubmitBatchOptions): SubmitBatchResult
   appendEvent(paths.events, "findings_batch_submitted", { for: target, round, batch: opts.batch, units: batch.units.length, issues, blocking, path: docPath }, now);
 
   const allIn = plan.batches.every((b) => isBatchSubmitted(opts.runDir, round, b.k, target));
-  const completed = allIn ? completeRound(opts.runDir, plan, now, opts.producedBy ?? null) : null;
+  const completed = allIn && run.eval === undefined ? completeRound(opts.runDir, plan, now, opts.producedBy ?? null) : null;
   return {
     round,
     batch: opts.batch,

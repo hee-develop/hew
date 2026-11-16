@@ -6,6 +6,7 @@ import "../core/plan/index.js";
 import { EXIT, usageError } from "../core/errors.js";
 import { register as registerApprove } from "./commands/approve.js";
 import { register as registerCheck } from "./commands/check.js";
+import { register as registerEval } from "./commands/eval.js";
 import { register as registerGate } from "./commands/gate.js";
 import { register as registerInit } from "./commands/init.js";
 import { register as registerMistake } from "./commands/mistake.js";
@@ -27,7 +28,7 @@ program
   .exitOverride()
   .configureOutput({ writeErr: () => {} });
 
-for (const register of [registerInit, registerStatus, registerNext, registerSubmit, registerSource, registerUnits, registerCheck, registerPacket, registerRun, registerSasu, registerGate, registerApprove, registerMistake]) register(program);
+for (const register of [registerInit, registerStatus, registerNext, registerSubmit, registerSource, registerUnits, registerCheck, registerPacket, registerRun, registerSasu, registerGate, registerApprove, registerMistake, registerEval]) register(program);
 
 try {
   await program.parseAsync(process.argv);

@@ -60,7 +60,7 @@ export interface WorkUnit {
 }
 
 const NEIGHBOR_LIMIT = 12;
-const DOC_KINDS = new Set(["table_row", "bullet", "paragraph"]);
+export const DOC_KINDS = new Set(["table_row", "bullet", "paragraph"]);
 const W3_KINDS = new Set(["table_row", "bullet", "paragraph", "figma_desc"]);
 const WEB_PLATFORMS = new Set(["web", "mobile_web"]);
 
@@ -110,7 +110,7 @@ function evidenceInput(src: Source, ev: Evidence, withQuote: boolean): Record<st
 }
 
 /** 요구의 변경 항목과 ai.notes 가 근거로 든 원문 단위 id 를 순서대로, 중복 없이 모은다. */
-function citedUnitIds(r: Requirement): string[] {
+export function citedUnitIds(r: Requirement): string[] {
   const ids: string[] = [];
   for (const c of r.changes) for (const ev of c.evidence) ids.push(ev.unit_id);
   for (const n of r.ai.notes) for (const ev of n.evidence) ids.push(ev.unit_id);
@@ -178,16 +178,19 @@ const sectionKey = (u: Unit): string | null => {
   return Array.isArray(section) ? JSON.stringify(section) : null;
 };
 
+/** 근거로 든 단위와 같은 절에 있는 이웃 문서 단위(근거 단위 제외, 앞에서 12개까지). */
+export function neighborUnits(units: Unit[], cited: string[]): Unit[] {
+  const byId = new Map(units.map((u) => [u.id, u]));
+  const sections = new Set(cited.map((id) => byId.get(id)).filter((u): u is Unit => u !== undefined).map(sectionKey).filter((k): k is string => k !== null));
+  return units.filter((u) => DOC_KINDS.has(u.kind) && !cited.includes(u.id) && sections.has(sectionKey(u) ?? "")).slice(0, NEIGHBOR_LIMIT);
+}
+
 function w4(src: Source): WorkUnit[] {
   return src.items.requirements
     .filter((r) => r.status === "confirmed")
     .map((r) => {
       const cited = citedUnitIds(r);
-      const sections = new Set(cited.map((id) => src.byId.get(id)).filter((u): u is Unit => u !== undefined).map(sectionKey).filter((k): k is string => k !== null));
-      const neighbors = src.units
-        .filter((u) => DOC_KINDS.has(u.kind) && !cited.includes(u.id) && sections.has(sectionKey(u) ?? ""))
-        .slice(0, NEIGHBOR_LIMIT)
-        .map((u) => ({ id: u.id, text: u.text }));
+      const neighbors = neighborUnits(src.units, cited).map((u) => ({ id: u.id, text: u.text }));
       return make("W4", r.id, {
         title: r.title,
         changes: r.changes.map((c) => c.text),
@@ -216,6 +219,9 @@ function w6(src: Source): WorkUnit[] {
     .filter((u) => u.kind === "table_row" && u.actor === undefined && cited.has(u.id))
     .map((u) => make("W6", u.id, { text: u.text, columns: u.columns }));
 }
+
+/** AS-IS·TO-BE 이미지가 모두 있는가(W7 단위가 만들어지는 조건). */
+export const hasVisualPair = (images: { role: string }[]): boolean => images.some((i) => i.role === "as_is") && images.some((i) => i.role === "to_be");
 
 function w7(src: Source): WorkUnit[] {
   const out: WorkUnit[] = [];
