@@ -189,6 +189,6 @@
 | `coverage_incomplete` | 어느 행에도 없는 단위, 또는 두 행 이상에 든 단위가 있다 | 오류가 알려 준 `U-n` 을 장부 행에 넣거나, 중복된 행에서 빼 정확히 한 행에만 둔다. 웹·모웹 Figma 단위는 생략해도 된다 |
 | `confirmed_with_open` | `confirmed` 요구가 열린 질문·차이·가정에 걸려 있다 | 걸린 항목이 열려 있는 한 `pending` 이다. 처음 제출에서는 모든 질문·차이·가정이 열려 있으므로, 이들에 걸린 요구는 `pending` 으로 쓴다 |
 | `blocker_without_question` | 막힘이 질문으로 이어지지 않았다 | 그 막힘을 묻는 질문(`origin` 은 `impact`)을 만들고 막힘의 `question_id` 에 그 `Q-n` 을 적는다 |
-| `evidence_operator_row` | 주체가 운영자인 단위를 근거로 썼다 | 판매자·구매자가 주체인 행, 시안, 작업 구분 표의 Mobile(App) 칸에서 근거를 다시 찾는다. 운영자 행은 장부에서 `not_app` 으로 처리한다 |
+| `evidence_operator_row` | 주체가 운영자인 단위를 근거로 썼다 | 앱 사용자가 주체인 행, 시안, 작업 구분 표의 Mobile(App) 칸에서 근거를 다시 찾는다. 운영자 행은 장부에서 `not_app` 으로 처리한다 |
 
 그 밖에 자주 나오는 것: `schema_invalid`(칸 형식이나 열거값이 틀림), `id_format`(id 형식), `ref_missing`(없는 화면·요구·단위를 가리킴), `change_without_evidence`(근거 없는 변경 항목), `ac_missing`·`ac_without_verify`(인수 조건 또는 검증 수단 없음), `scope_out_without_quote`(범위 밖 처리에 인용이나 사유 없음), `question_without_options`(선택지·영향이 없는 질문), `delta_decision_kind`(차이 종류에 맞지 않는 추천 결정), `delta_same_decision`(경고: 앞의 차이와 종류가 같고 비교 값 쌍이 같거나 한쪽이 다른 쪽에 포함되며 추천 결정이 서로 다르지 않다. 사람이 내릴 결정이 같으면 차이 하나로 묶고 걸린 요구를 모두 적는다. 결정이 요구마다 갈릴 수 있으면 나눈 채 둔다. 게이트에서는 비슷한 차이에 같은 결정을 한 번에 적용할 수 있다).

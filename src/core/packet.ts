@@ -13,6 +13,7 @@ import { loadAnswers } from "./analysis/answers.js";
 import { currentBasis, diffBasis, type Basis } from "./basis.js";
 import { nextAction } from "./next.js";
 import { loadRun, type Run } from "./run.js";
+import { humanTitleFormat, loadProfile } from "./profile.js";
 import { isRoleName, roleConfig, type RoleName } from "./roles.js";
 import { currentRound, isBatchSubmitted, loadPlan } from "./sasu/store.js";
 import { BatchFileSchema, type BatchFile, type SasuTarget } from "./sasu/types.js";
@@ -344,6 +345,33 @@ function sasuBatch(runDir: string, run: Run, wanted: number | undefined, target:
   return { k: entry.k, path: entry.path, file: BatchFileSchema.parse(readJsonFile(entry.path)) };
 }
 
+/** `## 팀 규칙` 절(ticket-maker·ticket-sasu 전용). 값은 프로필의 plan 에서 온다. */
+function teamRulesSection(): string[] {
+  const { sp, title, pr, notes } = loadProfile().plan;
+  return [
+    "## 팀 규칙",
+    "",
+    `- 제목 형식: \`${humanTitleFormat(title.format)}\``,
+    `- SP 범위: ${sp.min}~${sp.max}SP (1SP = ${sp.hours_per_sp}시간, 티켓 하나 ${sp.min * sp.hours_per_sp}~${sp.max * sp.hours_per_sp}시간)`,
+    `- PR 묶음 하나의 티켓 상한: ${pr.max_tickets}개`,
+    `- 기본 base 브랜치: \`${pr.base}\``,
+    ...notes.map((n) => `- ${n}`),
+    "",
+  ];
+}
+
+/**
+ * `## 도메인 안내` 절. 역할 정의가 이 절을 가리키는 역할(테크니컬 매니저, QA 설계)에만 싣는다.
+ * 사수는 좁은 대조만 하므로 싣지 않는다(실으면 결함 주입 평가에서 포착이 떨어졌다). domain.md 가 없거나 비면 절을 뺀다.
+ */
+const DOMAIN_ROLES: readonly string[] = ["technical-manager", "qa-designer"];
+
+function domainSection(role: string): string[] {
+  if (!DOMAIN_ROLES.includes(role)) return [];
+  const { domain } = loadProfile();
+  return domain === null ? [] : ["## 도메인 안내", "", domain, ""];
+}
+
 function renderSasuPacket(
   opts: PacketOptions & { plan: PacketPlan },
   run: Run,
@@ -373,6 +401,7 @@ function renderSasuPacket(
   if (batch.file.code === "W7") lines.push("- 묶음 파일의 `as_is`·`to_be` 는 이미지 경로다. Read 로 직접 열어 본다.");
   for (const ref of config.refs) lines.push(`- \`${join(HEW_ROOT, ref)}\` — 형식 안내`);
   lines.push(`- \`${opts.runDir}\` — 실행 폴더`, "");
+  if (role === "ticket-sasu") lines.push(...teamRulesSection());
   lines.push("## 따를 규칙", "", ...rulesSection(config.heka, run, env, warnings));
   lines.push("## 쓰는 곳과 제출", "");
   lines.push(`- 작업 폴더(여기에만 쓸 수 있다): \`${opts.plan.workDir}\``);
@@ -448,7 +477,7 @@ function renderCollectorPacket(opts: PacketOptions & { plan: PacketPlan }, run: 
 
   lines.push("## 읽기 도구", "");
   lines.push(
-    `- cloudId: \`${collect.atlassian_cloud_id}\``,
+    `- cloudId: \`${loadProfile().connections.atlassian_cloud_id}\``,
     "- Confluence 현재 버전: `getConfluencePage`(cloudId, pageId, contentFormat: markdown)",
     "- Confluence 지정 버전: `executeRead` 로 `getConfluenceContentVersion`(contentId, versionNumber, content_format: markdown). `responseFields` 를 주지 않는다(주면 빈 값이 온다)",
     "- Jira: `getJiraIssue`(cloudId, issueIdOrKey)",
@@ -535,6 +564,8 @@ export function renderPacket(opts: PacketOptions & { plan: PacketPlan }): { text
 
   if (role === "qa-designer" && existsSync(p.scenarios)) lines.push(...previousScenariosSection(opts.runDir));
 
+  if (role === "ticket-maker") lines.push(...teamRulesSection());
+  lines.push(...domainSection(role));
   lines.push("## 따를 규칙", "", ...rulesSection(config.heka, run, env, warnings));
 
   lines.push("## 쓰는 곳과 제출", "");

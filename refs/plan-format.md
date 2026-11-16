@@ -5,7 +5,7 @@
 - 통과하는 분해안 예시: `refs/plan.example.json`
 - 그 예시가 가리키는 분석 문서: `refs/analysis.example.json` (요구와 변경 항목을 거기서 읽는다)
 - 그 예시가 따르는 사람의 답과 결정: `refs/answers.example.json` (차이 D-1 이 `hold` 라서 요구-2 가 범위 밖이다)
-- 분해 규칙: `rules/plan.yaml` (SP 범위, 제목 형식, 본문에 쓰면 안 되는 것, PR 하나의 티켓 수 상한)
+- 분해 규칙: `rules/plan.yaml` (본문에 쓰면 안 되는 것. SP 범위·제목 형식·PR 하나의 티켓 수 상한은 프로필의 `plan` 에 있다)
 
 예시는 실제 일감의 내용이 아니라 형식을 보이는 합성 자료다. 칸의 모양과 id 쓰는 법만 따르고 내용은 베끼지 않는다. 분해안은 정본 분석 문서(`doc/analysis.json`)와 사람의 답(`doc/answers.json`)이 있어야 검사받는다.
 
@@ -33,11 +33,11 @@
 | 칸 | 형식 | 필수 | 뜻 |
 |---|---|---|---|
 | `id` | `Tn` | 필수 | 티켓 id |
-| `title` | 문자열 | 필수 | `[MO] {일감명} / {작업 요약}`. 스쿼드 접두어는 붙이지 않는다 |
+| `title` | 문자열 | 필수 | 패킷의 '팀 규칙' 절에 적힌 제목 형식(프로필의 `plan.title.format`). 예시 프로필의 값은 `[MO] {일감명} / {작업 요약}` |
 | `body` | 객체 | 필수 | 본문(아래 표) |
 | `requirement_ids` | 요구 id 배열 | 검사 | 덮는 요구. 비면 플래그 제거 티켓(`feature_flag.removal_ticket`)만 허용된다 |
 | `changes` | 객체 배열 | 선택 | 요구의 일부 변경만 맡을 때 `{ requirement_id, index }`. `index` 는 그 요구 `changes` 배열의 0부터 위치다 |
-| `sp` | 숫자 | 필수 | Story Points. 1SP 는 1시간이다. 기본 범위는 2~4SP |
+| `sp` | 숫자 | 필수 | Story Points. 1SP 가 몇 시간이고 기본 범위가 얼마인지는 프로필의 `plan.sp`(패킷의 '팀 규칙' 절)를 따른다. 예시 프로필은 1SP 1시간, 2~4SP |
 | `depends_on` | 티켓 id 배열 | 선택 | 먼저 끝나야 하는 티켓 |
 | `pr` | `PR-n` | 필수 | 속한 PR 묶음 |
 
@@ -64,7 +64,7 @@
 |---|---|---|---|
 | `id` | `PR-n` | 필수 | PR 묶음 id |
 | `title` | 문자열 | 필수 | 제목 |
-| `ticket_ids` | 티켓 id 배열 | 검사 | 묶인 티켓. 티켓의 `pr` 과 서로 맞아야 한다. 규칙 상한(6개)을 넘으면 경고 |
+| `ticket_ids` | 티켓 id 배열 | 검사 | 묶인 티켓. 티켓의 `pr` 과 서로 맞아야 한다. 프로필의 `plan.pr.max_tickets`(패킷의 '팀 규칙' 절, 예시 프로필은 6개)를 넘으면 경고 |
 | `base` | `develop` 또는 `PR-n` | 필수 | 어느 브랜치 위에 쌓는가. `PR-n` 이면 그 PR 의 `order` 가 더 작아야 한다 |
 | `order` | 숫자 | 필수 | 병합 순서. 작을수록 먼저다 |
 
@@ -103,7 +103,7 @@
 | `requirement_unmapped` | 범위 안 요구의 변경 항목을 맡은 티켓이 없다 | 티켓의 `requirement_ids`(필요하면 `changes`)에 넣는다 |
 | `ticket_orphan` | 맡은 요구가 없는 티켓이다 | 요구를 적거나, 플래그 제거 티켓이면 `feature_flag.removal_ticket` 으로 지정한다 |
 | `hold_included` | 보류·구현 안 함으로 정한 요구를 티켓이 맡았다 | 그 요구를 티켓에서 빼고 `excluded` 에 적는다 |
-| `title_format` | 제목이 `[MO] {일감명} / {작업 요약}` 이 아니거나 일감명이 `epic_name` 과 다르다 | 모든 제목을 같은 일감명으로 맞춘다 |
+| `title_format` | 제목이 프로필의 제목 형식(패킷의 '팀 규칙' 절, 예시 프로필은 `[MO] {일감명} / {작업 요약}`)이 아니거나 일감명이 `epic_name` 과 다르다 | 모든 제목을 같은 일감명으로 맞춘다 |
 | `body_sections` | 배경이나 작업 내용이 비었다 | 둘 다 쓴다 |
 | `body_code_detail` | 본문에 파일 경로·확장자·줄 번호·함수 호출 모양이 있다 | 화면 이름과 문구로 바꿔 쓴다 |
 | `dependency_cycle` | 티켓 의존이나 PR base 에 순환이 있다 | 순환을 끊는다 |

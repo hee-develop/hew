@@ -5,6 +5,7 @@ import { parse } from "yaml";
 import { z } from "zod";
 import { HewError, usageError } from "./errors.js";
 import { HEW_ROOT } from "./paths.js";
+import { loadProfile } from "./profile.js";
 
 export const ROLE_NAMES = ["technical-manager", "qa-designer", "ticket-maker", "manager-sasu", "ticket-sasu", "collector"] as const;
 export type RoleName = (typeof ROLE_NAMES)[number];
@@ -28,7 +29,7 @@ export const isRoleName = (value: string): value is RoleName => (ROLE_NAMES as r
 /** 역할 이름을 환경 변수 접미사로 바꾼다(대문자, 하이픈은 밑줄). */
 export const envSuffix = (role: string): string => role.toUpperCase().replace(/-/g, "_");
 
-/** roles.yaml 전체를 읽는다. */
+/** roles.yaml 전체를 읽는다. 역할의 heka 목록은 프로필에서 채운다(없으면 빈 목록). */
 export function loadRoles(root: string = HEW_ROOT): Record<string, RoleConfig> {
   const file = join(root, "rules", "roles.yaml");
   if (!existsSync(file)) throw new HewError("internal", `역할 설정 파일이 없습니다: ${file}`);
@@ -37,7 +38,8 @@ export function loadRoles(root: string = HEW_ROOT): Record<string, RoleConfig> {
     const first = parsed.error.issues[0];
     throw new HewError("internal", `roles.yaml 형식이 올바르지 않습니다: ${first?.path.join(".") ?? ""} ${first?.message ?? ""}`);
   }
-  return parsed.data.roles;
+  const { heka } = loadProfile();
+  return Object.fromEntries(Object.entries(parsed.data.roles).map(([name, cfg]) => [name, { ...cfg, heka: heka[name] ?? [] }]));
 }
 
 /** 역할 하나의 설정. HEW_MODEL_<역할>, HEW_EFFORT_<역할> 이 있으면 덮어쓴다. */
