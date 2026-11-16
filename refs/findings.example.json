@@ -1,0 +1,18 @@
+{
+  "findings": [
+    {
+      "id": "F-1",
+      "work": "W3:U-3",
+      "verdict": "ok"
+    },
+    {
+      "id": "F-2",
+      "work": "W3:U-4",
+      "verdict": "issue",
+      "kind": "missing",
+      "claim": "원문의 '6번째부터는 더보기 버튼으로 연결한다' 가 어느 요구의 변경 항목에도 없다",
+      "evidence": { "unit_id": "U-4", "quote": "6번째부터는 더보기 버튼으로 연결한다" },
+      "action": "fix"
+    }
+  ]
+}

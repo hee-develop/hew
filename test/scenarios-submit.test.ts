@@ -11,6 +11,7 @@ import { ScenarioItemsSchema } from "../src/core/scenarios/schema.js";
 import { submitArtifact } from "../src/core/submit.js";
 import { answersPath, buildAnalysis, clone, setState, setupRun, writeJson, type Doc } from "./analysis-fixtures.js";
 import { PRD_URL, useTempRunsDir, writeItemsFile } from "./helpers.js";
+import { planNow, submitAll } from "./sasu-fixtures.js";
 import { buildScenarios, setupAnalyzed } from "./scenarios-fixtures.js";
 
 const runs = useTempRunsDir();
@@ -156,7 +157,10 @@ describe("submit: 열린 항목 합산과 answers_complete", () => {
     answerAnalysis(dir, extra);
     return dir;
   }
-  const findings = (dir: string) => submitArtifact({ runDir: dir, kind: "findings", for: "analysis", file: writeItemsFile(dir, "f.json", { findings: [] }) });
+  const findings = (dir: string) => {
+    const r = submitAll(dir, planNow(dir));
+    return { state: r.state, open: loadRun(dir).open };
+  };
   const resubmitAnalysis = (dir: string) => {
     const doc = buildAnalysis();
     for (const r of doc.requirements) r.status = "confirmed";

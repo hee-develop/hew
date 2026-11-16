@@ -1,4 +1,7 @@
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { HEW_ROOT } from "../src/core/paths.js";
 import { ROLE_NAMES, envSuffix, loadRoles, roleConfig } from "../src/core/roles.js";
 
 describe("roles.yaml", () => {
@@ -17,6 +20,13 @@ describe("roles.yaml", () => {
     expect(roles["technical-manager"]?.heka).toHaveLength(10);
     expect(roles["technical-manager"]?.heka[0]).toBe("requirement-source-priority-figma-first");
     for (const r of ROLE_NAMES.filter((n) => n !== "technical-manager")) expect(roles[r]?.heka).toEqual([]);
+  });
+
+  it("manager-sasu 는 형식 안내 세 개를 refs 로 가지고 대상 저장소 도구 없이 Read·Write·Bash 만 쓴다", () => {
+    const sasu = loadRoles()["manager-sasu"];
+    expect(sasu?.refs).toEqual(["refs/findings-format.md", "refs/findings.example.json", "refs/sasu-batch.example.json"]);
+    expect(sasu?.allowed_tools).toEqual(["Read", "Write", "Bash"]);
+    for (const ref of sasu?.refs ?? []) expect(existsSync(join(HEW_ROOT, ref))).toBe(true);
   });
 
   it("환경 변수로 모델·effort 를 덮어쓴다", () => {

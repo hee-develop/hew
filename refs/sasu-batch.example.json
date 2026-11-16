@@ -1,0 +1,27 @@
+{
+  "for": "analysis",
+  "round": 1,
+  "batch": 1,
+  "code": "W3",
+  "question": "이 원문 단위가 말하는 것이 빠짐없이 요구에 있는가. 범위 장부의 처리(범위 밖, 앱 작업 아님, 배경)가 맞는가",
+  "units": [
+    {
+      "id": "W3:U-3",
+      "target": "U-3",
+      "inputs": {
+        "text": "원가가 입력되지 않은 팩은 판매가만 노출한다",
+        "coverage": [{ "id": "C-1", "disposition": "covered" }],
+        "requirements": [{ "id": "요구-3", "title": "원가 없는 팩은 판매가만", "changes": ["원가가 없으면 판매가만 그린다"] }]
+      }
+    },
+    {
+      "id": "W3:U-4",
+      "target": "U-4",
+      "inputs": {
+        "text": "배너는 최대 5개까지 노출하고, 6번째부터는 더보기 버튼으로 연결한다",
+        "coverage": [{ "id": "C-1", "disposition": "covered" }],
+        "requirements": [{ "id": "요구-2", "title": "배너는 최대 5개", "changes": ["6번째부터는 그리지 않는다"] }]
+      }
+    }
+  ]
+}

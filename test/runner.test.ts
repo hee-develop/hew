@@ -241,7 +241,6 @@ describe("실행기: --dry, --until, 멈추는 곳", () => {
   });
 
   it.each([
-    ["qa_designed", "sasu"],
     ["checked", "publish_gate"],
     ["gate_answering", "wait_human"],
     ["plan_checked", "publish_gate"],
@@ -256,12 +255,12 @@ describe("실행기: --dry, --until, 멈추는 곳", () => {
     expect(existsSync(log) ? readdirSync(log) : []).toEqual([]);
   });
 
-  it("역할 정의 파일이 없는 역할(ticket-maker)은 멈추고 알린다", async () => {
+  it("역할 정의 파일이 있는 역할(ticket-maker)은 --dry 에서 띄울 명령을 만든다", async () => {
     const { dir } = makeRun("answers_applied");
     const { env } = fakeEnv("submit");
-    const result = await runLoop({ runDir: dir, env });
-    expect(result.outcome).toBe("role_missing");
-    expect(result.message).toContain("agents/ticket-maker.md");
+    const result = await runLoop({ runDir: dir, env, dry: true });
+    expect(result.outcome).toBe("dry");
+    expect(result.dry?.args).toContain("hew:ticket-maker");
   });
 });
 

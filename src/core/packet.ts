@@ -9,6 +9,8 @@ import { HEW_ROOT, findingsPath, resolveRunDir, runPaths } from "./paths.js";
 import { nextAction } from "./next.js";
 import { loadRun, type Run } from "./run.js";
 import { isRoleName, roleConfig, type RoleName } from "./roles.js";
+import { currentRound, isBatchSubmitted, loadPlan } from "./sasu/store.js";
+import { BatchFileSchema, type BatchFile } from "./sasu/types.js";
 
 export const PURPOSES = ["first", "rework", "apply_answers"] as const;
 export type Purpose = (typeof PURPOSES)[number];
@@ -39,6 +41,8 @@ export interface PacketOptions {
   role: string;
   purpose?: string;
   env?: NodeJS.ProcessEnv;
+  /** manager-sasu 패킷이 다룰 묶음 번호. 생략하면 이번 회차에서 아직 제출되지 않은 첫 묶음. */
+  batch?: number;
 }
 
 const expandHome = (p: string): string => (p === "~" ? homedir() : p.startsWith("~/") ? join(homedir(), p.slice(2)) : p);
@@ -159,16 +163,17 @@ interface Submit {
   file: string;
 }
 
-function submitFor(role: RoleName, hew: string, runDir: string, workDir: string): Submit | null {
+function submitFor(role: RoleName, hew: string, runDir: string, workDir: string, batch?: number): Submit | null {
   const make = (name: string, args: string): Submit => ({
     file: join(workDir, name),
     line: `${hew} --json ${args} --run ${runDir} --file ${join(workDir, name)}`,
   });
+  if (role === "manager-sasu" && batch === undefined) throw usageError("manager-sasu 패킷에는 묶음 번호가 필요합니다");
   switch (role) {
     case "technical-manager": return { ...make("analysis.json", "submit analysis") };
     case "qa-designer": return { ...make("scenarios.json", "submit scenarios") };
     case "ticket-maker": return { ...make("plan.json", "submit plan") };
-    case "manager-sasu": return { ...make("findings.json", "submit findings --for analysis") };
+    case "manager-sasu": return { ...make("findings.json", `submit findings --for analysis --batch ${batch}`) };
     case "ticket-sasu": return { ...make("findings.json", "submit findings --for plan") };
     case "collector": return null;
   }
@@ -181,6 +186,14 @@ function latestFindings(runDir: string, target: "analysis" | "plan", run: Run): 
   return existsSync(path) ? path : null;
 }
 
+function evidenceCell(evidence: unknown): string {
+  if (evidence === null || typeof evidence !== "object") return "";
+  const e = evidence as Record<string, unknown>;
+  if (typeof e.quote === "string") return `${typeof e.unit_id === "string" ? `${e.unit_id}: ` : ""}${e.quote}`;
+  return typeof e.image === "string" ? e.image : "";
+}
+
+/** 반송 지적 표의 행: 차단 지적 중 테크니컬 매니저가 고칠 것(fix·drop)만. 차단 표시가 없는 옛 지적은 issue 면 싣는다. */
 function issueRows(file: string): unknown[][] {
   const doc = readJsonFile(file) as { items?: { findings?: unknown } } | null;
   const findings = doc?.items?.findings;
@@ -189,8 +202,8 @@ function issueRows(file: string): unknown[][] {
   for (const f of findings) {
     if (f === null || typeof f !== "object") continue;
     const rec = f as Record<string, unknown>;
-    if (rec.verdict !== "issue") continue;
-    rows.push([rec.id ?? "", rec.work ?? "", rec.claim ?? ""]);
+    if (rec.verdict !== "issue" || rec.blocking === false || rec.action === "ask") continue;
+    rows.push([rec.id ?? "", rec.work ?? "", rec.kind ?? "", rec.claim ?? "", evidenceCell(rec.evidence), rec.action ?? ""]);
   }
   return rows;
 }
@@ -238,12 +251,59 @@ function readList(runDir: string, role: RoleName, purpose: Purpose, run: Run, re
   return out;
 }
 
+/** manager-sasu 패킷이 다룰 묶음을 정한다. */
+function sasuBatch(runDir: string, run: Run, wanted: number | undefined): { k: number; path: string; file: BatchFile } {
+  const round = currentRound(run);
+  const plan = loadPlan(runDir, round);
+  if (plan === null) throw usageError("이 회차의 사수 계획이 없습니다. 먼저 hew sasu plan --for analysis 를 실행하세요");
+  const entry = wanted !== undefined ? plan.batches.find((b) => b.k === wanted) : plan.batches.find((b) => !isBatchSubmitted(runDir, round, b.k));
+  if (entry === undefined) throw usageError(wanted !== undefined ? `계획에 묶음 ${wanted} 이(가) 없습니다` : "제출되지 않은 묶음이 없습니다");
+  return { k: entry.k, path: entry.path, file: BatchFileSchema.parse(readJsonFile(entry.path)) };
+}
+
+function renderSasuPacket(opts: PacketOptions & { plan: PacketPlan }, run: Run): { text: string; purpose: Purpose; role: RoleName; warnings: Issue[] } {
+  const env = opts.env ?? process.env;
+  const config = roleConfig("manager-sasu", env);
+  const hew = hewBinPath();
+  const warnings: Issue[] = [];
+  const batch = sasuBatch(opts.runDir, run, opts.batch);
+  const lines: string[] = [];
+  lines.push(`# 패킷: manager-sasu ${opts.plan.n}번째`, "");
+  lines.push("## 이번 일", "");
+  lines.push(
+    "- 역할: manager-sasu",
+    `- 목적: first — 작업 묶음 파일의 단위마다 판정을 하나씩 내어 지적(findings)으로 제출한다.`,
+    `- 대상: 분석 문서, 회차 ${batch.file.round}, 묶음 ${batch.k} (종류 ${batch.file.code}, 단위 ${batch.file.units.length}개)`,
+    `- 이 종류가 묻는 것: ${batch.file.question}`,
+    `- 실행 모드: ${MODE_TEXT[run.mode]}`,
+    `- 실행 id: ${run.run_id}`,
+    `- 현재 상태: ${run.state}`,
+    "",
+  );
+  lines.push("## 읽을 것", "", "읽을 수 있는 곳은 아래 경로와 그 아래뿐이다. 목록에 없는 곳은 찾아 읽지 않는다.", "");
+  lines.push(`- \`${batch.path}\` — 작업 묶음 파일(이 파일의 단위만 판정한다)`);
+  if (batch.file.code === "W7") lines.push("- 묶음 파일의 `as_is`·`to_be` 는 이미지 경로다. Read 로 직접 열어 본다.");
+  for (const ref of config.refs) lines.push(`- \`${join(HEW_ROOT, ref)}\` — 형식 안내`);
+  lines.push(`- \`${opts.runDir}\` — 실행 폴더`, "");
+  lines.push("## 따를 규칙", "", ...rulesSection(config.heka, run, env, warnings));
+  lines.push("## 쓰는 곳과 제출", "");
+  lines.push(`- 작업 폴더(여기에만 쓸 수 있다): \`${opts.plan.workDir}\``);
+  lines.push(`- hew 실행 파일: \`${hew}\``);
+  const submit = submitFor("manager-sasu", hew, opts.runDir, opts.plan.workDir, batch.k) as Submit;
+  lines.push(`- 초안 파일: \`${submit.file}\``, "", "제출 명령:", "", "```sh", submit.line, "```", "");
+  lines.push("제출이 거부되면(종료 3) 출력된 오류를 읽고 초안을 고쳐 같은 명령으로 다시 낸다. 통과할 때까지 반복한다.", "");
+  lines.push("쓸 수 있는 Bash 명령:", "", ...BASH_ALLOWED.map((c) => `- ${c}`), "");
+  lines.push("파이프(`|`), `&&`, `||`, `;` 로 이은 명령은 조각마다 위 목록에 있어야 한다. 쉘 치환(`$(...)`, 백틱), 변수 참조, 목록에 없는 명령은 거부된다.", "");
+  return { text: `${lines.join("\n")}\n`, purpose: "first", role: "manager-sasu", warnings };
+}
+
 /** 패킷 본문과 경고를 만든다. 파일은 쓰지 않는다. */
 export function renderPacket(opts: PacketOptions & { plan: PacketPlan }): { text: string; purpose: Purpose; role: RoleName; warnings: Issue[] } {
   if (!isRoleName(opts.role)) throw usageError(`알 수 없는 역할입니다: ${opts.role}`);
   const role = opts.role;
   const env = opts.env ?? process.env;
   const run = loadRun(opts.runDir);
+  if (role === "manager-sasu") return renderSasuPacket(opts, run);
   const purpose = ((): Purpose => {
     if (opts.purpose === undefined) return defaultPurpose(run, role);
     if (!(PURPOSES as readonly string[]).includes(opts.purpose)) throw usageError(`--purpose 는 ${PURPOSES.join("|")} 중 하나여야 합니다: ${opts.purpose}`);
@@ -269,7 +329,7 @@ export function renderPacket(opts: PacketOptions & { plan: PacketPlan }): { text
     if (file === null) {
       lines.push("지적 파일이 아직 없습니다.", "");
     } else {
-      lines.push(`지적 파일: \`${file}\``, "", ...table(["id", "대상", "주장"], issueRows(file)), "");
+      lines.push(`지적 파일: \`${file}\``, "", ...table(["id", "대상", "종류", "주장", "근거", "처리"], issueRows(file)), "");
     }
   }
   if (purpose === "apply_answers") {

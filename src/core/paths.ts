@@ -80,3 +80,23 @@ export function runPaths(dir: string): RunPaths {
 export function findingsPath(paths: RunPaths, target: "analysis" | "plan", attempt: number): string {
   return join(paths.findingsDir, `${target}-${attempt}.json`);
 }
+
+/** 사수 계획 파일 경로. 회차는 그 대상의 사수가 몇 번째로 도는지다. */
+export function sasuPlanPath(paths: RunPaths, target: "analysis" | "plan", round: number): string {
+  return join(paths.doc, "sasu", `${target}-${round}.plan.json`);
+}
+
+/** 사수 묶음 파일(에이전트가 읽는 입력)이 놓이는 작업 폴더. */
+export function sasuWorkDir(paths: RunPaths, target: "analysis" | "plan", round: number): string {
+  return join(paths.work, `sasu-${target}-${round}`);
+}
+
+/** 묶음별 제출 정본 폴더(doc/findings/<대상>-<회차>/). */
+export function findingsBatchDir(paths: RunPaths, target: "analysis" | "plan", round: number): string {
+  return join(paths.findingsDir, `${target}-${round}`);
+}
+
+/** 묶음 하나의 제출 정본 경로. */
+export function findingsBatchPath(paths: RunPaths, target: "analysis" | "plan", round: number, batch: number): string {
+  return join(findingsBatchDir(paths, target, round), `batch-${batch}.json`);
+}

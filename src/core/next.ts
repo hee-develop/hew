@@ -35,8 +35,9 @@ export function nextAction(state: RunState, ctx: NextContext): NextAction {
     case "gate_answering":
       return { action: "wait_human", for: "answers" };
     case "answers_complete": {
+      // 시나리오 진행은 남고 분석 진행만 false 이면 사수 반송이다.
       if (!ctx.progress.analysis) {
-        return { action: "spawn", role: "technical-manager", purpose: "apply_answers" };
+        return { action: "spawn", role: "technical-manager", purpose: ctx.progress.scenarios ? "rework" : "apply_answers" };
       }
       if (!ctx.progress.scenarios) {
         return { action: "spawn", role: "qa-designer", purpose: "apply_answers" };

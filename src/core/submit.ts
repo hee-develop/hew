@@ -167,6 +167,10 @@ export function submitArtifact(opts: SubmitOptions): SubmitResult {
   // 상태가 이 종류를 받을 수 있는지 먼저 확인한다(받을 수 없으면 종료 4).
   transition(run.state, eventFor(opts.kind, target, {}, 0), contextOf(run, currentRevision));
 
+  if (opts.kind === "findings" && target === "analysis") {
+    throw usageError("분석용 findings 는 묶음 단위로 냅니다. --batch <k> 를 붙여 hew submit findings 를 부르세요");
+  }
+
   const parsed = parseItems(text, spec);
   const issues: Issue[] = [];
   if ("issues" in parsed) {

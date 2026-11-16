@@ -123,6 +123,7 @@ approval.json         승인 기록(잠근 revision)
 | `gate_answering` | 답 들여옴 | 열린 항목이 남음 | `gate_answering` | 〃 |
 | `answers_complete` | 답 반영 `analysis`·`scenarios` 제출 통과와 사수 재확인이 모두 끝남 | 열린 항목 0 | `answers_applied` | 답 반영으로 `technical-manager`, `qa-designer`, 사수를 차례로 |
 | `answers_complete` | 〃 | 새 질문이 생겨 열린 항목이 있음 | `checked` | 〃 |
+| `answers_complete` | 분석용 `findings` 가 모두 들어옴 | 차단 지적이 있고 분석 반송이 2회 미만 | `answers_complete`(반송 회차 +1, 분석·사수 진행만 false) | `technical-manager` 를 반송으로 띄우기 |
 | `answers_applied` | `plan` 제출 통과 | — | `planned` | `ticket-maker` 띄우기 |
 | `planned` | 분해안용 `findings` 가 모두 들어옴 | 차단 지적 0건 또는 반송 2회를 채움 | `plan_checked` | 티켓 사수 돌리기 |
 | `planned` | 〃 | 차단 지적이 있고 반송이 2회 미만 | `answers_applied`(반송 회차 +1) | 〃 |

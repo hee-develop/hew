@@ -295,7 +295,8 @@ function checkScreens(env: Env): Issue[] {
   const out: Issue[] = [];
   const used = new Set(env.items.requirements.flatMap((r) => r.changes.map((c) => c.screen_id).filter((id): id is string => id !== undefined)));
   for (const s of env.items.screens) {
-    if (env.hasFigmaMeta && s.images.length === 0) out.push(issue("screen_without_image", "warn", s.id, `${s.id}(${s.name}) 에 이미지가 없습니다`));
+    const hasAnyImage = s.images.length > 0 || s.variants.some((v) => v.images.length > 0);
+    if (env.hasFigmaMeta && !hasAnyImage) out.push(issue("screen_without_image", "warn", s.id, `${s.id}(${s.name}) 와 그 변형에 이미지가 없습니다`));
     for (const v of s.variants) {
       if (!used.has(v.id)) out.push(issue("variant_without_change", "warn", v.id, `변형 ${v.id}(${v.name}) 에 걸린 변경 항목이 없습니다`));
     }

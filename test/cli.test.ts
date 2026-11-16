@@ -95,9 +95,9 @@ describe("CLI 계약(자식 프로세스)", () => {
   });
 
   it("submit --withdraw 를 처리하지 않는 종류는 경고를 낸다", () => {
-    const { dir } = makeRun("qa_designed", {}, "sub-3");
+    const { dir } = makeRun("planned", {}, "sub-3");
     const file = writeItemsFile(dir, "in.json", { findings: [] });
-    const r = hew(["--json", "submit", "findings", "--for", "analysis", "--run", "sub-3", "--file", file, "--withdraw", "Q-1,Q-2"]);
+    const r = hew(["--json", "submit", "findings", "--for", "plan", "--run", "sub-3", "--file", file, "--withdraw", "Q-1,Q-2"]);
     expect(r.code).toBe(0);
     expect(parse(r.stdout).warnings.map((w: any) => w.code)).toEqual(["withdraw_unsupported"]);
   });

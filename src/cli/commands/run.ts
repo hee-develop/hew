@@ -11,7 +11,7 @@ export function register(program: Command): void {
     .description("다음 역할을 띄우는 일을 사람 차례가 올 때까지 되풀이한다")
     .requiredOption("--run <폴더|id>", "실행 폴더 경로 또는 run_id")
     .option("--until <상태>", "이 상태에 닿으면 멈춘다")
-    .option("--max-steps <n>", "띄우는 횟수 상한(기본 10)")
+    .option("--max-steps <n>", "띄우는 횟수 상한(기본 40)")
     .option("--dry", "띄우지 않고 띄울 명령만 출력한다")
     .action((options: { run: string; until?: string; maxSteps?: string; dry?: boolean }, command: Command) =>
       runActionAsync(command, async () => {
