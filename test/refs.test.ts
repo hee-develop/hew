@@ -11,7 +11,7 @@ import { join } from "node:path";
 import { exampleUnits, EXAMPLE_DOC } from "./runner-helpers.js";
 
 const EXAMPLE_SCENARIOS = join(HEW_ROOT, "refs", "scenarios.example.json");
-import { setupRun } from "./analysis-fixtures.js";
+import { setState, setupRun } from "./analysis-fixtures.js";
 import { useTempRunsDir } from "./helpers.js";
 
 useTempRunsDir();
@@ -46,8 +46,9 @@ describe("형식 안내 예시(refs/)", () => {
   it("예시 시나리오 문서가 예시 분석 문서에 이어 결정적 검사를 통과해 제출된다(거부 0, 경고 없음)", () => {
     const { dir } = setupRun({ units: exampleUnits() });
     submitArtifact({ runDir: dir, kind: "analysis", file: EXAMPLE_DOC });
+    setState(dir, "vetted");
     const result = submitArtifact({ runDir: dir, kind: "scenarios", file: EXAMPLE_SCENARIOS });
-    expect(result).toMatchObject({ state: "qa_designed", previous_state: "analyzed" });
+    expect(result).toMatchObject({ state: "checked", previous_state: "vetted" });
     expect(result.warnings.filter((w) => w.severity !== "info")).toEqual([]);
     expect(loadRun(dir).submissions.scenarios?.attempt).toBe(1);
   });

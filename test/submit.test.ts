@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { HewError } from "../src/core/errors.js";
 import { readEvents } from "../src/core/events.js";
 import { findingsPath, runPaths } from "../src/core/paths.js";
+import { RUN_STATES } from "../src/core/state-machine.js";
 import { computeRevision } from "../src/core/revision.js";
 import { loadRun, saveRun } from "../src/core/run.js";
 import {
@@ -72,7 +73,7 @@ describe("submit: 통과", () => {
   });
 
   it("produced_by 와 cost 는 호출자가 준 값을 그대로 넣는다", () => {
-    const { dir } = makeRun("analyzed");
+    const { dir } = makeRun("vetted");
     const file = writeItemsFile(dir, "in.json", { s: 1 });
     const producedBy = { role: "qa-designer", model: "m", effort: "high", role_sha: "abc", session_id: "s" };
     const cost = { usd: 0.5, duration_ms: 1000 };
@@ -85,6 +86,7 @@ describe("submit: 통과", () => {
   it("두 번째 제출의 input_revision 은 첫 제출 뒤 revision 이다", () => {
     const { dir } = makeRun("collected");
     submitArtifact({ runDir: dir, kind: "analysis", file: writeItemsFile(dir, "a.json", { a: 1 }) });
+    saveRun(dir, { ...loadRun(dir), state: "vetted" });
     const after = loadRun(dir).revision;
     submitArtifact({ runDir: dir, kind: "scenarios", file: writeItemsFile(dir, "s.json", { s: 1 }) });
     expect(JSON.parse(readFileSync(runPaths(dir).scenarios, "utf8")).input_revision).toBe(after);
@@ -93,6 +95,7 @@ describe("submit: 통과", () => {
   it("재제출하면 attempt 가 증가한다(반송 뒤 분석 재제출)", () => {
     const { dir } = makeRun("collected");
     submitArtifact({ runDir: dir, kind: "analysis", file: writeItemsFile(dir, "a.json", { a: 1 }) });
+    saveRun(dir, { ...loadRun(dir), state: "vetted" });
     submitArtifact({ runDir: dir, kind: "scenarios", file: writeItemsFile(dir, "s.json", { s: 1 }) });
     saveRun(dir, { ...loadRun(dir), state: "collected", rework: { analysis: 1, plan: 0 } });
 
@@ -103,12 +106,12 @@ describe("submit: 통과", () => {
   });
 
   it("분석용 findings 는 submitArtifact 로 낼 수 없고 묶음 제출(--batch)을 쓰라고 알린다(종료 2)", () => {
-    const { dir } = makeRun("qa_designed");
+    const { dir } = makeRun("analyzed");
     const clean = writeItemsFile(dir, "f.json", { findings: [{ verdict: "ok" }] });
     const err = fail(() => submitArtifact({ runDir: dir, kind: "findings", for: "analysis", file: clean }));
     expect(err.exitCode).toBe(2);
     expect(err.message).toContain("--batch");
-    expect(loadRun(dir).state).toBe("qa_designed");
+    expect(loadRun(dir).state).toBe("analyzed");
   });
 
   it("분해안 findings 도 submitArtifact 로 낼 수 없고 묶음 제출(--batch)을 쓰라고 알린다(종료 2)", () => {
@@ -150,19 +153,42 @@ describe("submit: 통과", () => {
     expect(result.warnings.map((w) => w.code)).toContain("withdraw_unsupported");
   });
 
-  it("answers_complete 에서 분석·시나리오 재제출은 진행만 기록하고 상태는 그대로다", () => {
-    const { dir } = makeRun("answers_complete");
+  it("answers_complete 에서 분석 재제출은 진행만 기록하고 상태는 그대로다", () => {
+    const { dir } = makeRun("answers_complete", { progress: { analysis: true, scenarios: true, sasu: true } });
     const a = submitArtifact({ runDir: dir, kind: "analysis", file: writeItemsFile(dir, "a.json", { a: 1 }) });
     expect(a.state).toBe("answers_complete");
-    const s = submitArtifact({ runDir: dir, kind: "scenarios", file: writeItemsFile(dir, "s.json", { s: 1 }) });
-    expect(s.state).toBe("answers_complete");
-    expect(loadRun(dir).progress).toEqual({ analysis: true, scenarios: true, sasu: false });
+    expect(loadRun(dir).progress).toEqual({ analysis: true, scenarios: false, sasu: false });
+  });
+
+  it("answers_complete 에서 시나리오 재제출은 사수 재확인 뒤에만 받고, 받으면 열린 항목에 따라 완료한다", () => {
+    const { dir } = makeRun("answers_complete");
+    const file = writeItemsFile(dir, "s.json", { s: 1 });
+    expect(fail(() => submitArtifact({ runDir: dir, kind: "scenarios", file })).exitCode).toBe(4);
+    saveRun(dir, { ...loadRun(dir), progress: { analysis: true, scenarios: false, sasu: false } });
+    expect(fail(() => submitArtifact({ runDir: dir, kind: "scenarios", file })).exitCode).toBe(4);
+    saveRun(dir, { ...loadRun(dir), progress: { analysis: true, scenarios: false, sasu: true } });
+    const s = submitArtifact({ runDir: dir, kind: "scenarios", file });
+    expect(s).toMatchObject({ previous_state: "answers_complete", state: "answers_applied" });
+    expect(loadRun(dir).progress).toEqual({ analysis: false, scenarios: false, sasu: false });
+  });
+
+  it("상태별 수락: analysis 는 collected·answers_complete, scenarios 는 vetted·answers_complete 만 받는다", () => {
+    const accepted = { analysis: ["collected", "answers_complete"], scenarios: ["vetted", "answers_complete"] };
+    for (const kind of ["analysis", "scenarios"] as const) {
+      for (const state of RUN_STATES) {
+        const { dir } = makeRun(state, state === "answers_complete" ? { progress: { analysis: true, scenarios: false, sasu: true } } : {}, `acc-${kind}-${state}`);
+        const run = () => submitArtifact({ runDir: dir, kind, file: writeItemsFile(dir, "x.json", { x: 1 }) });
+        if (accepted[kind].includes(state)) expect(() => run()).not.toThrow();
+        else expect(fail(run).exitCode).toBe(4);
+      }
+    }
   });
 
   it("재제출에서 새 열린 항목이 생기면 run.open 과 정본의 open 에 반영된다(collectOpen 교체)", () => {
     registerKind("analysis", { ...getKindSpec("analysis"), collectOpen: () => ["Q-9"] });
     const { dir } = makeRun("answers_complete");
     submitArtifact({ runDir: dir, kind: "analysis", file: writeItemsFile(dir, "a.json", { a: 1 }) });
+    saveRun(dir, { ...loadRun(dir), progress: { analysis: true, scenarios: false, sasu: true } });
     submitArtifact({ runDir: dir, kind: "scenarios", file: writeItemsFile(dir, "s.json", { s: 1 }) });
     expect(loadRun(dir).open).toBe(1);
     expect(JSON.parse(readFileSync(runPaths(dir).analysis, "utf8")).open).toEqual(["Q-9"]);
@@ -236,14 +262,14 @@ describe("submit: 상태와 인자", () => {
     expect(fail(() => submitArtifact({ runDir: dir, kind: "analysis", file })).exitCode).toBe(4);
   });
 
-  it("qa_designed 에서 분해안용 findings 는 종료 4", () => {
-    const { dir } = makeRun("qa_designed");
+  it("analyzed 에서 분해안용 findings 는 종료 4", () => {
+    const { dir } = makeRun("analyzed");
     const file = writeItemsFile(dir, "x.json", { findings: [] });
     expect(fail(() => submitArtifact({ runDir: dir, kind: "findings", for: "plan", file })).exitCode).toBe(4);
   });
 
   it("findings 에 --for 가 없거나 다른 종류에 --for 가 있으면 종료 2", () => {
-    const { dir } = makeRun("qa_designed");
+    const { dir } = makeRun("analyzed");
     const file = writeItemsFile(dir, "x.json", {});
     expect(fail(() => submitArtifact({ runDir: dir, kind: "findings", file })).exitCode).toBe(2);
     expect(fail(() => submitArtifact({ runDir: dir, kind: "analysis", for: "plan", file })).exitCode).toBe(2);

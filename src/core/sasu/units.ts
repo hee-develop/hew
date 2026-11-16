@@ -16,7 +16,6 @@ import { ANALYSIS_WORK_CODES, type WorkCode } from "../findings/schema.js";
 import { readJsonFile } from "../fsx.js";
 import { hashJson } from "../hash.js";
 import { runPaths } from "../paths.js";
-import { ScenarioItemsSchema, type ScenarioItems } from "../scenarios/schema.js";
 import type { DocLocator, Unit } from "../units/types.js";
 
 /** W2·W3 질문 끝에 덧붙이는, 이미 차이·질문으로 올라간 어긋남은 지적하지 않는다는 안내. */
@@ -67,7 +66,6 @@ const WEB_PLATFORMS = new Set(["web", "mobile_web"]);
 interface Source {
   runDir: string;
   items: AnalysisItems;
-  scenarios: ScenarioItems | null;
   units: Unit[];
   byId: Map<string, Unit>;
   answered: (q: Pick<Question, "id" | "text" | "options">) => boolean;
@@ -82,17 +80,11 @@ function loadSource(runDir: string): Source {
   if (!existsSync(p.analysis)) throw stateError("분석 정본(doc/analysis.json)이 없어 사수 작업 단위를 만들 수 없습니다");
   const analysis = AnalysisItemsSchema.safeParse(readItems(p.analysis));
   if (!analysis.success) throw new HewError("internal", `analysis.json 형식이 올바르지 않습니다: ${analysis.error.issues[0]?.message ?? ""}`);
-  let scenarios: ScenarioItems | null = null;
-  if (existsSync(p.scenarios)) {
-    const parsed = ScenarioItemsSchema.safeParse(readItems(p.scenarios));
-    if (parsed.success) scenarios = parsed.data;
-  }
   const units = existsSync(p.units) ? ((readJsonFile(p.units) as { units?: Unit[] }).units ?? []) : [];
   const answers = loadAnswers(runDir);
   return {
     runDir,
     items: analysis.data,
-    scenarios,
     units,
     byId: new Map(units.map((u) => [u.id, u])),
     answered: (q) => isQuestionAnswered(q, answers),
@@ -121,9 +113,9 @@ const unitText = (src: Source, id: string): { id: string; text: string } => ({ i
 
 const deltaLink = (d: Delta): Record<string, unknown> => ({ id: d.id, kind: d.kind, title: d.title, rows: d.comparison?.rows ?? [] });
 
-/** 요구에 걸린 차이·질문(분석과 시나리오 모두)·가정. */
+/** 요구에 걸린 차이·질문·가정. */
 function requirementLinks(src: Source, id: string): Record<string, unknown> {
-  const questions = [...src.items.questions, ...(src.scenarios?.questions ?? [])];
+  const questions = src.items.questions;
   return {
     deltas: src.items.deltas.filter((d) => d.requirement_ids.includes(id)).map(deltaLink),
     questions: questions.filter((q) => q.affects.includes(id)).map((q) => ({ id: q.id, text: q.text })),
@@ -162,7 +154,7 @@ function w3(src: Source): WorkUnit[] {
         requirements: reqs.map((r) => ({ id: r.id, title: r.title, changes: r.changes.map((c) => c.text) })),
         linked: {
           deltas: src.items.deltas.filter((d) => [...d.prd_evidence, ...d.figma_evidence].some((ev) => ev.unit_id === u.id)).map(deltaLink),
-          questions: [...src.items.questions, ...(src.scenarios?.questions ?? [])]
+          questions: src.items.questions
             .filter((q) => q.rationale.some((ev) => ev.unit_id === u.id))
             .map((q) => ({ id: q.id, text: q.text })),
           requirements: reqs.map((r) => ({ id: r.id, status: r.status })),
@@ -263,15 +255,9 @@ function w8(src: Source): WorkUnit[] {
 }
 
 function w9(src: Source): WorkUnit[] {
-  const questions: Question[] = [...src.items.questions, ...(src.scenarios?.questions ?? [])].filter(
-    (q) => q.origin !== "sasu" && !src.answered(q),
-  );
-  const requirementsOf = (id: string): string[] => {
-    const scenario = src.scenarios?.scenarios.find((s) => s.id === id);
-    return scenario !== undefined ? scenario.requirement_ids : [id];
-  };
+  const questions: Question[] = src.items.questions.filter((q) => q.origin !== "sasu" && !src.answered(q));
   return questions.map((q) => {
-    const reqIds = [...new Set(q.affects.flatMap(requirementsOf))];
+    const reqIds = [...new Set(q.affects)];
     const affects = src.items.requirements
       .filter((r) => reqIds.includes(r.id))
       .map((r) => ({ id: r.id, units: citedUnitIds(r).map((id) => unitText(src, id)) }));

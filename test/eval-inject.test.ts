@@ -299,7 +299,7 @@ describe("복사 규칙과 새 run.json", () => {
     expect(existsSync(runPaths(r.dir).answers)).toBe(false);
   });
 
-  it("새 run.json: shadow, qa_designed, 반송 0, 제출 기록 attempt 1, 원본 입력·저장소 유지, eval 칸, revision·open 다시 계산", () => {
+  it("새 run.json: shadow, analyzed, 반송 0, 제출 기록 attempt 1, 원본 입력·저장소 유지, eval 칸, revision·open 다시 계산", () => {
     const source = setupWithLeftovers();
     const before = loadRun(source);
     const r = injectDefect({ source, kind: "w2_alter", seed: 1 });
@@ -308,7 +308,7 @@ describe("복사 규칙과 새 run.json", () => {
     expect(run).toMatchObject({
       run_id: r.run_id,
       mode: "shadow",
-      state: "qa_designed",
+      state: "analyzed",
       rework: { analysis: 0, plan: 0 },
       open: collectRunOpen(r.dir).length,
       eval: { source_run: before.run_id, kind: "w2_alter", seed: 1 },
@@ -369,19 +369,32 @@ describe("원본 점검", () => {
     return 0;
   };
 
-  it("qa_designed 앞 상태이거나 정본이 없으면 종료 4", () => {
+  it("analyzed 앞 상태이거나 분석 정본이 없으면 종료 4, 시나리오 정본은 없어도 된다", () => {
     const { dir } = setupEvalSource();
     const file = runPaths(dir).runJson;
     const raw = JSON.parse(readFileSync(file, "utf8")) as Record<string, unknown>;
-    writeFileSync(file, JSON.stringify({ ...raw, state: "analyzed" }));
-    expect(exitOf(() => injectDefect({ source: dir, kind: "w3_delete", seed: 1 }))).toBe(4);
-    writeFileSync(file, JSON.stringify({ ...raw, state: "checked" }));
-    expect(exitOf(() => injectDefect({ source: dir, kind: "w3_delete", seed: 1 }))).toBe(0);
-    writeFileSync(file, JSON.stringify({ ...raw, state: "qa_designed" }));
+    for (const state of ["init", "collected"]) {
+      writeFileSync(file, JSON.stringify({ ...raw, state }));
+      expect(exitOf(() => injectDefect({ source: dir, kind: "w3_delete", seed: 1 }))).toBe(4);
+    }
+    for (const state of ["analyzed", "vetted", "checked"]) {
+      writeFileSync(file, JSON.stringify({ ...raw, state }));
+      expect(exitOf(() => injectDefect({ source: dir, kind: "w3_delete", seed: 1, outId: `ok-${state}` }))).toBe(0);
+    }
     rmSync(runPaths(dir).scenarios);
-    expect(exitOf(() => injectDefect({ source: dir, kind: "w3_delete", seed: 2 }))).toBe(4);
+    expect(exitOf(() => injectDefect({ source: dir, kind: "w3_delete", seed: 2 }))).toBe(0);
     rmSync(runPaths(dir).analysis);
     expect(exitOf(() => injectDefect({ source: dir, kind: "w3_delete", seed: 3 }))).toBe(4);
+  });
+
+  it("시나리오 정본이 없는 원본에서는 시나리오를 복사하지 않고 제출 기록도 분석만 둔다", () => {
+    const { dir } = setupEvalSource({ withoutScenarios: true });
+    const r = injectDefect({ source: dir, kind: "w3_delete", seed: 1 });
+    expect(existsSync(runPaths(r.dir).scenarios)).toBe(false);
+    const run = loadRun(r.dir);
+    expect(run.state).toBe("analyzed");
+    expect(Object.keys(run.submissions)).toEqual(["analysis"]);
+    expect(run.revision).toBe(computeRevision(r.dir));
   });
 
   it("종류나 시드가 틀리면 종료 2", () => {

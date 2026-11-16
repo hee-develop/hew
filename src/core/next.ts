@@ -27,22 +27,19 @@ export function nextAction(state: RunState, ctx: NextContext): NextAction {
         purpose: ctx.rework.analysis > 0 ? "rework" : "first",
       };
     case "analyzed":
-      return { action: "spawn", role: "qa-designer", purpose: "first" };
-    case "qa_designed":
       return { action: "sasu", for: "analysis" };
+    case "vetted":
+      return { action: "spawn", role: "qa-designer", purpose: "first" };
     case "checked":
       return { action: "publish_gate", phase: "answer" };
     case "gate_answering":
       return { action: "wait_human", for: "answers" };
     case "answers_complete": {
-      // 시나리오 진행은 남고 분석 진행만 false 이면 사수 반송이다.
       if (!ctx.progress.analysis) {
-        return { action: "spawn", role: "technical-manager", purpose: ctx.progress.scenarios ? "rework" : "apply_answers" };
+        return { action: "spawn", role: "technical-manager", purpose: ctx.rework.analysis > 0 ? "rework" : "apply_answers" };
       }
-      if (!ctx.progress.scenarios) {
-        return { action: "spawn", role: "qa-designer", purpose: "apply_answers" };
-      }
-      return { action: "sasu", for: "analysis" };
+      if (!ctx.progress.sasu) return { action: "sasu", for: "analysis" };
+      return { action: "spawn", role: "qa-designer", purpose: "apply_answers" };
     }
     case "answers_applied":
       return { action: "spawn", role: "ticket-maker", purpose: ctx.rework.plan > 0 ? "rework" : "first" };

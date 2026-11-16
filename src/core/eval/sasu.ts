@@ -87,7 +87,7 @@ export async function runEvalSasu(opts: EvalSasuOptions): Promise<EvalResult> {
   const run = loadRun(runDir);
   const paths = evalPaths(runDir);
   if (run.eval === undefined || !existsSync(paths.injection)) throw usageError(`결함 주입 실행이 아닙니다(run.eval 또는 eval/injection.json 이 없음): ${runDir}`);
-  if (run.state !== "qa_designed") throw stateError(`상태 ${run.state} 에서는 평가용 사수를 돌릴 수 없습니다. qa_designed 여야 합니다`);
+  if (run.state !== "analyzed") throw stateError(`상태 ${run.state} 에서는 평가용 사수를 돌릴 수 없습니다. analyzed 여야 합니다`);
   const injection = readJsonFile(paths.injection) as InjectionFile;
   const expectedCode = splitWorkId(injection.expected)?.code;
   const codes = opts.codes ?? (expectedCode === undefined ? undefined : [expectedCode]);

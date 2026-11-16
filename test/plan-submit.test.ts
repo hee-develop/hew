@@ -81,7 +81,7 @@ describe("plan 제출: answers_applied → planned", () => {
 
   it("answers_applied 가 아니면 종료 4 이고 아무것도 바뀌지 않는다", () => {
     const { dir } = setupAnswersApplied();
-    for (const state of ["collected", "qa_designed", "checked", "gate_answering", "planned", "plan_checked"] as const) {
+    for (const state of ["collected", "vetted", "checked", "gate_answering", "planned", "plan_checked"] as const) {
       saveRun(dir, { ...loadRun(dir), state });
       const before = readFileSync(runPaths(dir).runJson, "utf8");
       expect(fail(() => submitPlan(dir)).exitCode).toBe(4);
@@ -138,6 +138,7 @@ describe("형식 안내 예시(refs/): 분해안", () => {
   function setupExample(): { dir: string } {
     const { dir } = setupRun({ units: exampleUnits() });
     submitArtifact({ runDir: dir, kind: "analysis", file: EXAMPLE_DOC });
+    saveRun(dir, { ...loadRun(dir), state: "vetted" });
     submitArtifact({ runDir: dir, kind: "scenarios", file: EXAMPLE_SCENARIOS });
     writeJson(answersPath(dir), JSON.parse(readFileSync(EXAMPLE_ANSWERS, "utf8")));
     saveRun(dir, { ...loadRun(dir), state: "answers_applied", open: 0 });

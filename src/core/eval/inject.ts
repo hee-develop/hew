@@ -56,7 +56,7 @@ export interface Chosen {
   after: unknown;
 }
 
-const reachedQaDesigned = (run: Run): boolean => RUN_STATES.indexOf(run.state) >= RUN_STATES.indexOf("qa_designed");
+const reachedAnalyzed = (run: Run): boolean => RUN_STATES.indexOf(run.state) >= RUN_STATES.indexOf("analyzed");
 
 function readUnits(file: string): Unit[] {
   return existsSync(file) ? ((readJsonFile(file) as { units?: Unit[] }).units ?? []) : [];
@@ -69,9 +69,8 @@ export function chooseInjection(sourceArg: string, kind: EvalKind, seed: number)
   const sourceDir = resolveRunDir(sourceArg);
   const source = loadRun(sourceDir);
   const p = runPaths(sourceDir);
-  if (!reachedQaDesigned(source)) throw stateError(`원본 실행의 상태가 ${source.state} 입니다. qa_designed 이후여야 합니다`);
+  if (!reachedAnalyzed(source)) throw stateError(`원본 실행의 상태가 ${source.state} 입니다. analyzed 이후여야 합니다`);
   if (!existsSync(p.analysis)) throw stateError("원본 실행에 분석 정본(doc/analysis.json)이 없습니다");
-  if (!existsSync(p.scenarios)) throw stateError("원본 실행에 시나리오 정본(doc/scenarios.json)이 없습니다");
   const parsed = AnalysisItemsSchema.safeParse((readJsonFile(p.analysis) as { items?: unknown }).items);
   if (!parsed.success) throw new HewError("internal", `analysis.json 형식이 올바르지 않습니다: ${parsed.error.issues[0]?.message ?? ""}`);
 
@@ -114,7 +113,8 @@ export function injectDefect(opts: InjectOptions): InjectResult {
   for (const d of [to.packets, to.work, to.findingsDir, to.gateAssets, to.doc, evalPaths(dir).dir]) mkdirSync(d, { recursive: true });
   for (const f of [to.costs, to.mistakes]) writeFileSync(f, "", "utf8");
   cpSync(from.analysis, to.analysis);
-  cpSync(from.scenarios, to.scenarios);
+  const withScenarios = existsSync(from.scenarios);
+  if (withScenarios) cpSync(from.scenarios, to.scenarios);
   if (existsSync(from.answers)) cpSync(from.answers, to.answers);
 
   const stamp = now.toISOString();
@@ -126,7 +126,7 @@ export function injectDefect(opts: InjectOptions): InjectResult {
     case: null,
     ...(source.case_info === undefined ? {} : { case_info: source.case_info }),
     eval: { source_run: source.run_id, kind: opts.kind, seed: opts.seed },
-    state: "qa_designed",
+    state: "analyzed",
     revision: NO_REVISION,
     rework: { analysis: 0, plan: 0 },
     progress: emptyProgress(),
@@ -139,7 +139,7 @@ export function injectDefect(opts: InjectOptions): InjectResult {
   appendEvent(to.events, "eval_injected", { source_run: source.run_id, kind: opts.kind, seed: opts.seed, expected: candidate.expected }, now);
 
   rewriteEnvelope(to.analysis, outId, "analysis", dir, items);
-  rewriteEnvelope(to.scenarios, outId, "scenarios", dir);
+  if (withScenarios) rewriteEnvelope(to.scenarios, outId, "scenarios", dir);
   const checks = runAnalysisChecks(items, { kind: "analysis", for: null, run: base, runDir: dir });
   const checksAfter = [...new Set(checks.filter((i) => i.severity === "reject").map((i) => i.code))];
 
@@ -152,7 +152,7 @@ export function injectDefect(opts: InjectOptions): InjectResult {
       open: collectRunOpen(dir).length,
       submissions: {
         analysis: { attempt: 1, at: stamp, hash: hashJson(stored(to.analysis)) },
-        scenarios: { attempt: 1, at: stamp, hash: hashJson(stored(to.scenarios)) },
+        ...(withScenarios ? { scenarios: { attempt: 1, at: stamp, hash: hashJson(stored(to.scenarios)) } } : {}),
       },
     },
     now,

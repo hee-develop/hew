@@ -11,7 +11,7 @@ const base = { found_stage: "sasu", cause_stage: "analysis", found_by: "sasu", t
 
 describe("실수 기록", () => {
   it("한 줄씩 덧붙이고 id 는 M-n 으로 센다", () => {
-    const { dir } = makeRun("qa_designed");
+    const { dir } = makeRun("analyzed");
     const now = new Date("2026-11-14T00:00:00Z");
     const a = appendMistake(dir, base, now);
     const b = appendMistake(dir, { ...base, type: "visual_missed", target: "화면-1", versions: { role_sha: "abc", model: "m", effort: null }, case: "case-1" }, now);
@@ -23,7 +23,7 @@ describe("실수 기록", () => {
   });
 
   it("열거값(found_by, type)이 틀리면 사용법 오류이고 아무것도 덧붙이지 않는다", () => {
-    const { dir } = makeRun("qa_designed");
+    const { dir } = makeRun("analyzed");
     for (const patch of [{ found_by: "nobody" }, { type: "weird" }]) {
       try {
         appendMistake(dir, { ...base, ...patch });
@@ -36,7 +36,7 @@ describe("실수 기록", () => {
   });
 
   it("빈 단계·대상·근거는 거부한다", () => {
-    const { dir } = makeRun("qa_designed");
+    const { dir } = makeRun("analyzed");
     expect(() => appendMistake(dir, { ...base, target: "" })).toThrow(/target/);
     expect(() => appendMistake(dir, { ...base, evidence: "" })).toThrow(/evidence/);
     expect(() => appendMistake(dir, { ...base, found_stage: "" })).toThrow(/found_stage/);
@@ -48,7 +48,7 @@ describe("실수 기록", () => {
   });
 
   it("기록이 없으면 빈 목록", () => {
-    const { dir } = makeRun("qa_designed");
+    const { dir } = makeRun("analyzed");
     expect(readMistakes(dir)).toEqual([]);
   });
 });

@@ -5,7 +5,10 @@ import { describe, expect, it } from "vitest";
 import { buildPacket, hewBinPath, planPacket } from "../src/core/packet.js";
 import { HEW_ROOT, runPaths } from "../src/core/paths.js";
 import { loadRun, saveRun } from "../src/core/run.js";
-import { makeRun, useTempRunsDir } from "./helpers.js";
+import { submitArtifact } from "../src/core/submit.js";
+import type { Doc } from "./analysis-fixtures.js";
+import { makeRun, useTempRunsDir, writeItemsFile } from "./helpers.js";
+import { buildScenarios, setupVetted } from "./scenarios-fixtures.js";
 import { FAKE_HEKA, tempDir } from "./runner-helpers.js";
 
 const runs = useTempRunsDir();
@@ -59,7 +62,7 @@ describe("패킷: 이번 일·읽을 것·쓰는 곳", () => {
   });
 
   it("qa-designer 패킷은 분석 정본 경로와 시나리오 제출 명령을 싣는다", () => {
-    const { dir } = makeRun("analyzed");
+    const { dir } = makeRun("vetted");
     writeFileSync(runPaths(dir).analysis, "{}");
     const r = buildPacket({ runDir: dir, role: "qa-designer", env: env() });
     const text = read(r.path);
@@ -69,7 +72,7 @@ describe("패킷: 이번 일·읽을 것·쓰는 곳", () => {
   });
 
   it("qa-designer 패킷은 분석 정본과 있으면 OpenAPI 폴더, 형식 안내 세 파일을 읽을 것에 싣고 scenarios 제출 줄을 쓴다", () => {
-    const { dir } = makeRun("analyzed");
+    const { dir } = makeRun("vetted");
     const p = runPaths(dir);
     writeFileSync(p.analysis, "{}");
     mkdirSync(join(p.sources, "openapi"), { recursive: true });
@@ -85,7 +88,7 @@ describe("패킷: 이번 일·읽을 것·쓰는 곳", () => {
   });
 
   it("qa-designer 패킷은 OpenAPI 가 없으면 그 줄을 싣지 않는다", () => {
-    const { dir } = makeRun("analyzed");
+    const { dir } = makeRun("vetted");
     writeFileSync(runPaths(dir).analysis, "{}");
     const text = read(buildPacket({ runDir: dir, role: "qa-designer", env: env() }).path);
     expect(text).not.toContain("환경별 OpenAPI");
@@ -103,9 +106,75 @@ describe("패킷: 이번 일·읽을 것·쓰는 곳", () => {
   });
 
   it("앞 단계 에이전트의 추론을 담는 칸이 없다", () => {
-    const { dir } = makeRun("analyzed");
+    const { dir } = makeRun("vetted");
     const text = read(buildPacket({ runDir: dir, role: "qa-designer", env: env() }).path);
     expect(text).not.toMatch(/추론|보고 내용|reasoning/);
+  });
+});
+
+describe("패킷: qa-designer 의 이전 시나리오 안내와 바뀐 요구 표", () => {
+  /** 분석을 내고 시나리오까지 한 번 낸 실행. 그 뒤 분석을 mutate 로 고쳐 정본에 다시 쓴다. */
+  function setupWithScenarios(): { dir: string } {
+    const { dir } = setupVetted();
+    submitArtifact({ runDir: dir, kind: "scenarios", file: writeItemsFile(dir, "sc-in.json", buildScenarios()) });
+    return { dir };
+  }
+  function mutateAnalysis(dir: string, mutate: (items: Doc) => void): void {
+    const file = runPaths(dir).analysis;
+    const doc = JSON.parse(read(file)) as { items: Doc };
+    mutate(doc.items);
+    writeFileSync(file, JSON.stringify(doc));
+  }
+  const qaText = (dir: string, purpose?: string): string => read(buildPacket({ runDir: dir, role: "qa-designer", purpose, env: env() }).path);
+
+  it("이전 시나리오가 없으면 안내도 표도 싣지 않는다", () => {
+    const { dir } = setupVetted();
+    const text = qaText(dir);
+    expect(text).not.toContain("## 이전 시나리오");
+    expect(text).not.toContain(runPaths(dir).scenarios);
+  });
+
+  it("이전 시나리오가 있으면 목적이 first 이든 apply_answers 이든 안내와 경로를 싣는다", () => {
+    const { dir } = setupWithScenarios();
+    for (const purpose of ["first", "apply_answers"]) {
+      const text = qaText(dir, purpose);
+      expect(text).toContain("## 이전 시나리오");
+      expect(text).toContain("분석이 바뀐 부분에 걸린 시나리오만 고치고 나머지는 id 와 내용을 유지해 다시 제출한다");
+      const readSection = text.split("## 읽을 것")[1]!.split("## ")[0]!;
+      expect(readSection).toContain(`\`${runPaths(dir).scenarios}\``);
+    }
+  });
+
+  it("분석이 그대로이면 바뀐 요구가 없다고 적는다", () => {
+    const { dir } = setupWithScenarios();
+    const text = qaText(dir);
+    expect(text).toContain("바뀐 요구가 없다");
+    expect(text).not.toContain("| 요구 id | 변화 |");
+  });
+
+  it("요구가 바뀜·추가·삭제되면 id 순으로 표에 싣는다", () => {
+    const { dir } = setupWithScenarios();
+    mutateAnalysis(dir, (items) => {
+      const reqs = items.requirements as Doc[];
+      reqs[0]!.title = "바뀐 제목";
+      reqs.push({ ...JSON.parse(JSON.stringify(reqs[1]!)), id: "요구-9", title: "새 요구" });
+      items.requirements = reqs.filter((r) => r.id !== "요구-2");
+    });
+    const text = qaText(dir);
+    const table = text.split("| 요구 id | 변화 |")[1]!.split("\n\n")[0]!;
+    expect(table.trim().split("\n")).toEqual(["|---|---|", "| 요구-1 | 바뀜 |", "| 요구-2 | 삭제 |", "| 요구-9 | 추가 |"]);
+  });
+
+  it("basis 가 없는 옛 시나리오 정본이면 바뀐 요구를 알 수 없다고 적고 모든 요구를 대조하라고 한다", () => {
+    const { dir } = setupWithScenarios();
+    const file = runPaths(dir).scenarios;
+    const doc = JSON.parse(read(file)) as Record<string, unknown>;
+    delete doc.basis;
+    writeFileSync(file, JSON.stringify(doc));
+    const text = qaText(dir);
+    expect(text).toContain("basis");
+    expect(text).toContain("모든 요구를 이전 시나리오와 대조한다");
+    expect(text).not.toContain("| 요구 id | 변화 |");
   });
 });
 

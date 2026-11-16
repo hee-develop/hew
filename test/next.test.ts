@@ -8,8 +8,8 @@ describe("next: 상태별로 전이 표의 마지막 열과 맞는다", () => {
   const cases: [RunState, NextAction][] = [
     ["init", { action: "spawn", role: "collector", purpose: "first" }],
     ["collected", { action: "spawn", role: "technical-manager", purpose: "first" }],
-    ["analyzed", { action: "spawn", role: "qa-designer", purpose: "first" }],
-    ["qa_designed", { action: "sasu", for: "analysis" }],
+    ["analyzed", { action: "sasu", for: "analysis" }],
+    ["vetted", { action: "spawn", role: "qa-designer", purpose: "first" }],
     ["checked", { action: "publish_gate", phase: "answer" }],
     ["gate_answering", { action: "wait_human", for: "answers" }],
     ["answers_applied", { action: "spawn", role: "ticket-maker", purpose: "first" }],
@@ -38,16 +38,16 @@ describe("next: 상태별로 전이 표의 마지막 열과 맞는다", () => {
     });
   });
 
-  it("answers_complete 는 진행에 따라 매니저, QA 설계, 사수 순서로 알려 준다", () => {
+  it("answers_complete 는 진행에 따라 매니저, 사수, QA 설계 순서로 알려 준다", () => {
     const step = (progress: { analysis: boolean; scenarios: boolean; sasu: boolean }) =>
       nextAction("answers_complete", { ...base, progress });
     expect(step({ analysis: false, scenarios: false, sasu: false })).toEqual({ action: "spawn", role: "technical-manager", purpose: "apply_answers" });
-    expect(step({ analysis: true, scenarios: false, sasu: false })).toEqual({ action: "spawn", role: "qa-designer", purpose: "apply_answers" });
-    expect(step({ analysis: true, scenarios: true, sasu: false })).toEqual({ action: "sasu", for: "analysis" });
+    expect(step({ analysis: true, scenarios: false, sasu: false })).toEqual({ action: "sasu", for: "analysis" });
+    expect(step({ analysis: true, scenarios: false, sasu: true })).toEqual({ action: "spawn", role: "qa-designer", purpose: "apply_answers" });
   });
 
-  it("answers_complete 에서 분석 진행만 false 이고 시나리오 진행이 남아 있으면 사수 반송이라 technical-manager 를 rework 로 띄운다", () => {
-    expect(nextAction("answers_complete", { ...base, progress: { analysis: false, scenarios: true, sasu: false } })).toEqual({
+  it("answers_complete 에서 분석 진행이 false 이고 이번 구간의 반송 회차가 있으면 technical-manager 를 rework 로 띄운다", () => {
+    expect(nextAction("answers_complete", { rework: { analysis: 1, plan: 0 }, progress: emptyProgress() })).toEqual({
       action: "spawn",
       role: "technical-manager",
       purpose: "rework",

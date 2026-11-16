@@ -7,7 +7,7 @@ import { runPaths } from "../src/core/paths.js";
 import { loadRun } from "../src/core/run.js";
 import { loadPlan } from "../src/core/sasu/store.js";
 import { makeRun, useTempRunsDir } from "./helpers.js";
-import { setupQaDesigned, writeFindingsFile } from "./sasu-fixtures.js";
+import { setupAnalyzed, writeFindingsFile } from "./sasu-fixtures.js";
 import { createPlan } from "../src/core/sasu/plan.js";
 
 const runs = useTempRunsDir();
@@ -17,20 +17,20 @@ const parse = (stdout: string) => JSON.parse(stdout) as { ok: boolean; data: any
 
 describe("hew sasu plan", () => {
   it("계획을 만들고 요약을 낸다. 다시 부르면 이미 있다고 알린다", () => {
-    const { dir } = setupQaDesigned();
+    const { dir } = setupAnalyzed();
     const run = loadRun(dir).run_id;
     const r = hew(["--json", "sasu", "plan", "--run", run, "--for", "analysis"]);
     expect(r.status).toBe(0);
     const body = parse(r.stdout);
     expect(body.data).toMatchObject({ created: true, completed: null });
     expect(body.data.plan.batches).toHaveLength(6);
-    expect(loadPlan(dir, 1)?.units).toHaveLength(17);
+    expect(loadPlan(dir, 1)?.units).toHaveLength(16);
     const text = hew(["sasu", "plan", "--run", run, "--for", "analysis"]);
     expect(text.stdout).toContain("이미 만들어 둔 사수 계획");
   });
 
   it("--for plan 은 분해안 차례가 아니면 종료 4, 알 수 없는 값은 종료 2", () => {
-    const { dir } = setupQaDesigned();
+    const { dir } = setupAnalyzed();
     const run = loadRun(dir).run_id;
     expect(hew(["--json", "sasu", "plan", "--run", run, "--for", "plan"]).status).toBe(4);
     expect(hew(["--json", "sasu", "plan", "--run", run, "--for", "x"]).status).toBe(2);
@@ -45,7 +45,7 @@ describe("hew sasu plan", () => {
 
 describe("hew submit findings --batch", () => {
   it("묶음을 내면 종료 0, 마지막 묶음에서 회차가 완료되어 상태가 바뀐다", () => {
-    const { dir } = setupQaDesigned();
+    const { dir } = setupAnalyzed();
     const run = loadRun(dir).run_id;
     const plan = createPlan(dir, "analysis").plan;
     let last = parse("{}" as string);
@@ -56,13 +56,13 @@ describe("hew submit findings --batch", () => {
       last = parse(r.stdout);
       expect(last.data).toMatchObject({ kind: "findings", for: "analysis", round: 1, batch: b.k });
     }
-    expect(last.data).toMatchObject({ previous_state: "qa_designed", state: "checked" });
+    expect(last.data).toMatchObject({ previous_state: "analyzed", state: "vetted" });
     expect(last.data.completed).toMatchObject({ round: 1, blocking: 0 });
-    expect(loadRun(dir).state).toBe("checked");
+    expect(loadRun(dir).state).toBe("vetted");
   });
 
   it("--batch 없이는 종료 2, 같은 묶음을 다시 내면 종료 3, 분석용이 아닌 곳의 --batch 도 종료 2", () => {
-    const { dir } = setupQaDesigned();
+    const { dir } = setupAnalyzed();
     const run = loadRun(dir).run_id;
     const plan = createPlan(dir, "analysis").plan;
     const file = writeFindingsFile(dir, plan, 1);
@@ -76,7 +76,7 @@ describe("hew submit findings --batch", () => {
   });
 
   it("근거가 맞지 않는 issue 는 경고를 내고 종료 0", () => {
-    const { dir } = setupQaDesigned();
+    const { dir } = setupAnalyzed();
     const run = loadRun(dir).run_id;
     const plan = createPlan(dir, "analysis").plan;
     const file = writeFindingsFile(dir, plan, 1, { "W2:요구-1": { verdict: "issue", kind: "unsupported", claim: "c", evidence: { quote: "없는 문장" }, action: "fix" } });

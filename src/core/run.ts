@@ -84,11 +84,12 @@ export const RunSchema = z.object({
 
 export type Run = z.infer<typeof RunSchema>;
 
-/** run.json 을 읽어 검증한다. 없으면 사용법 오류, 형식이 틀리면 내부 오류. */
+/** run.json 을 읽어 검증한다(옛 상태 qa_designed 는 analyzed 로 읽는다). 없으면 사용법 오류, 형식이 틀리면 내부 오류. */
 export function loadRun(runDir: string): Run {
   const { runJson } = runPaths(runDir);
   if (!existsSync(runJson)) throw usageError(`실행 폴더에 run.json 이 없습니다: ${runDir}`);
-  const parsed = RunSchema.safeParse(readJsonFile(runJson));
+  const raw = readJsonFile(runJson) as Record<string, unknown> | null;
+  const parsed = RunSchema.safeParse(raw?.state === "qa_designed" ? { ...raw, state: "analyzed" } : raw);
   if (!parsed.success) {
     throw new HewError("internal", `run.json 형식이 올바르지 않습니다: ${parsed.error.issues[0]?.message ?? ""}`);
   }

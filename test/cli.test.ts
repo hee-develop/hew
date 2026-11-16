@@ -6,7 +6,7 @@ import { runPaths } from "../src/core/paths.js";
 import { loadRun } from "../src/core/run.js";
 import { PRD_URL, makeRun, useTempRunsDir, writeItemsFile } from "./helpers.js";
 import { buildPlan, setupAnswersApplied } from "./plan-fixtures.js";
-import { buildScenarios, setupAnalyzed } from "./scenarios-fixtures.js";
+import { buildScenarios, setupVetted } from "./scenarios-fixtures.js";
 
 const runs = useTempRunsDir();
 const BIN = join(import.meta.dirname, "..", "bin", "hew");
@@ -76,15 +76,15 @@ describe("CLI 계약(자식 프로세스)", () => {
   });
 
   it("submit 통과는 종료 0, 상태에 맞지 않으면 종료 4", () => {
-    const { dir } = setupAnalyzed({ runId: "sub-1" });
+    const { dir } = setupVetted({ runId: "sub-1" });
     const file = writeItemsFile(dir, "in.json", buildScenarios());
     const ok = hew(["--json", "submit", "scenarios", "--run", "sub-1", "--file", file]);
     expect(ok.code).toBe(0);
-    expect(parse(ok.stdout).data).toMatchObject({ kind: "scenarios", attempt: 1, previous_state: "analyzed", state: "qa_designed" });
+    expect(parse(ok.stdout).data).toMatchObject({ kind: "scenarios", attempt: 1, previous_state: "vetted", state: "checked" });
     const bad = hew(["--json", "submit", "scenarios", "--run", "sub-1", "--file", file]);
     expect(bad.code).toBe(4);
     expect(parse(bad.stdout).errors[0].code).toBe("state");
-    expect(loadRun(dir).state).toBe("qa_designed");
+    expect(loadRun(dir).state).toBe("checked");
   });
 
   it("submit 의 잘못된 JSON 은 종료 3", () => {
@@ -109,7 +109,7 @@ describe("CLI 계약(자식 프로세스)", () => {
   });
 
   it("submit findings 에 --for 가 없으면 종료 2", () => {
-    const { dir } = makeRun("qa_designed", {}, "sub-5");
+    const { dir } = makeRun("analyzed", {}, "sub-5");
     const file = writeItemsFile(dir, "f.json", { findings: [] });
     expect(hew(["--json", "submit", "findings", "--run", "sub-5", "--file", file]).code).toBe(2);
   });

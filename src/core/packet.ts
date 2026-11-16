@@ -10,6 +10,7 @@ import { groupDuplicateFindings } from "./findings/group.js";
 import { readJsonFile } from "./fsx.js";
 import { HEW_ROOT, findingsPath, resolveRunDir, runPaths } from "./paths.js";
 import { loadAnswers } from "./analysis/answers.js";
+import { currentBasis, diffBasis, type Basis } from "./basis.js";
 import { nextAction } from "./next.js";
 import { loadRun, type Run } from "./run.js";
 import { isRoleName, roleConfig, type RoleName } from "./roles.js";
@@ -271,6 +272,31 @@ function answerRows(file: string): unknown[][] {
   return rows;
 }
 
+/** 이전 시나리오 정본을 싣는 절: 고치는 방식과, 지난 제출 뒤 바뀐 요구 표. */
+function previousScenariosSection(runDir: string): string[] {
+  const p = runPaths(runDir);
+  const lines = [
+    "## 이전 시나리오",
+    "",
+    `이전 시나리오가 있다(\`${p.scenarios}\`). 분석이 바뀐 부분에 걸린 시나리오만 고치고 나머지는 id 와 내용을 유지해 다시 제출한다.`,
+    "",
+  ];
+  const stored = (readJsonFile(p.scenarios) as { basis?: unknown } | null)?.basis;
+  const previous: Basis | null = stored !== null && typeof stored === "object" ? (stored as Basis) : null;
+  const now = currentBasis(runDir);
+  if (previous === null || now === null) {
+    lines.push("지난 제출 시점의 분석 기록(basis)이 없어 바뀐 요구를 알 수 없다. 분석의 모든 요구를 이전 시나리오와 대조한다.", "");
+    return lines;
+  }
+  const changes = diffBasis(previous, now);
+  if (changes.length === 0) {
+    lines.push("지난 시나리오 제출 이후 바뀐 요구가 없다.", "");
+    return lines;
+  }
+  lines.push("지난 시나리오 제출 이후 바뀐 요구:", "", ...table(["요구 id", "변화"], changes.map((c) => [c.id, c.change])), "");
+  return lines;
+}
+
 /** 사람이 낸 분해안 수정 요청이 있는가. */
 function hasPlanRequests(runDir: string): boolean {
   return loadAnswers(runDir).plan_requests.length > 0;
@@ -301,7 +327,7 @@ function readList(runDir: string, role: RoleName, purpose: Purpose, run: Run, re
   if (role === "qa-designer" || role === "ticket-maker") prior.push([p.analysis, "분석 정본", "analysis"]);
   if (role === "ticket-maker") prior.push([p.scenarios, "시나리오 정본", "scenarios"], [p.answers, "사람의 답과 결정(차이 결정, 수정 요청 포함)", "answers"]);
   if (role === "technical-manager" && purpose !== "first") prior.push([p.analysis, "지금의 분석 정본(고칠 대상)", "analysis"]);
-  if (role === "qa-designer" && purpose === "apply_answers") prior.push([p.scenarios, "지금의 시나리오 정본(고칠 대상)", "scenarios"]);
+  if (role === "qa-designer") prior.push([p.scenarios, "이전 시나리오 정본(분석이 바뀐 부분만 고칠 대상)", "scenarios"]);
   if (role === "ticket-maker" && (purpose === "rework" || hasPlanRequests(runDir))) prior.push([p.plan, "지금의 분해안 정본(고칠 대상)", "plan"]);
   for (const [path, note] of prior) if (existsSync(path)) add(path, note);
   for (const ref of refs) add(join(HEW_ROOT, ref), ref.startsWith("rules/") ? "분해 규칙" : "형식 안내");
@@ -506,6 +532,8 @@ export function renderPacket(opts: PacketOptions & { plan: PacketPlan }): { text
       lines.push("답 파일이 아직 없습니다.", "");
     }
   }
+
+  if (role === "qa-designer" && existsSync(p.scenarios)) lines.push(...previousScenariosSection(opts.runDir));
 
   lines.push("## 따를 규칙", "", ...rulesSection(config.heka, run, env, warnings));
 

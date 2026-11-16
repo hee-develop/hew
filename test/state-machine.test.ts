@@ -1,5 +1,9 @@
+import { readFileSync, writeFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { HewError } from "../src/core/errors.js";
+import { nextAction } from "../src/core/next.js";
+import { runPaths } from "../src/core/paths.js";
+import { loadRun } from "../src/core/run.js";
 import {
   RUN_STATES,
   emptyProgress,
@@ -8,6 +12,7 @@ import {
   type TransitionContext,
   type TransitionEvent,
 } from "../src/core/state-machine.js";
+import { makeRun, useTempRunsDir } from "./helpers.js";
 
 const ctx = (patch: Partial<TransitionContext> = {}): TransitionContext => ({
   rework: { analysis: 0, plan: 0 },
@@ -38,25 +43,25 @@ describe("전이 표의 각 줄", () => {
     expect(r).toMatchObject({ state: "analyzed", row: 2, changes: { open: 3 } });
   });
 
-  it("3줄: analyzed + scenarios 제출 통과 -> qa_designed", () => {
-    expect(transition("analyzed", { type: "scenarios_accepted", open: 4 }, ctx())).toMatchObject({ state: "qa_designed", row: 3, changes: { open: 4 } });
+  it("3줄: analyzed + 분석 findings, 차단 0건 -> vetted", () => {
+    const r = transition("analyzed", { type: "findings_complete", for: "analysis", blocking: 0 }, ctx());
+    expect(r).toMatchObject({ state: "vetted", row: 3 });
   });
 
-  it("4줄: qa_designed + 분석 findings, 차단 0건 -> checked", () => {
-    const r = transition("qa_designed", { type: "findings_complete", for: "analysis", blocking: 0 }, ctx());
-    expect(r).toMatchObject({ state: "checked", row: 4 });
+  it("3줄: 차단이 있어도 반송 2회를 채웠으면 vetted", () => {
+    const r = transition("analyzed", { type: "findings_complete", for: "analysis", blocking: 3 }, ctx({ rework: { analysis: 2, plan: 0 } }));
+    expect(r).toMatchObject({ state: "vetted", row: 3 });
   });
 
-  it("4줄: 차단이 있어도 반송 2회를 채웠으면 checked", () => {
-    const r = transition("qa_designed", { type: "findings_complete", for: "analysis", blocking: 3 }, ctx({ rework: { analysis: 2, plan: 0 } }));
-    expect(r).toMatchObject({ state: "checked", row: 4 });
-  });
-
-  it("5줄: qa_designed + 차단 있고 반송 2회 미만 -> collected(분석 반송 +1)", () => {
-    const first = transition("qa_designed", { type: "findings_complete", for: "analysis", blocking: 1 }, ctx());
-    expect(first).toMatchObject({ state: "collected", row: 5, changes: { rework: { analysis: 1, plan: 0 } } });
-    const second = transition("qa_designed", { type: "findings_complete", for: "analysis", blocking: 1 }, ctx({ rework: { analysis: 1, plan: 0 } }));
+  it("4줄: analyzed + 차단 있고 반송 2회 미만 -> collected(분석 반송 +1)", () => {
+    const first = transition("analyzed", { type: "findings_complete", for: "analysis", blocking: 1 }, ctx());
+    expect(first).toMatchObject({ state: "collected", row: 4, changes: { rework: { analysis: 1, plan: 0 } } });
+    const second = transition("analyzed", { type: "findings_complete", for: "analysis", blocking: 1 }, ctx({ rework: { analysis: 1, plan: 0 } }));
     expect(second).toMatchObject({ state: "collected", changes: { rework: { analysis: 2, plan: 0 } } });
+  });
+
+  it("5줄: vetted + scenarios 제출 통과 -> checked", () => {
+    expect(transition("vetted", { type: "scenarios_accepted", open: 4 }, ctx())).toMatchObject({ state: "checked", row: 5, changes: { open: 4 } });
   });
 
   it("6줄: checked + 게이트(답변) 게시 -> gate_answering", () => {
@@ -69,81 +74,85 @@ describe("전이 표의 각 줄", () => {
     expect(r).toMatchObject({ state: "answers_complete", row: 7, changes: { open: 0, progress: emptyProgress() } });
   });
 
+  it("7줄: answers_complete 로 들어오면 분석 반송 회차를 0 으로 되돌린다(분해안 회차는 그대로)", () => {
+    const r = transition("gate_answering", { type: "answers_imported", open: 0 }, ctx({ rework: { analysis: 2, plan: 1 } }));
+    expect(r.changes.rework).toEqual({ analysis: 0, plan: 1 });
+  });
+
   it("8줄: gate_answering + 답 들여옴, 열린 항목이 남음 -> gate_answering", () => {
     const r = transition("gate_answering", { type: "answers_imported", open: 2 }, ctx({ open: 4 }));
     expect(r).toMatchObject({ state: "gate_answering", row: 8, changes: { open: 2 } });
   });
 
-  describe("9·10줄: answers_complete 의 진행과 완료", () => {
-    const done = { analysis: true, scenarios: true, sasu: false };
+  describe("9·10줄: answers_complete 의 진행(분석 -> 사수 -> 시나리오)과 완료", () => {
+    const analyzed = { analysis: true, scenarios: false, sasu: false };
+    const vetted = { analysis: true, scenarios: false, sasu: true };
 
-    it("분석 재제출만으로는 상태가 그대로이고 진행만 기록한다", () => {
-      const r = transition("answers_complete", { type: "analysis_accepted", open: 0 }, ctx());
-      expect(r.state).toBe("answers_complete");
-      expect(r.row).toBeNull();
-      expect(r.changes.progress).toEqual({ analysis: true, scenarios: false, sasu: false });
+    it("분석 재제출은 상태가 그대로이고 분석만 true 로 기록한다", () => {
+      const r = transition("answers_complete", { type: "analysis_accepted", open: 2 }, ctx());
+      expect(r).toEqual({ state: "answers_complete", row: null, changes: { progress: analyzed, open: 2 } });
     });
 
-    it("시나리오 재제출만으로는 상태가 그대로", () => {
-      const r = transition("answers_complete", { type: "scenarios_accepted", open: 0 }, ctx());
-      expect(r.changes.progress).toEqual({ analysis: false, scenarios: true, sasu: false });
+    it("분석을 다시 내면 사수·시나리오 진행이 모두 false 로 돌아간다", () => {
+      const r = transition("answers_complete", { type: "analysis_accepted", open: 0 }, ctx({ progress: { analysis: true, scenarios: true, sasu: true } }));
+      expect(r.changes.progress).toEqual(analyzed);
     });
 
-    it("시나리오 재제출이 싣는 열린 항목 수가 run 의 열린 항목이 되고 완료 판정에 쓰인다", () => {
-      const r = transition("answers_complete", { type: "scenarios_accepted", open: 1 }, ctx({ progress: { analysis: true, scenarios: false, sasu: false } }));
-      expect(r.changes.open).toBe(1);
-      const done = transition("answers_complete", { type: "findings_complete", for: "analysis", blocking: 0 }, ctx({ progress: { analysis: true, scenarios: true, sasu: false }, open: r.changes.open ?? 0 }));
-      expect(done).toMatchObject({ state: "checked", row: 10 });
+    it("사수 완료(차단 0)는 sasu 를 true 로 기록한다", () => {
+      const r = transition("answers_complete", { type: "findings_complete", for: "analysis", blocking: 0 }, ctx({ progress: analyzed, open: 2 }));
+      expect(r).toEqual({ state: "answers_complete", row: null, changes: { progress: vetted, open: 2 } });
     });
 
-    it("9줄: 셋이 모두 끝나고 열린 항목 0 -> answers_applied(진행 초기화)", () => {
-      const r = transition("answers_complete", { type: "findings_complete", for: "analysis", blocking: 0 }, ctx({ progress: done }));
-      expect(r).toMatchObject({ state: "answers_applied", row: 9, changes: { progress: emptyProgress(), open: 0 } });
+    it("사수 완료: 차단이 있어도 반송 상한(2회)이면 sasu 를 true 로 기록한다", () => {
+      const r = transition("answers_complete", { type: "findings_complete", for: "analysis", blocking: 3 }, ctx({ progress: analyzed, rework: { analysis: 2, plan: 0 }, open: 5 }));
+      expect(r).toEqual({ state: "answers_complete", row: null, changes: { progress: vetted, open: 5 } });
     });
 
-    it("10줄: 셋이 끝났는데 새 질문이 생겨 열린 항목이 있음 -> checked", () => {
-      const r = transition("answers_complete", { type: "findings_complete", for: "analysis", blocking: 0 }, ctx({ progress: done, open: 2 }));
-      expect(r).toMatchObject({ state: "checked", row: 10, changes: { progress: emptyProgress(), open: 2 } });
-    });
-
-    it("18줄: 차단 지적이 있고 반송이 상한 미만 -> answers_complete 그대로, 반송 +1, 분석·사수 진행만 false", () => {
-      const r = transition("answers_complete", { type: "findings_complete", for: "analysis", blocking: 2 }, ctx({ progress: done, rework: { analysis: 1, plan: 1 }, open: 3 }));
+    it("사수 반송: 차단이 있고 상한 미만이면 상태 그대로, 반송 +1, 분석·사수 진행 false", () => {
+      const r = transition("answers_complete", { type: "findings_complete", for: "analysis", blocking: 2 }, ctx({ progress: analyzed, rework: { analysis: 1, plan: 1 }, open: 3 }));
       expect(r).toEqual({
         state: "answers_complete",
-        row: 18,
-        changes: { rework: { analysis: 2, plan: 1 }, progress: { analysis: false, scenarios: true, sasu: false }, open: 3 },
+        row: null,
+        changes: { rework: { analysis: 2, plan: 1 }, progress: emptyProgress(), open: 3 },
       });
     });
 
-    it("18줄: 반송이 0회여도 차단 1건이면 반송 1회가 된다", () => {
-      const r = transition("answers_complete", { type: "findings_complete", for: "analysis", blocking: 1 }, ctx({ progress: done }));
-      expect(r).toMatchObject({ state: "answers_complete", row: 18, changes: { rework: { analysis: 1, plan: 0 } } });
+    it("사수 반송: 반송이 0회여도 차단 1건이면 반송 1회가 된다", () => {
+      const r = transition("answers_complete", { type: "findings_complete", for: "analysis", blocking: 1 }, ctx({ progress: analyzed }));
+      expect(r.changes.rework).toEqual({ analysis: 1, plan: 0 });
+      expect(r.changes.progress).toEqual(emptyProgress());
     });
 
-    it("9줄: 차단이 있어도 반송 상한(2회)을 채웠고 열린 항목이 없으면 answers_applied", () => {
-      const r = transition("answers_complete", { type: "findings_complete", for: "analysis", blocking: 3 }, ctx({ progress: done, rework: { analysis: 2, plan: 0 } }));
-      expect(r).toMatchObject({ state: "answers_applied", row: 9, changes: { progress: emptyProgress(), open: 0 } });
-    });
-
-    it("10줄: 차단이 있고 상한을 채웠으면 열린 항목이 있으므로 checked", () => {
-      const r = transition("answers_complete", { type: "findings_complete", for: "analysis", blocking: 3 }, ctx({ progress: done, rework: { analysis: 2, plan: 0 }, open: 2 }));
-      expect(r).toMatchObject({ state: "checked", row: 10, changes: { progress: emptyProgress(), open: 2 } });
-    });
-
-    it("18줄 뒤 분석을 다시 내면 사수 재확인 차례(시나리오 진행은 유지)", () => {
-      const back = transition("answers_complete", { type: "findings_complete", for: "analysis", blocking: 1 }, ctx({ progress: done }));
+    it("반송 뒤 분석을 다시 내면 사수 차례가 된다", () => {
+      const back = transition("answers_complete", { type: "findings_complete", for: "analysis", blocking: 1 }, ctx({ progress: analyzed }));
       const r = transition("answers_complete", { type: "analysis_accepted", open: 1 }, ctx({ progress: back.changes.progress ?? emptyProgress(), rework: back.changes.rework ?? { analysis: 0, plan: 0 } }));
-      expect(r.changes.progress).toEqual({ analysis: true, scenarios: true, sasu: false });
+      expect(r.changes.progress).toEqual(analyzed);
     });
 
-    it("분석을 다시 내면 사수 재확인을 다시 해야 한다", () => {
-      const r = transition("answers_complete", { type: "analysis_accepted", open: 0 }, ctx({ progress: { analysis: true, scenarios: true, sasu: true } }));
-      expect(r.changes.progress?.sasu).toBe(false);
+    it("9줄: 사수까지 끝나고 시나리오 재제출 통과, 열린 항목 0 -> answers_applied(진행 초기화)", () => {
+      const r = transition("answers_complete", { type: "scenarios_accepted", open: 0 }, ctx({ progress: vetted }));
+      expect(r).toEqual({ state: "answers_applied", row: 9, changes: { progress: emptyProgress(), open: 0 } });
     });
 
-    it("분석·시나리오가 끝나기 전의 사수 재확인은 종료 4", () => {
-      const fn = () => transition("answers_complete", { type: "findings_complete", for: "analysis", blocking: 0 }, ctx({ progress: { analysis: true, scenarios: false, sasu: false } }));
-      expect(exitCodeOf(fn)).toBe(4);
+    it("10줄: 시나리오 재제출 뒤 새 질문으로 열린 항목이 있음 -> checked", () => {
+      const r = transition("answers_complete", { type: "scenarios_accepted", open: 2 }, ctx({ progress: vetted }));
+      expect(r).toEqual({ state: "checked", row: 10, changes: { progress: emptyProgress(), open: 2 } });
+    });
+
+    it("순서 위반: 분석 전의 사수 완료는 종료 4", () => {
+      for (const progress of [emptyProgress()]) {
+        expect(exitCodeOf(() => transition("answers_complete", { type: "findings_complete", for: "analysis", blocking: 0 }, ctx({ progress })))).toBe(4);
+      }
+    });
+
+    it("순서 위반: 사수 전의 시나리오 제출은 종료 4(분석만 끝난 경우, 아무것도 안 끝난 경우)", () => {
+      for (const progress of [emptyProgress(), analyzed]) {
+        expect(exitCodeOf(() => transition("answers_complete", { type: "scenarios_accepted", open: 0 }, ctx({ progress })))).toBe(4);
+      }
+    });
+
+    it("순서 위반: 반송 직후(분석 진행 false)의 시나리오 제출은 종료 4", () => {
+      expect(exitCodeOf(() => transition("answers_complete", { type: "scenarios_accepted", open: 0 }, ctx({ rework: { analysis: 1, plan: 0 } })))).toBe(4);
     });
   });
 
@@ -214,8 +223,8 @@ const ALL_EVENTS: TransitionEvent[] = [
 const VALID: Record<RunState, (e: TransitionEvent) => boolean> = {
   init: (e) => e.type === "sources_complete",
   collected: (e) => e.type === "analysis_accepted",
-  analyzed: (e) => e.type === "scenarios_accepted",
-  qa_designed: (e) => e.type === "findings_complete" && e.for === "analysis",
+  analyzed: (e) => e.type === "findings_complete" && e.for === "analysis",
+  vetted: (e) => e.type === "scenarios_accepted",
   checked: (e) => e.type === "gate_published" && e.phase === "answer",
   gate_answering: (e) => e.type === "answers_imported",
   answers_complete: (e) =>
@@ -228,7 +237,7 @@ const VALID: Record<RunState, (e: TransitionEvent) => boolean> = {
 };
 
 describe("표에 없는 조합은 종료 4", () => {
-  const ready = ctx({ progress: { analysis: true, scenarios: true, sasu: false } });
+  const ready = ctx({ progress: { analysis: true, scenarios: false, sasu: true } });
   for (const state of RUN_STATES) {
     for (const event of ALL_EVENTS) {
       if (VALID[state](event)) continue;
@@ -254,8 +263,31 @@ describe("순수성", () => {
   it("ctx 를 바꾸지 않는다", () => {
     const c = ctx({ rework: { analysis: 0, plan: 0 } });
     const snapshot = JSON.stringify(c);
-    transition("qa_designed", { type: "findings_complete", for: "analysis", blocking: 1 }, c);
+    transition("analyzed", { type: "findings_complete", for: "analysis", blocking: 1 }, c);
     transition("answers_complete", { type: "analysis_accepted", open: 1 }, c);
     expect(JSON.stringify(c)).toBe(snapshot);
+  });
+});
+
+describe("옛 상태 호환", () => {
+  useTempRunsDir();
+
+  it("run.json 의 옛 상태 qa_designed 는 analyzed 로 읽는다(시나리오 정본이 있어도 사수부터 다시)", () => {
+    const { dir } = makeRun("checked");
+    const file = runPaths(dir).runJson;
+    const raw = JSON.parse(readFileSync(file, "utf8")) as Record<string, unknown>;
+    writeFileSync(file, JSON.stringify({ ...raw, state: "qa_designed" }));
+    writeFileSync(runPaths(dir).scenarios, JSON.stringify({ items: {} }));
+    const run = loadRun(dir);
+    expect(run.state).toBe("analyzed");
+    expect(nextAction(run.state, { rework: run.rework, progress: run.progress })).toEqual({ action: "sasu", for: "analysis" });
+  });
+
+  it("알 수 없는 다른 상태는 여전히 읽을 수 없다", () => {
+    const { dir } = makeRun("checked");
+    const file = runPaths(dir).runJson;
+    const raw = JSON.parse(readFileSync(file, "utf8")) as Record<string, unknown>;
+    writeFileSync(file, JSON.stringify({ ...raw, state: "weird" }));
+    expect(() => loadRun(dir)).toThrow(/run.json 형식/);
   });
 });

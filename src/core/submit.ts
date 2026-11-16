@@ -1,6 +1,7 @@
 /** 종류별 검증기 등록부와 제출 흐름(상태 확인, 검증, 정본 쓰기, 전이, revision 반영). */
 import { existsSync, readFileSync } from "node:fs";
 import { z } from "zod";
+import { currentBasis } from "./basis.js";
 import { wrapEnvelope, type Cost, type ProducedBy, type Stage } from "./envelope.js";
 import { rejectedError, usageError, type Issue } from "./errors.js";
 import { appendEvent } from "./events.js";
@@ -207,6 +208,7 @@ export function submitArtifact(opts: SubmitOptions): SubmitResult {
     verdictReasons: warnings.map((w) => w.code),
     producedBy: opts.producedBy ?? null,
     cost: opts.cost ?? null,
+    basis: opts.kind === "scenarios" ? (currentBasis(opts.runDir) ?? undefined) : undefined,
   });
   const docPath =
     opts.kind === "analysis" ? paths.analysis
