@@ -7,7 +7,7 @@ import { pathToFileURL } from "node:url";
 
 const ALLOWED_COMMANDS = new Set([
   "rg", "grep", "ls", "find", "cat", "head", "tail", "wc", "jq", "sort", "uniq", "cut", "tr", "sips", "file", "stat",
-  "basename", "dirname", "echo", "true", "test", "[", "git",
+  "basename", "dirname", "echo", "true", "test", "[", "git", "pwd",
 ]);
 const GIT_SUBCOMMANDS = new Set(["log", "show", "diff", "status", "ls-files", "grep", "rev-parse", "cat-file", "blame", "branch"]);
 const GIT_FORBIDDEN_FLAGS = ["--output", "--ext-diff", "--textconv", "--filters", "--open-files-in-pager", "--exec-path", "--upload-pack"];
@@ -448,8 +448,23 @@ function checkBash(input, cwd, roots, env) {
   if (typeof command !== "string" || command.trim().length === 0) deny("Bash 명령이 비어 있습니다");
   const realCwd = physicalPath(cwd);
   if (realCwd === null || !within(realCwd, roots.read)) deny(`작업 디렉터리가 읽기 범위 밖입니다: ${cwd}`);
-  const ctx = { cwd: realCwd, roots, hewBin: env.HEW_GUARD_HEW_BIN, runDir: env.HEW_GUARD_RUN_DIR };
-  for (const seg of tokenize(command)) checkSegment(seg, ctx);
+  let ctx = { cwd: realCwd, roots, hewBin: env.HEW_GUARD_HEW_BIN, runDir: env.HEW_GUARD_RUN_DIR };
+  let movedByCd = false;
+  tokenize(command).forEach((seg, index) => {
+    if (seg.words[0] === "cd") {
+      // cd 는 맨 앞 조각에서 읽기 범위 안의 경로 하나로만 받고, 뒤 조각의 상대 경로는 그 자리 기준으로 푼다.
+      if (index !== 0) deny("cd 는 명령의 맨 앞에서만 쓸 수 있습니다");
+      if (seg.words.length !== 2 || seg.redirs.length > 0) deny("cd 에는 경로 하나만 줄 수 있습니다");
+      checkRead(seg.words[1], ctx.cwd, roots, "cd 대상의");
+      const target = physicalPath(resolve(ctx.cwd, seg.words[1]));
+      if (target === null || !within(target, roots.read)) deny(`cd 대상이 읽기 범위 밖입니다: ${seg.words[1]}`);
+      ctx = { ...ctx, cwd: target };
+      movedByCd = true;
+      return;
+    }
+    if (movedByCd && seg.words.some((word) => word.includes(".."))) deny("cd 뒤에는 .. 가 든 인자를 쓸 수 없습니다");
+    checkSegment(seg, ctx);
+  });
 }
 
 /** 훅 입력과 환경 변수로 판정을 낸다. { decision: "allow"|"deny", reason } */

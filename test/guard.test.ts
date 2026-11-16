@@ -281,3 +281,31 @@ describe("범위 훅 프로세스 계약", () => {
     expect(lines[0]?.tool).toBe("Bash");
   });
 });
+
+describe("cd 와 pwd", () => {
+  const bash = (command: string) => decide({ tool_name: "Bash", tool_input: { command }, cwd: run }, env).decision;
+
+  it("맨 앞의 cd 는 읽기 범위 안이면 허용하고 뒤 조각의 상대 경로를 그 자리 기준으로 푼다", () => {
+    expect(bash(`cd ${join(run, "sources")} && cat units.json`)).toBe("allow");
+    expect(bash(`cd ${repo} && rg x src`)).toBe("allow");
+    expect(bash("pwd")).toBe("allow");
+  });
+
+  it("범위 밖으로 가는 cd, 맨 앞이 아닌 cd, 인자가 여럿인 cd 는 거부한다", () => {
+    expect(bash(`cd ${other} && cat secret.txt`)).toBe("deny");
+    expect(bash(`cat sources/units.json && cd ${repo}`)).toBe("deny");
+    expect(bash(`cd ${repo} ${run}`)).toBe("deny");
+    expect(bash("cd .. && ls")).toBe("deny");
+    expect(bash(`cd ${join(run, "link-out")} && cat secret.txt`)).toBe("deny");
+  });
+
+  it("cd 뒤에는 .. 가 든 인자를 받지 않는다", () => {
+    expect(bash(`cd ${join(run, "sources")} && cat ../doc/x.json`)).toBe("deny");
+    expect(bash(`cd ${repo} && cat ../other/secret.txt`)).toBe("deny");
+  });
+
+  it("cd 뒤에도 범위 밖 절대 경로와 허용되지 않는 명령은 거부한다", () => {
+    expect(bash(`cd ${repo} && cat ${join(other, "secret.txt")}`)).toBe("deny");
+    expect(bash(`cd ${repo} && curl http://example.com`)).toBe("deny");
+  });
+});
