@@ -526,7 +526,7 @@ approval.json         승인 기록(잠근 revision)</code></pre>
 
   <ul>
     <li>revision 은 승인 대상 전체의 해시다. 대상은 <code>analysis</code>(사람용·AI용 문장 모두), <code>scenarios</code>, <code>plan</code>, <code>answers</code>, 원천 manifest 다.</li>
-    <li>계산: 키를 정렬한 JSON 의 sha256. 비용, 시각, 세션 id, 빈 값은 뺀다.</li>
+    <li>계산: 키를 정렬한 JSON 의 sha256. 비용, 시각, 세션 id, 빈 값은 뺀다. <code>answers</code> 에서는 승인 기록(<code>approvals</code>)과 계정 메모(<code>accounts</code>)도 뺀다. 계정 메모는 승인 대상이 아니라 메모가 바뀌어도 승인이 무효가 되지 않는다.</li>
     <li>승인은 revision 하나를 잠근다. 잠근 뒤 정본이 바뀌면 revision 이 달라지고 승인은 무효다.</li>
   </ul>
 
@@ -800,6 +800,7 @@ approval.json         승인 기록(잠근 revision)</code></pre>
         <tr><td><code>delta_decision_kind</code></td><td>차이 종류에 허용되지 않는 결정 값</td><td>거부</td></tr>
         <tr><td><code>delta_comparison_missing</code>, <code>delta_comparison_unpaired</code></td><td>비교 행이 없다, <code>mismatch</code> 인데 양쪽이 다 있는 행이 없다</td><td>경고</td></tr>
         <tr><td><code>delta_multi_decision</code></td><td>대표 요구가 여럿으로 갈릴 수 있는 묶음(걸린 요구 4개 이상)</td><td>경고</td></tr>
+        <tr><td><code>delta_same_decision</code></td><td>앞의 차이와 종류가 같고 비교 값 쌍(공백 제외)이 같거나 한쪽이 다른 쪽에 포함되며 추천 결정이 서로 다르지 않다(뒤쪽 차이에 붙는다). 사람이 내릴 결정이 같으면 하나로 묶으라는 뜻</td><td>경고</td></tr>
         <tr><td><code>question_without_options</code></td><td>선택지도 &quot;이 답이 바꾸는 구현&quot;도 없는 질문</td><td>거부</td></tr>
         <tr><td><code>api_presence_unchecked</code></td><td>변경 API 가 있는데 환경 대조가 비어 있다</td><td>거부</td></tr>
         <tr><td><code>mismatch_ratio</code></td><td><code>mismatch</code> 차이에 걸린 요구 수 / 전체 요구 수. 10%를 넘으면 확인 요청서를 만든다</td><td>정보</td></tr>
@@ -834,7 +835,17 @@ approval.json         승인 기록(잠근 revision)</code></pre>
     </table>
   </div>
 
-  <p><code>items</code> 에는 <code>scenarios[]</code> 와 함께 <code>accounts[]</code>(필요한 계정 상태와 지금 가진 계정으로 되는지)를 둔다. 계정이 모자라면 질문으로 올린다.</p>
+  <p><code>items</code> 에는 <code>scenarios[]</code> 와 함께 <code>preflight[]</code>, <code>accounts[]</code> 를 둔다. 둘 다 게이트의 열린 항목이 아니다. QA 설계가 모자란 것을 세 갈래로 나눈다: 승인할 때 사람이 답할 수 있는 것만 질문으로 올리고, 실행하는 날의 환경 상태는 실행 전 확인으로, 필요한 계정은 계정 목록으로 옮긴다(<code>agents/qa-designer.md</code>).</p>
+
+  <div class="tw">
+    <table>
+      <thead><tr><th>칸</th><th>내용</th></tr></thead>
+      <tbody>
+        <tr><td><code>preflight[]</code></td><td><code>{ id(PF-n), text, kind(env·deploy·flag·data), scenario_ids[1+], check, fallback(mock·hold) }</code>. 실행하는 날 QA 가 <code>check</code> 대로 확인하고, 안 되면 <code>fallback</code> 대로 모킹으로 돌리거나 그 시나리오를 보류하고 보고한다</td></tr>
+        <tr><td><code>accounts[]</code></td><td><code>{ id(AC-n), state, available, scenario_ids[1+], note? }</code>. 시나리오가 요구하는 계정 상태와 지금 가진 테스트 계정으로 되는지</td></tr>
+      </tbody>
+    </table>
+  </div>
 
   <p>결정적 검사</p>
 
@@ -849,6 +860,12 @@ approval.json         승인 기록(잠근 revision)</code></pre>
         <tr><td><code>real_without_presence</code></td><td>실서버인데 쓰는 API 가 고른 환경에 없다(<a href="#s4-5">§4.5</a> 의 <code>presence</code>)</td><td>거부</td></tr>
         <tr><td><code>mock_only_requirement</code></td><td>어떤 요구가 모킹 시나리오로만 덮인다</td><td>경고(&quot;통합 미검증&quot;)</td></tr>
         <tr><td><code>reach_unknown</code></td><td>도달 방법을 모르는 시나리오</td><td>경고</td></tr>
+        <tr><td><code>id_format</code>, <code>id_duplicate</code></td><td>시나리오·기대 결과·질문·<code>PF-n</code>·<code>AC-n</code> 의 id 형식, 중복</td><td>거부</td></tr>
+        <tr><td><code>scenario_ref_missing</code></td><td>(위와 같다) 실행 전 확인·계정의 <code>scenario_ids</code> 가 없는 시나리오를 가리키는 경우도 포함</td><td>거부</td></tr>
+        <tr><td><code>preflight_without_check</code></td><td>실행 전 확인의 <code>check</code> 가 비어 있다</td><td>거부</td></tr>
+        <tr><td><code>preflight_mock_unprepared</code></td><td><code>fallback</code> 이 <code>mock</code> 인데 걸린 실서버 시나리오에 모킹 정보(<code>mock.endpoints</code>)가 없다</td><td>경고</td></tr>
+        <tr><td><code>qa_question_not_for_gate</code></td><td>질문 문장이 실행하는 날의 환경·계정 상태를 묻는 것으로 보인다(해당 낱말이 있다. 물음표 유무는 보지 않는다). <code>preflight</code>·<code>accounts</code> 로 옮기라는 뜻</td><td>경고</td></tr>
+        <tr><td><code>accounts_unavailable</code></td><td>지금 가진 계정으로 안 되는 계정이 있다. 질문 유무와 무관하게 한 건</td><td>정보</td></tr>
       </tbody>
     </table>
   </div>
@@ -1028,11 +1045,11 @@ approval.json         승인 기록(잠근 revision)</code></pre>
         <tr><td>확인 필요</td><td>결정적 검사의 경고, 다시 답해야 하는 질문</td><td>—</td></tr>
         <tr><td>화면</td><td>화면별 탭. 탭 안에서 AS-IS·TO-BE 이미지는 왼쪽에 고정하고 요구는 오른쪽에서 스크롤한다. 이미지 폭 250px. 차이는 붉은 상자(선 2px, 불투명도 0.8), 차이 면적이 60%를 넘으면 &quot;전면 변경&quot;으로 표시한다</td><td><code>hew-gate-layout-decisions-2026-11-11</code>, <code>hew-6-2026-10-23-mismatch</code></td></tr>
         <tr><td>요구</td><td>화면 아래에 요구별 변경 목록. 변형에 걸린 변경은 그 변형 아래. 인수 조건은 기본 접힘. AI용 칸은 &quot;AI용 보기&quot;로 접어 둔다</td><td><code>hew-2026-10-21-figma-prd</code></td></tr>
-        <tr><td>차이</td><td>대표 요구 아래 한 번만. 관점, PRD, 시안 3열 표. 미결정은 펼치고 결정된 것은 접는다. 다른 관련 요구에는 링크만</td><td><code>hew-2026-10-21-requirement-ids</code>, <code>hew-delta-comparison-rows-2026-10-28</code></td></tr>
+        <tr><td>차이</td><td>대표 요구 아래 한 번만. 관점, PRD, 시안 3열 표. 미결정은 펼치고 결정된 것은 접는다. 다른 관련 요구에는 링크만. 같은 결정으로 묶을 수 있어 보이는 차이(<code>similar_ids</code>)가 있으면 &quot;같은 결정을 D-n 에도 적용&quot; 체크를 두고, 켜고 결정을 누르면 그 차이들에도 같은 결정을 적는다. 그 종류에 허용되지 않는 결정은 그 차이에만 건너뛰고, 적용된 차이에는 &quot;D-n 과 같은 결정으로 적용됨&quot;을 보인다</td><td><code>hew-2026-10-21-requirement-ids</code>, <code>hew-delta-comparison-rows-2026-10-28</code></td></tr>
         <tr><td>질문</td><td>선택지, 추천과 근거, &quot;이 답이 바꾸는 구현&quot;, 자유 답</td><td>설계 §5.1</td></tr>
         <tr><td>가정과 범위 밖</td><td>가정 확인. 범위 밖은 원문 인용과 함께</td><td>설계 §5.1</td></tr>
         <tr><td>영향 분석</td><td>걸리는 영역, API 의 환경별 유무, 없는 에셋</td><td>설계 §5.1</td></tr>
-        <tr><td>QA 시나리오</td><td>시나리오별 여정, 기대 결과, 실서버/모킹 전환</td><td>설계 §5.1</td></tr>
+        <tr><td>QA 시나리오</td><td>시나리오별 여정, 기대 결과, 실서버/모킹 전환. 아래에 &quot;QA 준비&quot;: 실행 전 확인 표(확인할 것, 확인 방법, 걸린 시나리오, 안 되면)와 계정 표(필요한 계정 상태, 걸린 시나리오, 지금 가진 계정으로 되는지. 안 되는 줄에는 메모 입력). 둘 다 열린 항목·진행 집계·승인 조건에 들어가지 않는다</td><td>설계 §5.1, 자동 결정 C13</td></tr>
         <tr><td>분해안</td><td>티켓 표(제목, 덮는 요구, SP), PR 묶음, 의존 그래프, 수정 요청 입력. 답변 단계에서는 &quot;답이 끝나면 만들어집니다&quot;로 비워 둔다</td><td>설계 §4.4</td></tr>
       </tbody>
     </table>
@@ -1056,6 +1073,7 @@ approval.json         승인 기록(잠근 revision)</code></pre>
         <tr><td><code>scope</code></td><td><code>D-n</code></td><td><code>{ decision, note?, at, by }</code>. 결정을 바꾸면 메모는 지워진다</td></tr>
         <tr><td><code>assumptions</code></td><td><code>A-n</code></td><td><code>{ status, note?, at, by }</code></td></tr>
         <tr><td><code>scenarios</code></td><td><code>시나리오-n</code></td><td><code>{ backend, note?, at, by }</code> (실서버/모킹을 바꿨을 때만)</td></tr>
+        <tr><td><code>accounts</code></td><td><code>AC-n</code></td><td><code>{ note, at, by }</code>. 계정 메모. 승인·revision 과 무관하다</td></tr>
         <tr><td><code>plan_requests</code></td><td>자동 id</td><td><code>{ target, text, at, by }</code>. <code>target</code> 은 <code>Tn</code>, <code>PR-n</code>, <code>전체</code></td></tr>
         <tr><td><code>approvals</code></td><td>revision 앞 12자</td><td><code>{ revision, at, by, note? }</code>. 문서 id 가 revision 이라 다른 판의 승인과 섞이지 않는다. 승인을 거두면 문서를 지운다</td></tr>
       </tbody>
@@ -1076,6 +1094,8 @@ approval.json         승인 기록(잠근 revision)</code></pre>
 
   <ul>
     <li>답의 시각이 이전 답보다 늦은 것만 새 답으로 본다.</li>
+    <li>들여오기는 <code>accounts</code> 도 같은 규칙으로 병합한다. 정본에 없는 <code>AC-n</code> 은 <code>unknown_id</code> 경고와 함께 건너뛰고, 시각이 같거나 이른 메모는 <code>stale</code> 로 건너뛴다. 메모는 revision 에서 빠지므로 들여온 뒤에도 revision 과 열린 항목은 그대로다.</li>
+    <li>비슷한 차이에 같은 결정을 한 번에 적용한 경우에도 내보내는 파일에는 차이마다 결정과 시각만 담긴다(적용 표시는 페이지 안에서만 쓴다).</li>
     <li>질문의 본문이 답한 뒤에 바뀌면 그 답은 &quot;다시 답 필요&quot;가 된다(답과 함께 질문 본문의 해시를 저장해 가린다).</li>
     <li class="m" data-m="미결">승인하면 게이트에서 내린 결정을 heka 결정 노트로 남긴다(<code>live</code> 모드만). 차이 결정과 차단 질문의 답은 건별로, 나머지는 묶어서 남긴다(heka <code>hew-6-2026-10-23-mismatch</code> 의 4). 아직 만들지 않았다. <span class="chip c-m" data-k="미결">미결</span></li>
   </ul>

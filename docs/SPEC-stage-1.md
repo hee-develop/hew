@@ -251,7 +251,7 @@ heka `hew-id-labels-korean` 을 따른다. 새 종류는 [가정]이다.
 ### 2.4 revision
 
 - revision 은 승인 대상 전체의 해시다. 대상은 `analysis`(사람용·AI용 문장 모두), `scenarios`, `plan`, `answers`, 원천 manifest 다.
-- 계산: 키를 정렬한 JSON 의 sha256. 비용, 시각, 세션 id, 빈 값은 뺀다.
+- 계산: 키를 정렬한 JSON 의 sha256. 비용, 시각, 세션 id, 빈 값은 뺀다. `answers` 에서는 승인 기록(`approvals`)과 계정 메모(`accounts`)도 뺀다. 계정 메모는 승인 대상이 아니라 메모가 바뀌어도 승인이 무효가 되지 않는다.
 - 승인은 revision 하나를 잠근다. 잠근 뒤 정본이 바뀌면 revision 이 달라지고 승인은 무효다.
 
 ### 2.5 명령 출력과 종료 코드
@@ -452,6 +452,7 @@ heka `hew-id-labels-korean` 을 따른다. 새 종류는 [가정]이다.
 | `delta_decision_kind` | 차이 종류에 허용되지 않는 결정 값 | 거부 |
 | `delta_comparison_missing`, `delta_comparison_unpaired` | 비교 행이 없다, `mismatch` 인데 양쪽이 다 있는 행이 없다 | 경고 |
 | `delta_multi_decision` | 대표 요구가 여럿으로 갈릴 수 있는 묶음(걸린 요구 4개 이상) | 경고 |
+| `delta_same_decision` | 앞의 차이와 종류가 같고 비교 값 쌍(공백 제외)이 같거나 한쪽이 다른 쪽에 포함되며 추천 결정이 서로 다르지 않다(뒤쪽 차이에 붙는다). 사람이 내릴 결정이 같으면 하나로 묶으라는 뜻 | 경고 |
 | `question_without_options` | 선택지도 "이 답이 바꾸는 구현"도 없는 질문 | 거부 |
 | `api_presence_unchecked` | 변경 API 가 있는데 환경 대조가 비어 있다 | 거부 |
 | `mismatch_ratio` | `mismatch` 차이에 걸린 요구 수 / 전체 요구 수. 10%를 넘으면 확인 요청서를 만든다 | 정보 |
@@ -475,7 +476,12 @@ heka `hew-id-labels-korean` 을 따른다. 새 종류는 [가정]이다.
 | `reach` | 화면에 도달하는 방법: `deeplink`, `navigation`, `unknown` |
 | `platforms[]` | `ios`, `android` (기본 둘 다) |
 
-`items` 에는 `scenarios[]` 와 함께 `accounts[]`(필요한 계정 상태와 지금 가진 계정으로 되는지)를 둔다. 계정이 모자라면 질문으로 올린다.
+`items` 에는 `scenarios[]` 와 함께 `preflight[]`, `accounts[]` 를 둔다. 둘 다 게이트의 열린 항목이 아니다. QA 설계가 모자란 것을 세 갈래로 나눈다: 승인할 때 사람이 답할 수 있는 것만 질문으로 올리고, 실행하는 날의 환경 상태는 실행 전 확인으로, 필요한 계정은 계정 목록으로 옮긴다(`agents/qa-designer.md`).
+
+| 칸 | 내용 |
+|---|---|
+| `preflight[]` | `{ id(PF-n), text, kind(env·deploy·flag·data), scenario_ids[1+], check, fallback(mock·hold) }`. 실행하는 날 QA 가 `check` 대로 확인하고, 안 되면 `fallback` 대로 모킹으로 돌리거나 그 시나리오를 보류하고 보고한다 |
+| `accounts[]` | `{ id(AC-n), state, available, scenario_ids[1+], note? }`. 시나리오가 요구하는 계정 상태와 지금 가진 테스트 계정으로 되는지 |
 
 결정적 검사
 
@@ -488,6 +494,12 @@ heka `hew-id-labels-korean` 을 따른다. 새 종류는 [가정]이다.
 | `real_without_presence` | 실서버인데 쓰는 API 가 고른 환경에 없다(§4.5 의 `presence`) | 거부 |
 | `mock_only_requirement` | 어떤 요구가 모킹 시나리오로만 덮인다 | 경고("통합 미검증") |
 | `reach_unknown` | 도달 방법을 모르는 시나리오 | 경고 |
+| `id_format`, `id_duplicate` | 시나리오·기대 결과·질문·`PF-n`·`AC-n` 의 id 형식, 중복 | 거부 |
+| `scenario_ref_missing` | (위와 같다) 실행 전 확인·계정의 `scenario_ids` 가 없는 시나리오를 가리키는 경우도 포함 | 거부 |
+| `preflight_without_check` | 실행 전 확인의 `check` 가 비어 있다 | 거부 |
+| `preflight_mock_unprepared` | `fallback` 이 `mock` 인데 걸린 실서버 시나리오에 모킹 정보(`mock.endpoints`)가 없다 | 경고 |
+| `qa_question_not_for_gate` | 질문 문장이 실행하는 날의 환경·계정 상태를 묻는 것으로 보인다(해당 낱말이 있다. 물음표 유무는 보지 않는다). `preflight`·`accounts` 로 옮기라는 뜻 | 경고 |
+| `accounts_unavailable` | 지금 가진 계정으로 안 되는 계정이 있다. 질문 유무와 무관하게 한 건 | 정보 |
 
 ---
 
@@ -621,11 +633,11 @@ PR 묶음(`prs[]`): `id`, `title`, `ticket_ids[]`, `base`(`develop` 또는 앞�
 | 확인 필요 | 결정적 검사의 경고, 다시 답해야 하는 질문 | — |
 | 화면 | 화면별 탭. 탭 안에서 AS-IS·TO-BE 이미지는 왼쪽에 고정하고 요구는 오른쪽에서 스크롤한다. 이미지 폭 250px. 차이는 붉은 상자(선 2px, 불투명도 0.8), 차이 면적이 60%를 넘으면 "전면 변경"으로 표시한다 | `hew-gate-layout-decisions-2026-11-11`, `hew-6-2026-10-23-mismatch` |
 | 요구 | 화면 아래에 요구별 변경 목록. 변형에 걸린 변경은 그 변형 아래. 인수 조건은 기본 접힘. AI용 칸은 "AI용 보기"로 접어 둔다 | `hew-2026-10-21-figma-prd` |
-| 차이 | 대표 요구 아래 한 번만. 관점, PRD, 시안 3열 표. 미결정은 펼치고 결정된 것은 접는다. 다른 관련 요구에는 링크만 | `hew-2026-10-21-requirement-ids`, `hew-delta-comparison-rows-2026-10-28` |
+| 차이 | 대표 요구 아래 한 번만. 관점, PRD, 시안 3열 표. 미결정은 펼치고 결정된 것은 접는다. 다른 관련 요구에는 링크만. 같은 결정으로 묶을 수 있어 보이는 차이(`similar_ids`)가 있으면 "같은 결정을 D-n 에도 적용" 체크를 두고, 켜고 결정을 누르면 그 차이들에도 같은 결정을 적는다. 그 종류에 허용되지 않는 결정은 그 차이에만 건너뛰고, 적용된 차이에는 "D-n 과 같은 결정으로 적용됨"을 보인다 | `hew-2026-10-21-requirement-ids`, `hew-delta-comparison-rows-2026-10-28` |
 | 질문 | 선택지, 추천과 근거, "이 답이 바꾸는 구현", 자유 답 | 설계 §5.1 |
 | 가정과 범위 밖 | 가정 확인. 범위 밖은 원문 인용과 함께 | 설계 §5.1 |
 | 영향 분석 | 걸리는 영역, API 의 환경별 유무, 없는 에셋 | 설계 §5.1 |
-| QA 시나리오 | 시나리오별 여정, 기대 결과, 실서버/모킹 전환 | 설계 §5.1 |
+| QA 시나리오 | 시나리오별 여정, 기대 결과, 실서버/모킹 전환. 아래에 "QA 준비": 실행 전 확인 표(확인할 것, 확인 방법, 걸린 시나리오, 안 되면)와 계정 표(필요한 계정 상태, 걸린 시나리오, 지금 가진 계정으로 되는지. 안 되는 줄에는 메모 입력). 둘 다 열린 항목·진행 집계·승인 조건에 들어가지 않는다 | 설계 §5.1, 자동 결정 C13 |
 | 분해안 | 티켓 표(제목, 덮는 요구, SP), PR 묶음, 의존 그래프, 수정 요청 입력. 답변 단계에서는 "답이 끝나면 만들어집니다"로 비워 둔다 | 설계 §4.4 |
 
 - 기계 식별자(Figma 노드 번호, 원문 단위 id)는 화면에 그대로 보이지 않는다. 링크나 접힌 상세로만 간다.
@@ -642,6 +654,7 @@ PR 묶음(`prs[]`): `id`, `title`, `ticket_ids[]`, `base`(`develop` 또는 앞�
 | `scope` | `D-n` | `{ decision, note?, at, by }`. 결정을 바꾸면 메모는 지워진다 |
 | `assumptions` | `A-n` | `{ status, note?, at, by }` |
 | `scenarios` | `시나리오-n` | `{ backend, note?, at, by }` (실서버/모킹을 바꿨을 때만) |
+| `accounts` | `AC-n` | `{ note, at, by }`. 계정 메모. 승인·revision 과 무관하다 |
 | `plan_requests` | 자동 id | `{ target, text, at, by }`. `target` 은 `Tn`, `PR-n`, `전체` |
 | `approvals` | revision 앞 12자 | `{ revision, at, by, note? }`. 문서 id 가 revision 이라 다른 판의 승인과 섞이지 않는다. 승인을 거두면 문서를 지운다 |
 
@@ -656,6 +669,8 @@ PR 묶음(`prs[]`): `id`, `title`, `ticket_ids[]`, `base`(`develop` 또는 앞�
 7. 승인 버튼을 누르면 승인이 든 파일이 내려온다. `hew gate import` 로 넣으면(또는 `hew approve --revision` 을 직접 부르면) 코어가 revision 이 현재 값과 같을 때만 잠근다.
 
 - 답의 시각이 이전 답보다 늦은 것만 새 답으로 본다.
+- 들여오기는 `accounts` 도 같은 규칙으로 병합한다. 정본에 없는 `AC-n` 은 `unknown_id` 경고와 함께 건너뛰고, 시각이 같거나 이른 메모는 `stale` 로 건너뛴다. 메모는 revision 에서 빠지므로 들여온 뒤에도 revision 과 열린 항목은 그대로다.
+- 비슷한 차이에 같은 결정을 한 번에 적용한 경우에도 내보내는 파일에는 차이마다 결정과 시각만 담긴다(적용 표시는 페이지 안에서만 쓴다).
 - 질문의 본문이 답한 뒤에 바뀌면 그 답은 "다시 답 필요"가 된다(답과 함께 질문 본문의 해시를 저장해 가린다).
 - 승인하면 게이트에서 내린 결정을 heka 결정 노트로 남긴다(`live` 모드만). 차이 결정과 차단 질문의 답은 건별로, 나머지는 묶어서 남긴다(heka `hew-6-2026-10-23-mismatch` 의 4). 아직 만들지 않았다. [미결]
 
