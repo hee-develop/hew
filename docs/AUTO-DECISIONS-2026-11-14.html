@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{color-scheme:light}body{margin:0;font:14px system-ui,-apple-system,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>위임받아 Claude 가 정한 것 (2026-11-14)</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
+<style>
+/* 레이아웃: 머리 → 표기 필터 → (넓은 화면: 고정 절 목차 + 본문 / 좁은 화면: 접힌 절 목차 → 본문). 표·코드는 각자 가로 스크롤. */
+:root {
+  --bg: #f3f6f7;
+  --surface: #ffffff;
+  --fg: #17262b;
+  --muted: #55676d;
+  --line: #d3dde0;
+  --accent: #0b6e7f;
+  --accent-soft: #dbedf0;
+  --on-accent: #ffffff;
+  --zone: #eaf0f2;
+  --focus: #0b6e7f;
+  --c-d-bg: #d3ebe7; --c-d-fg: #0b5249;
+  --c-g-bg: #f5e6c2; --c-g-fg: #664500;
+  --c-j-bg: #dce5f6; --c-j-fg: #243f7c;
+  --c-m-bg: #f6d8d4; --c-m-fg: #84261e;
+  --c-s-bg: #e0e5e7; --c-s-fg: #2f4147;
+  --font-body: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e181b;
+    --surface: #152226;
+    --fg: #e2ebed;
+    --muted: #9bafb5;
+    --line: #2b3c41;
+    --accent: #5cc3d4;
+    --accent-soft: #163a41;
+    --on-accent: #08242a;
+    --zone: #121f23;
+    --focus: #5cc3d4;
+    --c-d-bg: #12403a; --c-d-fg: #8fdcd1;
+    --c-g-bg: #473711; --c-g-fg: #f0cf80;
+    --c-j-bg: #1e2f55; --c-j-fg: #aac2f3;
+    --c-m-bg: #4c201c; --c-m-fg: #f3a9a1;
+    --c-s-bg: #26353b; --c-s-fg: #bccbd0;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e181b;
+  --surface: #152226;
+  --fg: #e2ebed;
+  --muted: #9bafb5;
+  --line: #2b3c41;
+  --accent: #5cc3d4;
+  --accent-soft: #163a41;
+  --on-accent: #08242a;
+  --zone: #121f23;
+  --focus: #5cc3d4;
+  --c-d-bg: #12403a; --c-d-fg: #8fdcd1;
+  --c-g-bg: #473711; --c-g-fg: #f0cf80;
+  --c-j-bg: #1e2f55; --c-j-fg: #aac2f3;
+  --c-m-bg: #4c201c; --c-m-fg: #f3a9a1;
+  --c-s-bg: #26353b; --c-s-fg: #bccbd0;
+  color-scheme: dark;
+}
+body { background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 15px; line-height: 1.7; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+* { box-sizing: border-box; }
+.wrap { max-width: 1160px; margin-inline: auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 28px 56px; }
+a { color: var(--accent); text-underline-offset: 2px; overflow-wrap: anywhere; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 3px; }
+code { font-family: var(--font-mono); font-size: .86em; background: var(--zone); border: 1px solid var(--line); padding: .05em .35em; border-radius: 3px; overflow-wrap: anywhere; }
+strong { font-weight: 600; }
+p { margin: 0 0 .7em; }
+ul, ol { margin: 0 0 .8em; padding-left: 1.4em; }
+li { margin-bottom: .3em; }
+li > ul, li > ol { margin-top: .3em; margin-bottom: 0; }
+
+/* 전체 격자: 넓은 화면에서 왼쪽에 고정 목차 */
+.page { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; }
+.top { min-width: 0; }
+.toc { min-width: 0; margin-top: 2rem; }
+.doc { min-width: 0; }
+
+/* 머리 */
+.head h1 { font-size: clamp(1.45rem, 4.6vw, 2rem); line-height: 1.3; margin: 0 0 .9rem; font-weight: 700; text-wrap: balance; letter-spacing: -.01em; }
+.meta { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .25rem 1rem; margin: 0 0 1rem; font-size: .9rem; }
+.meta dt { color: var(--muted); font-weight: 500; }
+.meta dd { margin: 0; min-width: 0; }
+.headnotes { list-style: none; padding: 0; margin: 0; border-left: 3px solid var(--accent); padding: .1rem 0 .1rem 1rem; font-size: .95rem; }
+.headnotes li { margin: 0 0 .35rem; }
+.headnotes li:last-child { margin-bottom: 0; }
+
+/* 칩 */
+.chip { display: inline-block; font-family: var(--font-mono); font-size: .68rem; line-height: 1; font-weight: 500; padding: .22em .5em; border-radius: 3px; margin-left: .4em; margin-right: .15em; vertical-align: .1em; white-space: nowrap; }
+.c-d { background: var(--c-d-bg); color: var(--c-d-fg); }
+.c-g { background: var(--c-g-bg); color: var(--c-g-fg); }
+.c-j { background: var(--c-j-bg); color: var(--c-j-fg); }
+.c-m { background: var(--c-m-bg); color: var(--c-m-fg); }
+.c-s { background: var(--c-s-bg); color: var(--c-s-fg); }
+.note { font-size: .72rem; color: var(--muted); margin-left: .3em; margin-right: .15em; }
+.m { transition: opacity .15s; }
+.m.dim { opacity: .28; }
+
+/* 범례·필터 */
+.panel { margin-top: 1.6rem; padding-block: 1rem; border-block: 1px solid var(--line); }
+.panel h2 { font-size: .78rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; margin: 0 0 .7rem; }
+.filters { display: flex; flex-wrap: wrap; gap: .4rem; }
+.filters button { font: inherit; font-size: .85rem; background: var(--surface); color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: .35rem .7rem; cursor: pointer; display: inline-flex; gap: .45rem; align-items: baseline; }
+.filters button .n { font-family: var(--font-mono); font-size: .75rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.filters button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.filters button[aria-pressed="true"] .n { color: var(--on-accent); }
+
+/* 절 목차 */
+.toc summary { cursor: pointer; font-size: .9rem; font-weight: 600; padding: .55rem .8rem; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); list-style: none; }
+.toc summary::-webkit-details-marker { display: none; }
+.toc summary::after { content: "▾"; float: right; color: var(--muted); }
+.toc[open] summary::after { content: "▴"; }
+.toc ul { list-style: none; margin: .5rem 0 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: .2rem; }
+.toc li { margin: 0; }
+.toc a { display: block; text-decoration: none; font-size: .88rem; line-height: 1.4; padding: .35rem .6rem; border-radius: 5px; color: var(--fg); border: 1px solid var(--line); background: var(--surface); overflow-wrap: normal; }
+.toc a:hover { border-color: var(--accent); color: var(--accent); }
+.toc a .sn { font-family: var(--font-mono); color: var(--accent); margin-right: .45em; display: inline-block; min-width: 2.4em; }
+
+/* 본문 */
+section { padding-top: 2.2rem; scroll-margin-top: 16px; }
+h3 { scroll-margin-top: 16px; }
+section h2 { font-size: 1.3rem; line-height: 1.35; margin: 0 0 .9rem; padding-bottom: .4rem; border-bottom: 1px solid var(--line); font-weight: 700; text-wrap: balance; }
+section h2 .sn { font-family: var(--font-mono); font-weight: 500; color: var(--accent); margin-right: .4em; font-size: .85em; }
+section h3 { font-size: 1.03rem; margin: 1.5rem 0 .6rem; font-weight: 600; text-wrap: balance; }
+section h3 .sn { font-family: var(--font-mono); color: var(--accent); font-weight: 500; margin-right: .4em; font-size: .88em; }
+.tw { overflow-x: auto; margin: .3rem 0 1rem; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; min-width: 34rem; font-size: .88rem; line-height: 1.55; }
+table.w6 { min-width: 58rem; }
+table.w4 { min-width: 44rem; }
+th, td { text-align: left; vertical-align: top; padding: .55rem .7rem; border-bottom: 1px solid var(--line); }
+th { background: var(--zone); font-weight: 600; font-size: .8rem; white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+td.num, th.num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+table.codecol td:first-child { min-width: 11rem; }
+pre.code { margin: .3rem 0 1rem; padding: .8rem 1rem; background: var(--zone); border: 1px solid var(--line); border-radius: 6px; overflow-x: auto; font-family: var(--font-mono); font-size: .82rem; line-height: 1.6; white-space: pre; tab-size: 2; }
+h4 { font-size: .95rem; margin: 1.2rem 0 .5rem; font-weight: 600; }
+blockquote { margin: .3rem 0 1rem; padding: .1rem 0 .1rem 1rem; border-left: 3px solid var(--line); color: var(--muted); }
+blockquote p:last-child { margin-bottom: 0; }
+hr { border: 0; border-top: 1px solid var(--line); margin: 1.6rem 0; }
+del { opacity: .75; }
+.doc p, .doc li, .doc blockquote, .meta dd { overflow-wrap: anywhere; }
+.intro { padding-top: 1.6rem; }
+pre.code code { background: none; border: 0; padding: 0; font-size: inherit; }
+.lbl { font-size: .85rem; color: var(--muted); font-weight: 600; margin: 1rem 0 .4rem; }
+
+@media (min-width: 1000px) {
+  .page { grid-template-columns: 15.5rem minmax(0, 1fr); column-gap: 2.5rem; grid-template-areas: ". top" "toc doc"; }
+  .top { grid-area: top; max-width: 860px; }
+  .toc { grid-area: toc; margin-top: 2.2rem; position: sticky; top: calc(env(safe-area-inset-top, 0px) + 12px); align-self: start; max-height: calc(100vh - 24px); overflow-y: auto; }
+  .doc { grid-area: doc; max-width: 860px; }
+  .toc summary { display: none; }
+  .toc ul { margin-top: 0; }
+  .toc a { border-color: transparent; background: none; padding: .25rem .5rem; }
+}
+@media (max-width: 760px) {
+  .meta { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .meta dd { margin-bottom: .5rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; scroll-behavior: auto !important; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="page">
+
+<div class="top">
+<div class="head" id="top">
+  <h1>위임받아 Claude 가 정한 것 (2026-11-14)</h1>
+
+</div>
+
+</div>
+
+<nav class="toc" aria-label="절 목차">
+  <details id="tocd" open>
+    <summary>절 목차(4개)</summary>
+    <ul>
+      <li><a href="#sec-1">A. 명세 초안에서 여쭸던 것</a></li>
+      <li><a href="#sec-2">B. 앞선 답에서 확인받지 못한 것</a></li>
+      <li><a href="#sec-3">C. 작업을 진행하며 정한 것</a></li>
+      <li><a href="#sec-4">D. 실측 결과(조각 0)</a></li>
+    </ul>
+  </details>
+</nav>
+
+<main class="doc" id="doc">
+<div class="intro">
+  <p>공개본에서는 사내 수치와 실제 일감의 기록을 뺐다.</p>
+  <p>사용자가 2026-11-14 새벽 &quot;선택지가 필요하다면 네가 고르고 작업을 진행하라, 아침에 어떤 질문에 어떤 답을 했는지 보고하라&quot;고 했다. 이 파일은 그 기록이다. 여기 적힌 답은 모두 Claude 의 선택이고 사용자 결정이 아니다. 바꾸려면 번호로 알려 주면 된다.</p>
+  <p>표의 &quot;되돌리는 비용&quot;은 나중에 답을 바꿀 때 다시 해야 하는 일의 크기다.</p>
+</div>
+
+<section id="sec-1">
+  <h2>A. 명세 초안에서 여쭸던 것</h2>
+
+  <div class="tw">
+    <table class="w4">
+      <thead><tr><th class="num">#</th><th>질문</th><th>고른 답</th><th>이유</th><th>되돌리는 비용</th></tr></thead>
+      <tbody>
+        <tr><td class="num">A1</td><td>수집 단계를 분석과 분리할까</td><td>분리한다</td><td>승인 해시와 변경 감지에 고정된 원천이 필요하고, 리플레이에서 분석 에이전트의 외부 접근을 끊을 수 있다</td><td>큼(실행 모델)</td></tr>
+        <tr><td class="num">A2</td><td>승인 전 단계를 누가 띄울까</td><td>코어가 <code>claude -p</code> 로 띄운다. 대화형 세션은 게이트 게시와 답 읽기만</td><td>진행 주체를 하나로 둔다</td><td>큼</td></tr>
+        <tr><td class="num">A3</td><td>산출물을 누가 제출할까</td><td>에이전트가 <code>hew submit</code> 으로 직접 내고 같은 세션에서 고친다</td><td>검증 오류 하나에 세션을 새로 띄우지 않는다</td><td>중간</td></tr>
+        <tr><td class="num">A4</td><td>구현 언어</td><td>TypeScript(Node), zod, vitest</td><td>옛 hew 모듈을 그대로 가져올 수 있다</td><td>큼</td></tr>
+        <tr><td class="num">A5</td><td>인수 조건의 형식</td><td><code>given</code>(선택)·<code>when</code>·<code>then</code> 칸</td><td>검증 가능한 형식을 구조로 강제한다</td><td>작음</td></tr>
+        <tr><td class="num">A6</td><td>AI용 문장의 형식</td><td>정해진 칸(코드 위치, 검증 방법, 규칙 id, 근거 딸린 보충)만</td><td>새 동작을 담지 못하게 구조로 막는다</td><td>작음</td></tr>
+        <tr><td class="num">A7</td><td>리플레이의 게이트 답</td><td>사람이 미리 적어 둔 답안지에서 넣는다</td><td>사람 없이 여러 번 돌리기 위해서다</td><td>작음</td></tr>
+        <tr><td class="num">A8</td><td>완료 기준 수치</td><td>명세 §11.6 의 제안값을 임시 기준으로 쓴다. 기준선을 잰 뒤 다시 여쭌다</td><td>수치는 측정 전에 확정할 수 없다</td><td>작음</td></tr>
+        <tr><td class="num">A9</td><td>채점 전용 사례</td><td>후보만 정했다: (사내 사례라 공개본에서 뺌). PRD 와 당시 버전을 읽을 수 있는지는 리플레이 조각에서 확인한다</td><td>둘 다 이 워크플로우 설계에 쓰이지 않았다</td><td>작음</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+</section>
+
+<section id="sec-2">
+  <h2>B. 앞선 답에서 확인받지 못한 것</h2>
+
+  <div class="tw">
+    <table class="w4">
+      <thead><tr><th class="num">#</th><th>질문</th><th>고른 답</th><th>이유</th><th>되돌리는 비용</th></tr></thead>
+      <tbody>
+        <tr><td class="num">B1</td><td>&quot;설계는 Fable 써도 된다&quot;의 &quot;설계&quot;가 무엇인가</td><td>워크플로우의 설계 단계(테크니컬 매니저, QA 설계)로 읽었다</td><td>문맥상 설계 문서의 모델 배정에 대한 답이었다</td><td>작음(설정 값)</td></tr>
+        <tr><td class="num">B2</td><td>분해안을 언제 만드나</td><td>질문이 모두 답해진 뒤. 게이트는 답변과 승인으로 두 번 본다</td><td>답에 따라 요구가 바뀌면 분해를 다시 해야 한다</td><td>중간</td></tr>
+        <tr><td class="num">B3</td><td>분해안을 고치는 방법</td><td>수정 요청을 적으면 티켓 메이커가 다시 만든다</td><td>가장 단순하다</td><td>작음</td></tr>
+        <tr><td class="num">B4</td><td>승인 뒤 요구 변경으로 생긴 추가 티켓</td><td>다시 승인받지 않고 종료 보고서에 적는다</td><td>승인 뒤 무인 진행을 지킨다</td><td>작음</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+</section>
+
+<section id="sec-3">
+  <h2>C. 작업을 진행하며 정한 것</h2>
+
+  <div class="tw">
+    <table class="w4">
+      <thead><tr><th class="num">#</th><th>질문</th><th>고른 답</th><th>이유</th><th>되돌리는 비용</th></tr></thead>
+      <tbody>
+        <tr><td class="num">C1</td><td>hew 를 git 저장소로 만들고 커밋할까</td><td>만든다. 조각마다 로컬 커밋만 하고 원격은 두지 않는다</td><td>하위 에이전트가 앞 조각을 망가뜨렸을 때 되돌릴 지점이 필요하고, 역할 정의의 버전을 git SHA 로 남기기로 했다</td><td>작음</td></tr>
+        <tr><td class="num">C2</td><td>무인 세션의 Artifact 게시 실측</td><td>하지 않았다</td><td>이 계정은 요청이 없으면 Artifact 로 게시하지 않기로 했다</td><td>없음</td></tr>
+        <tr><td class="num">C3</td><td>게이트 페이지의 형식</td><td>로컬 HTML 파일로 만든다. 답은 페이지에서 고른 뒤 파일로 내보내 <code>hew gate import</code> 로 들여온다. Artifact 게시(PO·디자이너 확인 요청서 포함)는 요청하실 때만 한다</td><td>2026-11-14 &quot;이 계정에서는 요구하지 않으면 로컬에서 확인&quot;이라고 하셨다. 설계의 &quot;게이트는 Artifact&quot;는 가정이었다</td><td>중간(저장 방식만 바꾸면 된다)</td></tr>
+        <tr><td class="num">C4</td><td>실행 폴더의 위치</td><td><code>~/hew-runs/&lt;run_id&gt;/</code></td><td>옛 hew 의 바탕화면 폴더보다 덜 어지럽다</td><td>작음</td></tr>
+        <tr><td class="num">C5</td><td>역할 세션에 사용자 설정(훅·플러그인·MCP)을 실을까</td><td>수집 역할만 싣고, 나머지는 사용자 설정 없이 띄운다. heka 도구도 주지 않고 규칙 본문은 코어가 패킷에 싣는다</td><td>세션당 고정 비용이 6~10배 줄고(약 $0.001), 평가 때 현재 지식이 새어 들지 않으며, 모드에 따라 동작이 달라지지 않는다</td><td>작음(실행기 인자)</td></tr>
+        <tr><td class="num">C6</td><td>상태 전이의 세부 규칙</td><td>명세 §1.3 에 &quot;전이 표(구현 기준)&quot;로 적었다. 사수 반송은 분석 제출 전 상태로 되돌리고, 답 반영에서 새 질문이 생기면 게이트를 다시 게시한다</td><td>설계의 반송 상한 2회와 두 번 보는 게이트를 그대로 옮겼다</td><td>중간</td></tr>
+        <tr><td class="num">C7</td><td>리플레이에서 역할에 주는 규칙을 시점으로 거를까</td><td>거르지 않는다. 역할별 규칙 목록은 일하는 방법이라 항상 싣고, 사례 파일의 차단 목록에 든 노트만 뺀다</td><td>시점으로 거르면 2026-10 이후에 정한 화면 우선·운영자 행 제외 같은 규칙이 모두 빠져 지금의 워크플로우를 재는 것이 아니게 된다</td><td>작음</td></tr>
+        <tr><td class="num">C8</td><td>범위 훅이 막은 무해한 명령</td><td>실제 실행에서 막힌 10건 중 해롭지 않은 것(<code>sed -n</code>, <code>mkdir</code>(작업 폴더 안), 세션의 도구 결과 파일 읽기 등)을 풀었다. 반복문·변수·범위 밖 경로는 계속 막는다</td><td>거부 한 번이 에이전트의 한 턴을 쓴다</td><td>작음</td></tr>
+        <tr><td class="num">C9</td><td>사수가 사람에게 물으라고 한 지적을 어떻게 다룰까</td><td>곧바로 질문으로 만들지 않고 먼저 테크니컬 매니저에게 돌려보낸다. 두 번 돌려보내고도 남은 것만 질문이 된다. 문장이 같은 지적은 하나로 묶고, 테크니컬 매니저는 근거를 들어 반박할 수 있다</td><td>첫 실제 실행에서 사수 질문 16개가 붙어 사람이 답할 질문이 30개가 됐다</td><td>작음</td></tr>
+        <tr><td class="num">C10</td><td>시안 이미지 대조를 더 큰 모델로 돌릴까</td><td>Haiku 5.5 로 둔다</td><td>같은 결함 3건을 Sonnet 5.5 로 돌려도 포착이 같았고(3건 중 1건) 비용은 약 14배였다. 표본이 작아 나중에 다시 잰다</td><td>작음(환경 변수)</td></tr>
+        <tr><td class="num">C11</td><td>PRD 본문에 시안 링크가 없을 때</td><td>실행을 만들 때 시안 URL 을 직접 줄 수 있게 했다(<code>hew init --figma</code>)</td><td>(사내 사례라 공개본에서 뺌)</td><td>작음</td></tr>
+        <tr><td class="num">C12</td><td>문서를 로컬 HTML 로 보는 방법</td><td>Markdown 을 HTML 로 바꾸는 스크립트를 두고 <code>npm run docs</code> 로 다시 만든다</td><td>손으로 옮겨 쓴 HTML 은 문서가 바뀔 때마다 낡는다</td><td>없음</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+</section>
+
+<section id="sec-4">
+  <h2>D. 실측 결과(조각 0)</h2>
+
+  <p>명세 §14 에 있다. 요약하면 8건 중 6건을 확인했고, 사용량 한도 동작은 일부러 걸 수 없어 미결로 남겼으며, 무인 세션의 Artifact 게시는 하지 않았다(C2).</p>
+
+</section>
+</main>
+</div>
+</div>
+<script>
+(function () {
+  /* 절 목차: 넓은 화면에서는 항상 펼치고, 좁은 화면에서는 접어 둔다 */
+  var tocd = document.getElementById("tocd");
+  if (tocd) {
+    var mq = window.matchMedia("(min-width: 1000px)");
+    var syncToc = function () { tocd.open = mq.matches; };
+    syncToc();
+    if (mq.addEventListener) mq.addEventListener("change", syncToc);
+    tocd.addEventListener("click", function (e) {
+      if (!mq.matches && e.target.closest && e.target.closest("a")) tocd.open = false;
+    });
+  }
+
+  /* 표기 필터: 고른 표기가 달린 블록만 또렷하게 두고 나머지는 흐리게 한다 */
+  var buttons = document.querySelectorAll(".filters button");
+  var items = document.querySelectorAll(".m[data-m]");
+  function apply(f) {
+    buttons.forEach(function (b) { b.setAttribute("aria-pressed", b.getAttribute("data-f") === f ? "true" : "false"); });
+    items.forEach(function (it) {
+      var on = f === "전체" || it.getAttribute("data-m").split(" ").indexOf(f) !== -1;
+      it.classList.toggle("dim", !on);
+    });
+  }
+  buttons.forEach(function (b) {
+    b.addEventListener("click", function () { apply(b.getAttribute("data-f")); });
+  });
+  apply("전체");
+})();
+</script>
+</body>
+</html>
