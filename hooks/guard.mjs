@@ -277,7 +277,8 @@ export function tokenize(command) {
         if (d === "`") deny("백틱 치환은 허용되지 않습니다");
         if (d === "$") {
           const n = command[j + 1];
-          if (n !== undefined && n !== '"' && !/\s/.test(n)) deny("변수·치환 참조는 허용되지 않습니다");
+          // 직전 명령의 종료 코드($?)는 값을 읽기만 하므로 받는다.
+          if (n !== undefined && n !== '"' && n !== "?" && !/\s/.test(n)) deny("변수·치환 참조는 허용되지 않습니다");
         }
         cur += d;
         j += 1;
@@ -314,7 +315,7 @@ export function tokenize(command) {
       deny("백틱 치환은 허용되지 않습니다");
     } else if (c === "$") {
       const n = command[i + 1];
-      if (n !== undefined && !/\s/.test(n)) deny("변수·치환 참조는 허용되지 않습니다");
+      if (n !== undefined && n !== "?" && !/\s/.test(n)) deny("변수·치환 참조는 허용되지 않습니다");
       cur += c;
       has = true;
     } else if (c === "<") {

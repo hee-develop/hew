@@ -461,3 +461,15 @@ describe("hew sasu", () => {
     expect(bash(`${hew} sasu respond --run ${run} --for analysis --file ${join(other, "responses.json")}`)).toBe("deny");
   });
 });
+
+describe("종료 코드 참조", () => {
+  const bash = (command: string) => decide({ tool_name: "Bash", tool_input: { command }, cwd: run }, env).decision;
+
+  it("$? 는 받고 다른 변수는 계속 거부한다", () => {
+    expect(bash("ls sources; echo exit=$?")).toBe("allow");
+    expect(bash('ls sources; echo "exit=$?"')).toBe("allow");
+    expect(bash("echo $HOME")).toBe("deny");
+    expect(bash('echo "$?$HOME"')).toBe("deny");
+    expect(bash("H=x; echo $H")).toBe("deny");
+  });
+});
