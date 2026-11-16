@@ -1,6 +1,10 @@
 /** 실행 폴더 구조(§1.2)와 --run 인자 해석. */
 import { homedir } from "node:os";
-import { isAbsolute, join, resolve } from "node:path";
+import { dirname, isAbsolute, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+/** hew 저장소 루트(agents, rules, refs, hooks 가 있는 곳). */
+export const HEW_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 export const SOURCE_SUBDIRS = ["prd", "ticket", "figma", "code", "openapi", "related"] as const;
 

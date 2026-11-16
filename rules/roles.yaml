@@ -1,0 +1,61 @@
+# 역할별 실행 설정. 모델·effort 는 환경 변수 HEW_MODEL_<역할>, HEW_EFFORT_<역할> 로 덮어쓸 수 있다.
+roles:
+  technical-manager:
+    model: claude-opus-5-5
+    effort: high
+    isolated: true
+    allowed_tools: [Read, Write, Edit, Bash]
+    timeout_minutes: 90
+    heka:
+      - requirement-source-priority-figma-first
+      - hew-2026-10-21-figma-prd
+      - hew-scope-operator-journeys-excluded-2026-10-29
+      - hew-delta-comparison-rows-2026-10-28
+      - hew-2026-10-21-follow-figma
+      - hew-2026-10-21-requirement-ids
+      - hew-id-labels-korean
+      - figma-mcp-read-procedure
+      - figma-instance-app-3099
+      - figma-to-mobile-component-lookup
+    refs:
+      - refs/analysis-format.md
+      - refs/analysis.example.json
+      - refs/analysis.example.units.json
+  qa-designer:
+    model: claude-opus-5-5
+    effort: high
+    isolated: true
+    allowed_tools: [Read, Write, Edit, Bash]
+    timeout_minutes: 60
+    heka: []
+    refs: []
+  ticket-maker:
+    model: claude-sonnet-5-5
+    effort: medium
+    isolated: true
+    allowed_tools: [Read, Write, Edit, Bash]
+    timeout_minutes: 45
+    heka: []
+    refs: []
+  manager-sasu:
+    model: claude-haiku-5-5
+    isolated: true
+    allowed_tools: [Read, Bash]
+    timeout_minutes: 20
+    heka: []
+    refs: []
+  ticket-sasu:
+    model: claude-haiku-5-5
+    isolated: true
+    allowed_tools: [Read, Bash]
+    timeout_minutes: 20
+    heka: []
+    refs: []
+  collector:
+    model: claude-sonnet-5-5
+    effort: medium
+    isolated: false
+    allowed_tools: [Read, Bash, ToolSearch]
+    timeout_minutes: 45
+    heka: []
+    refs: []

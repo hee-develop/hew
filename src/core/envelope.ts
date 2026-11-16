@@ -65,3 +65,15 @@ export function wrapEnvelope(input: WrapInput): Envelope {
     cost: input.cost ?? null,
   };
 }
+
+/** 환경 변수 HEW_PRODUCED_BY(JSON)에서 produced_by 를 읽는다. 없거나 형식이 틀리면 null. */
+export function producedByFromEnv(env: NodeJS.ProcessEnv = process.env): ProducedBy | null {
+  const raw = env.HEW_PRODUCED_BY;
+  if (raw === undefined || raw.length === 0) return null;
+  try {
+    const parsed = ProducedBySchema.safeParse(JSON.parse(raw));
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
+}

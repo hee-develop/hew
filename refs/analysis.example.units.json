@@ -1,0 +1,126 @@
+{
+  "units": [
+    {
+      "id": "U-1",
+      "source_id": "S-1",
+      "kind": "table_row",
+      "locator": {
+        "section": [
+          "요구"
+        ],
+        "index": 1
+      },
+      "text": "판매자가 홈에서 배너를 본다 | **배너를** 노출한다",
+      "actor": "provider",
+      "columns": {
+        "User Journey": "판매자가 홈에서 배너를 본다",
+        "기능": "배너를 노출한다"
+      }
+    },
+    {
+      "id": "U-2",
+      "source_id": "S-1",
+      "kind": "table_row",
+      "locator": {
+        "section": [
+          "요구"
+        ],
+        "index": 2
+      },
+      "text": "운영자가 배너를 등록한다 | 어드민에서 입력한다",
+      "actor": "operator",
+      "columns": {
+        "User Journey": "운영자가 배너를 등록한다",
+        "기능": "어드민에서 입력한다",
+        "Mobile(App)": ""
+      }
+    },
+    {
+      "id": "U-3",
+      "source_id": "S-1",
+      "kind": "bullet",
+      "locator": {
+        "section": [
+          "요구"
+        ],
+        "index": 3
+      },
+      "text": "원가가 입력되지 않은 팩은 판매가만 노출한다"
+    },
+    {
+      "id": "U-4",
+      "source_id": "S-1",
+      "kind": "bullet",
+      "locator": {
+        "section": [
+          "요구"
+        ],
+        "index": 4
+      },
+      "text": "배너는 최대 5개까지 노출한다"
+    },
+    {
+      "id": "U-5",
+      "source_id": "S-1",
+      "kind": "paragraph",
+      "locator": {
+        "section": [
+          "요구"
+        ],
+        "index": 5
+      },
+      "text": "배경 설명 문단입니다"
+    },
+    {
+      "id": "U-6",
+      "source_id": "S-2",
+      "kind": "figma_screen",
+      "locator": {
+        "node_id": "1:2",
+        "name": "앱/홈"
+      },
+      "text": "앱/홈",
+      "platform": "app",
+      "image": "sources/figma/s1.png"
+    },
+    {
+      "id": "U-7",
+      "source_id": "S-2",
+      "kind": "figma_desc",
+      "locator": {
+        "node_id": "1:3",
+        "name": "desc"
+      },
+      "text": "배너 영역은 최대 5개",
+      "platform": "app"
+    },
+    {
+      "id": "U-8",
+      "source_id": "S-2",
+      "kind": "figma_screen",
+      "locator": {
+        "node_id": "1:4",
+        "name": "웹/홈"
+      },
+      "text": "웹/홈",
+      "platform": "web"
+    },
+    {
+      "id": "U-9",
+      "source_id": "S-1",
+      "kind": "table_row",
+      "locator": {
+        "section": [
+          "요구"
+        ],
+        "index": 9
+      },
+      "text": "앱 설정 노출 | 운영자 세팅",
+      "actor": "operator",
+      "columns": {
+        "작업 구분": "운영자 세팅",
+        "Mobile(App)": "앱 설정 화면에 노출"
+      }
+    }
+  ]
+}
