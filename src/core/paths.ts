@@ -2,7 +2,7 @@
 import { homedir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
 
-export const SOURCE_SUBDIRS = ["prd", "figma", "code", "openapi", "related"] as const;
+export const SOURCE_SUBDIRS = ["prd", "ticket", "figma", "code", "openapi", "related"] as const;
 
 /** 실행 폴더 뿌리. 환경 변수 HEW_RUNS_DIR, 없으면 ~/hew-runs. */
 export function runsRoot(): string {
@@ -27,6 +27,8 @@ export interface RunPaths {
   mistakes: string;
   sources: string;
   manifest: string;
+  requests: string;
+  inventory: string;
   units: string;
   packets: string;
   work: string;
@@ -53,6 +55,8 @@ export function runPaths(dir: string): RunPaths {
     mistakes: join(dir, "mistakes.jsonl"),
     sources,
     manifest: join(sources, "manifest.json"),
+    requests: join(sources, "requests.jsonl"),
+    inventory: join(sources, "figma", "inventory.json"),
     units: join(sources, "units.json"),
     packets: join(dir, "packets"),
     work: join(dir, "work"),

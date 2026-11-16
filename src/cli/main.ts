@@ -4,7 +4,9 @@ import { EXIT, usageError } from "../core/errors.js";
 import { register as registerInit } from "./commands/init.js";
 import { register as registerNext } from "./commands/next.js";
 import { register as registerStatus } from "./commands/status.js";
+import { register as registerSource } from "./commands/source.js";
 import { register as registerSubmit } from "./commands/submit.js";
+import { register as registerUnits } from "./commands/units.js";
 import { emitFailure } from "./output.js";
 
 const program = new Command();
@@ -15,7 +17,7 @@ program
   .exitOverride()
   .configureOutput({ writeErr: () => {} });
 
-for (const register of [registerInit, registerStatus, registerNext, registerSubmit]) register(program);
+for (const register of [registerInit, registerStatus, registerNext, registerSubmit, registerSource, registerUnits]) register(program);
 
 try {
   await program.parseAsync(process.argv);
