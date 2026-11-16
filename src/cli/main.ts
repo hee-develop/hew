@@ -1,6 +1,8 @@
 /** hew CLI 진입점. 종료 코드는 §2.5 를 따른다. */
 import { Command, CommanderError } from "commander";
+import "../core/analysis/index.js";
 import { EXIT, usageError } from "../core/errors.js";
+import { register as registerCheck } from "./commands/check.js";
 import { register as registerInit } from "./commands/init.js";
 import { register as registerNext } from "./commands/next.js";
 import { register as registerStatus } from "./commands/status.js";
@@ -17,7 +19,7 @@ program
   .exitOverride()
   .configureOutput({ writeErr: () => {} });
 
-for (const register of [registerInit, registerStatus, registerNext, registerSubmit, registerSource, registerUnits]) register(program);
+for (const register of [registerInit, registerStatus, registerNext, registerSubmit, registerSource, registerUnits, registerCheck]) register(program);
 
 try {
   await program.parseAsync(process.argv);
