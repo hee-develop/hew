@@ -4,7 +4,7 @@ import type { Issue } from "../src/core/errors.js";
 import { runPaths } from "../src/core/paths.js";
 import { loadRun } from "../src/core/run.js";
 import { submitArtifact } from "../src/core/submit.js";
-import { scenariosCheck } from "../src/core/scenarios/checks.js";
+import { isRunTimeQuestion, scenariosCheck } from "../src/core/scenarios/checks.js";
 import { answersPath, clone, setState, setupRun, writeJson, type Doc } from "./analysis-fixtures.js";
 import { useTempRunsDir, writeItemsFile } from "./helpers.js";
 import { buildScenarios, setupVetted } from "./scenarios-fixtures.js";
@@ -100,6 +100,7 @@ describe("scenarios 검사: 거부", () => {
       dropRequirement(c.dir, "drop");
       const doc = clone(buildScenarios());
       doc.scenarios = doc.scenarios.filter((s: Doc) => s.id !== "시나리오-1");
+      doc.accounts[0].scenario_ids = ["시나리오-2"];
       doc.questions[0].affects = ["요구-1"];
       expect(rejects(c.run(doc))).toEqual([]);
     });
@@ -109,6 +110,7 @@ describe("scenarios 검사: 거부", () => {
       dropRequirement(c.dir, "hold");
       const doc = clone(buildScenarios());
       doc.scenarios = doc.scenarios.filter((s: Doc) => s.id !== "시나리오-1");
+      doc.accounts[0].scenario_ids = ["시나리오-2"];
       doc.questions[0].affects = ["요구-1"];
       expect(rejects(c.run(doc))).toEqual(["ac_uncovered"]);
     });
@@ -128,6 +130,11 @@ describe("scenarios 검사: 거부", () => {
       sc(doc, "시나리오-1").expected[0].screen_id = "화면-1.1";
       expect(rejects(make().run(doc))).toEqual([]);
     });
+    it("실행 전 확인이 가리키는 시나리오가 없다", () => expectReject("scenario_ref_missing", (d) => d.preflight[0].scenario_ids.push("시나리오-9")));
+    it("계정이 가리키는 시나리오가 없다", () => {
+      const issues = expectReject("scenario_ref_missing", (d) => (d.accounts[1].scenario_ids = ["시나리오-9"]));
+      expect(issues.find((i) => i.code === "scenario_ref_missing")?.ref).toBe("AC-2");
+    });
     it("질문의 affects 가 없는 요구", () => expectReject("scenario_ref_missing", (d) => d.questions[0].affects.push("요구-9")));
     it("질문의 affects 가 없는 시나리오", () => expectReject("scenario_ref_missing", (d) => d.questions[0].affects.push("시나리오-9")));
     it("질문의 affects 는 요구 id 도 받아들인다", () => {
@@ -138,13 +145,21 @@ describe("scenarios 검사: 거부", () => {
   });
 
   describe("id_format, id_duplicate", () => {
-    it("시나리오 id 형식", () => expectReject("id_format", (d) => (sc(d, "시나리오-2").id = "시나리오-02")));
+    it("시나리오 id 형식", () =>
+      expectReject("id_format", (d) => {
+        sc(d, "시나리오-2").id = "시나리오-02";
+        d.preflight[0].scenario_ids = ["시나리오-02"];
+      }));
     it("기대 결과 id 형식", () => expectReject("id_format", (d) => (sc(d, "시나리오-1").expected[0].id = "E-1")));
     it("기대 결과 id 의 앞부분이 소속 시나리오와 다르다", () => expectReject("id_format", (d) => (sc(d, "시나리오-1").expected[0].id = "시나리오-2/E-9")));
     it("질문 id 형식", () => expectReject("id_format", (d) => (d.questions[0].id = "질문-3")));
     it("시나리오 id 중복", () => expectReject("id_duplicate", (d) => d.scenarios.push(clone(sc(d, "시나리오-3")))));
     it("기대 결과 id 중복", () => expectReject("id_duplicate", (d) => (sc(d, "시나리오-1").expected[1].id = "시나리오-1/E-1")));
     it("질문 id 중복", () => expectReject("id_duplicate", (d) => d.questions.push(clone(d.questions[0]))));
+    it("실행 전 확인 id 형식", () => expectReject("id_format", (d) => (d.preflight[0].id = "PF-01")));
+    it("계정 id 형식", () => expectReject("id_format", (d) => (d.accounts[0].id = "계정-1")));
+    it("실행 전 확인 id 중복", () => expectReject("id_duplicate", (d) => d.preflight.push(clone(d.preflight[0]))));
+    it("계정 id 중복", () => expectReject("id_duplicate", (d) => (d.accounts[1].id = "AC-1")));
     it("분석 문서의 질문 id 와 겹침", () => expectReject("id_duplicate", (d) => (d.questions[0].id = "Q-1")));
   });
 
@@ -209,6 +224,15 @@ describe("scenarios 검사: 경고와 정보", () => {
     expectWarn("mock_ignored", (d) => (sc(d, "시나리오-1").mock = { endpoints: [{ method: "GET", path: "/v1/x", case: "c" }], reason: "r" }));
   });
 
+  it("mock_ignored: 실행 전 확인이 안 되면 모킹으로 돌리기로 한 real 시나리오의 mock 은 경고하지 않는다", () => {
+    const doc = clone(buildScenarios());
+    doc.preflight[0].fallback = "mock";
+    sc(doc, "시나리오-2").mock = { endpoints: [{ method: "GET", path: "/v1/x", case: "c" }], reason: "실행 전 확인이 안 될 때 쓴다" };
+    const found = codes(make().run(doc));
+    expect(found).not.toContain("mock_ignored");
+    expect(found).not.toContain("preflight_mock_unprepared");
+  });
+
   it("environment_differs: 분석이 고른 환경과 다르지만 API 는 있다", () => {
     const c = make();
     const analysis = readAnalysis(c.dir);
@@ -239,11 +263,40 @@ describe("scenarios 검사: 경고와 정보", () => {
     expect(issues.find((i) => i.code === "reach_unknown")?.ref).toBe("시나리오-3");
   });
 
-  it("accounts_unavailable: 되지 않는 계정을 묻는 질문이 없으면 경고", () => {
-    const issues = expectWarn("accounts_unavailable", (d) => {
-      d.questions = [];
-    });
-    expect(issues.find((i) => i.code === "accounts_unavailable")?.severity).toBe("warn");
+  it("accounts_unavailable: 질문이 없어도 있어도 정보 1건이다", () => {
+    const withQuestions = make().run(buildScenarios()).filter((i) => i.code === "accounts_unavailable");
+    expect(withQuestions).toHaveLength(1);
+    expect(withQuestions[0]).toMatchObject({ severity: "info", ref: null });
+    expect(withQuestions[0]?.message).toContain("AC-2");
+    const doc = clone(buildScenarios());
+    doc.questions = [];
+    const without = make().run(doc).filter((i) => i.code === "accounts_unavailable");
+    expect(without).toHaveLength(1);
+    expect(without[0]?.severity).toBe("info");
+  });
+
+  it("preflight_without_check: 확인 방법이 비어 있으면 거부한다", () => {
+    const issues = expectReject("preflight_without_check", (d) => (d.preflight[0].check = "  "));
+    expect(issues.find((i) => i.code === "preflight_without_check")?.ref).toBe("PF-1");
+  });
+
+  it("preflight_mock_unprepared: 안 되면 모킹으로 돌린다는데 모킹 정보가 없는 real 시나리오가 있으면 경고", () => {
+    const issues = expectWarn("preflight_mock_unprepared", (d) => (d.preflight[0].fallback = "mock"));
+    expect(issues.find((i) => i.code === "preflight_mock_unprepared")?.ref).toBe("PF-1");
+  });
+
+  it("preflight_mock_unprepared: 모킹 정보가 있으면, 또는 보류하기로 했으면 남지 않는다", () => {
+    const withMock = clone(buildScenarios());
+    withMock.preflight[0].fallback = "mock";
+    sc(withMock, "시나리오-2").mock = { endpoints: [{ method: "GET", path: "/v1/banners", case: "배너 6개" }], reason: "환경이 안 맞으면 모킹" };
+    expect(codes(make().run(withMock))).not.toContain("preflight_mock_unprepared");
+    expect(codes(make().run(buildScenarios()))).not.toContain("preflight_mock_unprepared");
+  });
+
+  it("qa_question_not_for_gate: 실행하는 날의 상태를 묻는 질문은 경고한다", () => {
+    const issues = expectWarn("qa_question_not_for_gate", (d) => (d.questions[0].text = "QA 하는 날 staging 에 배너 설정이 배포돼 있나요?"));
+    expect(issues.find((i) => i.code === "qa_question_not_for_gate")?.ref).toBe("Q-3");
+    expect(codes(make().run(buildScenarios()))).not.toContain("qa_question_not_for_gate");
   });
 
   it("accounts_unavailable: 계정이 모두 되면 아무것도 내지 않는다", () => {
@@ -326,5 +379,24 @@ describe("scenarios 검사: 게이트 게시 뒤 질문 철회", () => {
     const c = published();
     writeJson(answersPath(c.dir), { answers: { "Q-3": { option: "a", at: "t" } } });
     expect(rejects(c.run(withoutQuestion(), ["Q-3"]))).toEqual(["withdraw_has_human_input"]);
+  });
+});
+
+describe("isRunTimeQuestion", () => {
+  it("실행하는 날의 상태를 묻는 낱말이 있으면 맞다", () => {
+    expect(isRunTimeQuestion("QA 하는 날 staging 에 새 적립률이 반영돼 있나요?")).toBe(true);
+    expect(isRunTimeQuestion("배너 플래그가 켜져 있습니까？")).toBe(true);
+    expect(isRunTimeQuestion("  테스트 계정이 필요한가요?  ")).toBe(true);
+    expect(isRunTimeQuestion("STAGING 에 배포되어 있나요?")).toBe(true);
+  });
+
+  it("물음표 없이 끝나도 맞다", () => {
+    expect(isRunTimeQuestion("QA 하는 날 staging 에 새 적립률이 반영돼 있나요")).toBe(true);
+    expect(isRunTimeQuestion("staging 의 심사중 설정이 두 플랫폼에서 모두 꺼져 있는가")).toBe(true);
+  });
+
+  it("해당 낱말이 없으면 아니다", () => {
+    expect(isRunTimeQuestion("배너를 탭하면 어디로 이동하나요?")).toBe(false);
+    expect(isRunTimeQuestion("")).toBe(false);
   });
 });

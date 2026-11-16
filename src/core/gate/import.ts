@@ -33,6 +33,7 @@ export const ExportFileSchema = z.object({
   scope: z.record(z.object({ decision: z.string(), note: Note, at: At })).default({}),
   assumptions: z.record(z.object({ status: z.string(), note: Note, at: At })).default({}),
   scenarios: z.record(z.object({ backend: z.string(), note: Note, at: At })).default({}),
+  accounts: z.record(z.object({ note: z.string(), at: At })).default({}),
   plan_requests: z.array(z.object({ target: z.string(), text: z.string(), at: At })).default([]),
   approvals: z.record(z.object({ revision: z.string(), at: At, note: Note })).default({}),
 });
@@ -53,7 +54,7 @@ export const SKIP_REASONS = [
 ] as const;
 export type SkipReason = (typeof SKIP_REASONS)[number];
 
-export const SECTIONS = ["answers", "scope", "assumptions", "scenarios", "plan_requests", "approvals"] as const;
+export const SECTIONS = ["answers", "scope", "assumptions", "scenarios", "accounts", "plan_requests", "approvals"] as const;
 export type Section = (typeof SECTIONS)[number];
 
 export interface SkippedEntry {
@@ -87,6 +88,7 @@ interface Targets {
   deltaKinds: Map<string, AnalysisItems["deltas"][number]["kind"]>;
   assumptions: Set<string>;
   scenarios: Set<string>;
+  accounts: Set<string>;
 }
 
 const warn = (code: string, ref: string | null, message: string): Issue => ({ code, severity: "warn", ref, message });
@@ -112,6 +114,7 @@ function loadTargets(runDir: string): Targets {
     deltaKinds: new Map(analysis.data.deltas.map((d) => [d.id, d.kind])),
     assumptions: new Set(analysis.data.assumptions.map((a) => a.id)),
     scenarios: new Set((scenarios?.scenarios ?? []).map((s) => s.id)),
+    accounts: new Set((scenarios?.accounts ?? []).map((a) => a.id)),
   };
 }
 
@@ -219,6 +222,20 @@ function mergeScenarios(file: ExportFile, targets: Targets, m: Merge): void {
   }
 }
 
+function mergeAccounts(file: ExportFile, targets: Targets, m: Merge): void {
+  for (const [id, entry] of Object.entries(file.accounts)) {
+    const skip = (reason: SkipReason): void => void m.skipped.push({ section: "accounts", id, reason });
+    if (!targets.accounts.has(id)) {
+      m.warnings.push(warn("unknown_id", id, `${id} 는 정본에 없는 계정이라 건너뛰었습니다`));
+      skip("unknown_id");
+    } else if (!isLater(entry.at, m.answers.accounts[id]?.at)) skip("stale");
+    else {
+      m.answers.accounts[id] = { note: entry.note.trim().slice(0, NOTE_LIMIT), at: entry.at };
+      m.applied.accounts += 1;
+    }
+  }
+}
+
 function mergePlanRequests(file: ExportFile, m: Merge): void {
   for (const req of file.plan_requests) {
     const skip = (reason: SkipReason): void => void m.skipped.push({ section: "plan_requests", id: req.target, reason });
@@ -285,7 +302,7 @@ export function importAnswers(opts: ImportOptions): ImportResult {
   const before = computeRevision(opts.runDir);
   const m: Merge = {
     answers: structuredClone(existsSync(paths.answers) ? loadAnswers(opts.runDir) : emptyAnswers()),
-    applied: { answers: 0, scope: 0, assumptions: 0, scenarios: 0, plan_requests: 0, approvals: 0 },
+    applied: { answers: 0, scope: 0, assumptions: 0, scenarios: 0, accounts: 0, plan_requests: 0, approvals: 0 },
     skipped: [],
     warnings: [],
   };
@@ -297,6 +314,7 @@ export function importAnswers(opts: ImportOptions): ImportResult {
   mergeDecisions(file, targets, m);
   mergeAssumptions(file, targets, m);
   mergeScenarios(file, targets, m);
+  mergeAccounts(file, targets, m);
   mergePlanRequests(file, m);
   // 승인은 revision 을 잠그는 기록이라 다른 항목을 먼저 쓴 뒤의 현재 revision 과 대조한다.
   writeJsonAtomic(paths.answers, AnswersFileSchema.parse(m.answers));

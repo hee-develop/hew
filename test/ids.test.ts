@@ -19,6 +19,8 @@ const GOOD: Record<IdKind, string> = {
   ticket: "T3",
   pr: "PR-2",
   finding: "F-9",
+  preflight: "PF-3",
+  account: "AC-2",
 };
 
 describe("ids", () => {

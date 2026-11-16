@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { buildGateModel } from "../src/core/gate/model.js";
@@ -119,6 +119,35 @@ describe("게이트 모델", () => {
     expect(answer.plan).toBeNull();
     expect(answer.rules.delta_choices.figma_only?.map((c) => c.value)).toEqual(["follow_figma", "drop", "hold"]);
     expect(readdirSync(dir)).toContain("run.json");
+  });
+
+  it("실행 전 확인과 계정을 채우고, 열린 항목 수에는 넣지 않는다", () => {
+    const { dir } = setupGateRun();
+    const { model } = buildGateModel(dir, "answer");
+    expect(model.preflight).toHaveLength(1);
+    expect(model.preflight[0]).toMatchObject({
+      id: "PF-1",
+      kind: "deploy",
+      kind_label: "배포",
+      fallback: "hold",
+      fallback_label: "보류하고 보고",
+      scenarios: [{ id: "시나리오-2" }],
+    });
+    expect(model.preflight[0]?.check).toContain("배너를 6개 등록한 환경");
+    expect(model.accounts.map((a) => [a.id, a.available, a.note, a.scenarios.map((s) => s.id)])).toEqual([
+      ["AC-1", true, "", ["시나리오-1"]],
+      ["AC-2", false, "지금 가진 테스트 계정은 모두 배너를 받는다", ["시나리오-3"]],
+    ]);
+    expect(model.head.open_ids).toEqual(["Q-1", "Q-2", "D-1", "D-2", "A-1", "Q-3"]);
+    expect(model.head.open_ids.some((id) => id.startsWith("PF-") || id.startsWith("AC-"))).toBe(false);
+  });
+
+  it("시나리오 문서가 없으면 실행 전 확인·계정은 비어 있다", () => {
+    const { dir } = setupGateRun();
+    rmSync(runPaths(dir).scenarios);
+    const { model } = buildGateModel(dir, "answer");
+    expect(model.preflight).toEqual([]);
+    expect(model.accounts).toEqual([]);
   });
 
   it("비교 내용이 같은 차이는 서로의 id 를 similar_ids 에 단다", () => {

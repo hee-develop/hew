@@ -141,6 +141,37 @@ describe("페이지 로직: 비슷한 차이에 같은 결정", () => {
   });
 });
 
+describe("페이지 로직: 계정 메모", () => {
+  it("메모를 저장하고, 같은 메모나 빈 메모는 상태를 바꾸지 않으며, 길이를 자른다", () => {
+    const empty = logic.emptyState();
+    expect(logic.setAccountNote(empty, "AC-2", "  ", T1)).toBe(empty);
+    const s = logic.setAccountNote(empty, "AC-2", " 준비함 ", T1);
+    expect(s.accounts["AC-2"]).toEqual({ note: "준비함", at: T1 });
+    expect(logic.setAccountNote(s, "AC-2", "준비함", T2)).toBe(s);
+    expect(logic.setAccountNote(s, "AC-2", "x".repeat(600), T2).accounts["AC-2"].note).toHaveLength(500);
+    expect(logic.setAccountNote(s, "AC-2", "", T2).accounts["AC-2"]).toEqual({ note: "", at: T2 });
+  });
+
+  it("내보내기에 accounts 가 들어가고 import 스키마를 통과한다. 열린 항목·승인 조건에는 영향이 없다", () => {
+    const { dir } = setupGateRun();
+    const m = modelOf(dir);
+    const base = answerEverything(logic, m);
+    const withNote = logic.setAccountNote(base, "AC-2", "없음, 모킹으로", T2);
+    const exp = logic.buildExport(m, withNote, new Date(T2));
+    expect(exp.accounts).toEqual({ "AC-2": { note: "없음, 모킹으로", at: T2 } });
+    expect(ExportFileSchema.safeParse(exp).success).toBe(true);
+    expect(logic.buildExport(m, logic.emptyState(), new Date(T2)).accounts).toEqual({});
+    expect(logic.computeOpen(m, withNote).all).toEqual(logic.computeOpen(m, base).all);
+    expect(logic.computeProgress(m, logic.emptyState()).open).toBe(6);
+    expect(m.preflight.length + m.accounts.length).toBeGreaterThan(0);
+  });
+
+  it("합칠 때 계정 메모도 시각이 늦은 쪽을 쓴다", () => {
+    const merged = logic.mergeStates({ accounts: { "AC-2": { note: "옛", at: T1 } } }, { accounts: { "AC-2": { note: "새", at: T2 } } });
+    expect(merged.accounts["AC-2"].note).toBe("새");
+  });
+});
+
 describe("페이지 로직: 합치기와 내보내기", () => {
   it("항목마다 시각이 늦은 쪽을 쓰고 수정 요청은 합친다", () => {
     const base = { answers: { "Q-1": { option: "a", at: T2 }, "Q-2": { option: "a", at: T1 } }, plan_requests: [{ target: "전체", text: "x", at: T1 }] };

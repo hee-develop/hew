@@ -28,7 +28,8 @@
 | 묶음 | 형식 | 필수 | 뜻 |
 |---|---|---|---|
 | `scenarios` | 객체 배열 | 필수 | 시나리오 |
-| `accounts` | 객체 배열 | 선택 | 필요한 계정 상태와 지금 가진 계정으로 되는지 |
+| `preflight` | 객체 배열 | 선택 | 실행하는 날 확인할 환경 상태(실행 전 확인). 게이트의 열린 항목이 아니다 |
+| `accounts` | 객체 배열 | 선택 | 시나리오가 요구하는 계정 상태와 지금 가진 계정으로 되는지. 게이트의 열린 항목이 아니다 |
 | `questions` | 객체 배열 | 선택 | QA 설계가 올리는 질문 |
 
 ## scenarios[] — 시나리오
@@ -80,15 +81,34 @@
 | `endpoints` | 배열 `{ method, path, case }` | 검사 | 흉내 낼 엔드포인트와 경우. 하나 이상 |
 | `reason` | 문자열 | 검사 | 모킹하는 이유 |
 
-## accounts[] — 필요한 계정 상태
+## preflight[] — 실행 전 확인
+
+실행하는 날의 환경 상태("QA 하는 날 staging 에 새 적립률이 반영돼 있는가", "이 플래그가 켜져 있는가")는 승인하는 날 답할 수 없으므로 질문으로 올리지 않는다. 여기에 적어 두면 게이트에 목록으로 보이고, 실행하는 날 QA 가 확인한다.
 
 | 칸 | 형식 | 필수 | 뜻 |
 |---|---|---|---|
+| `id` | `PF-n` | 필수 | 실행 전 확인 id |
+| `text` | 문자열 | 필수 | 확인할 환경 상태 |
+| `kind` | `env`·`deploy`·`flag`·`data` | 필수 | 환경, 배포, 플래그, 데이터 |
+| `scenario_ids` | 시나리오 id 배열 | 필수 | 이 확인이 걸린 시나리오. 하나 이상 |
+| `check` | 문자열 | 필수 | 무엇을 어떻게 확인하는지. 비어 있으면 거부 |
+| `fallback` | `mock`·`hold` | 필수 | 확인이 안 될 때: 모킹으로 돌린다 / 그 시나리오를 보류하고 보고한다 |
+
+`fallback` 이 `mock` 인데 걸린 시나리오가 실서버이고 `mock` 칸(엔드포인트)이 비어 있으면 모킹으로 돌릴 준비가 안 된 것이라 `preflight_mock_unprepared` 경고가 난다.
+
+## accounts[] — 필요한 계정
+
+시나리오가 요구하는 계정 상태를 한 줄씩 적는다. 계정마다 질문을 만들지 않는다. 사람은 게이트에서 이 목록을 한 번에 보고, 안 되는 줄에 준비 상황을 메모로 남길 수 있다(메모는 승인·revision 과 무관하다).
+
+| 칸 | 형식 | 필수 | 뜻 |
+|---|---|---|---|
+| `id` | `AC-n` | 필수 | 계정 id |
 | `state` | 문자열 | 필수 | 필요한 계정 상태 |
 | `available` | 참/거짓 | 필수 | 지금 가진 테스트 계정으로 되는가 |
+| `scenario_ids` | 시나리오 id 배열 | 필수 | 이 계정이 필요한 시나리오. 하나 이상 |
 | `note` | 문자열 | 선택 | 안 될 때 무엇이 더 필요한지 |
 
-`available` 이 거짓인 상태가 있으면 그것을 묻는 질문을 `questions` 에 올린다. 질문이 하나도 없으면 `accounts_unavailable` 경고가 난다.
+`available` 이 거짓인 계정이 있으면 질문 유무와 상관없이 `accounts_unavailable` 정보가 한 건 난다.
 
 ## questions[] — 질문
 
@@ -96,6 +116,7 @@
 
 - `origin` 은 `qa` 여야 한다.
 - `affects` 에는 요구 id 또는 이 문서의 시나리오 id 를 쓴다.
+- 실행하는 날의 환경·계정 상태를 묻는 질문은 올리지 않는다(위 `preflight`, `accounts` 로 옮긴다). 사람이 승인할 때 답할 수 있는 것(예: 모킹으로만 확인해도 되는가)만 묻는다.
 
 | 칸 | 형식 | 필수 | 뜻 |
 |---|---|---|---|
@@ -119,12 +140,13 @@
 | 코드 | 뜻 |
 |---|---|
 | `ac_uncovered` | 검증 수단이 `qa_scenario` 인 인수 조건을 덮는 시나리오가 없다. 사람이 `drop` 으로 범위 밖으로 결정한 요구의 인수 조건은 제외 |
-| `scenario_ref_missing` | 없는 요구·인수 조건·화면을 가리킨다. 인수 조건의 요구가 `requirement_ids` 에 없을 때도 같은 코드 |
+| `scenario_ref_missing` | 없는 요구·인수 조건·화면·시나리오(실행 전 확인·계정의 `scenario_ids`)를 가리킨다. 인수 조건의 요구가 `requirement_ids` 에 없을 때도 같은 코드 |
 | `expected_empty` | 기대 결과가 없거나 `text` 가 빈 시나리오 |
 | `steps_empty` | 단계가 없는 시나리오 |
 | `mock_without_reason` | 모킹인데 이유나 엔드포인트가 없다 |
 | `real_without_presence` | 실서버인데 `environment` 가 없거나, 영향 분석의 API 가 모두 그 환경에 없다 |
-| `id_format`, `id_duplicate` | id 형식이 틀렸거나 두 번 쓰였다 |
+| `id_format`, `id_duplicate` | id 형식이 틀렸거나 두 번 쓰였다(시나리오, 기대 결과, 질문, `PF-n`, `AC-n`) |
+| `preflight_without_check` | 실행 전 확인의 `check` 가 비어 있다 |
 | `question_origin`, `question_without_options` | 질문의 `origin` 이 `qa` 가 아니다 / 선택지도 `affects` 도 없다 |
 | `id_removed`, `withdraw_has_human_input` | 게이트 게시 뒤 질문이 `--withdraw` 없이 사라졌다 / 사람의 답이 있는 질문을 철회하려 했다 |
 | `analysis_missing` | 정본 분석 문서가 없다 |
@@ -137,8 +159,10 @@
 | `mock_only_requirement` | 어떤 요구를 덮는 시나리오가 모두 모킹이다("통합 미검증") |
 | `reach_unknown` | 화면에 도달하는 방법을 모른다 |
 | `environment_differs` | `environment` 가 분석이 고른 환경(`impact.environment.name`)과 다르다 |
-| `mock_ignored` | `backend` 가 `real` 인데 `mock` 칸이 채워져 있다 |
-| `accounts_unavailable` | 지금 가진 계정으로 안 되는 상태가 있다(질문이 있으면 정보, 없으면 경고) |
+| `mock_ignored` | `backend` 가 `real` 인데 `mock` 칸이 채워져 있다. 실행 전 확인의 `fallback` 이 `mock` 인 시나리오는 예외다(모킹 정보를 채워 둬야 한다) |
+| `accounts_unavailable` | 지금 가진 계정으로 안 되는 계정이 있다(정보 한 건. 질문 유무와 무관) |
+| `preflight_mock_unprepared` | 안 되면 모킹으로 돌린다고 했는데 걸린 실서버 시나리오에 모킹 정보가 없다 |
+| `qa_question_not_for_gate` | 질문이 실행하는 날의 환경·계정 상태를 묻는 것으로 보인다(`preflight`·`accounts` 로 옮긴다) |
 | `human_field_ignored`, `unknown_field_dropped` | 사람의 칸 값 / 스키마에 없는 칸을 버렸다 |
 | `item_withdrawn` | `--withdraw` 로 질문을 철회했다 |
 

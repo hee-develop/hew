@@ -60,6 +60,18 @@ describe("revision", () => {
     expect(computeRevision(dir)).not.toBe(r4);
   });
 
+  it("answers 의 계정 메모(accounts)는 revision 에 영향이 없고, 다른 칸은 영향이 있다", () => {
+    const { dir } = makeRun();
+    const p = runPaths(dir);
+    put(p.analysis, { items: { a: 1 } });
+    put(p.answers, { answers: { "Q-1": { option: "a", at: "t" } } });
+    const r0 = computeRevision(dir);
+    put(p.answers, { answers: { "Q-1": { option: "a", at: "t" } }, accounts: { "AC-2": { note: "준비함", at: "t" } } });
+    expect(computeRevision(dir)).toBe(r0);
+    put(p.answers, { answers: { "Q-1": { option: "b", at: "t" } }, accounts: { "AC-2": { note: "준비함", at: "t" } } });
+    expect(computeRevision(dir)).not.toBe(r0);
+  });
+
   it("envelope 의 items 밖(attempt, verdict)은 영향이 없다", () => {
     const { dir } = makeRun();
     const p = runPaths(dir);

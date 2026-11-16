@@ -19,6 +19,8 @@ export const ID_PATTERNS = {
   ticket: new RegExp(`^T${N}$`),
   pr: new RegExp(`^PR-${N}$`),
   finding: new RegExp(`^F-${N}$`),
+  preflight: new RegExp(`^PF-${N}$`),
+  account: new RegExp(`^AC-${N}$`),
 } as const;
 
 export type IdKind = keyof typeof ID_PATTERNS;

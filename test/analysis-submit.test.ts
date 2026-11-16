@@ -128,7 +128,7 @@ describe("submit analysis: 손질 경고", () => {
 describe("answers.json 과 열린 항목", () => {
   it("파일이 없으면 모두 빈 것으로 본다", () => {
     const { dir } = setupRun();
-    expect(loadAnswers(dir)).toEqual({ answers: {}, scope: {}, assumptions: {}, scenarios: {}, plan_requests: [], approvals: {} });
+    expect(loadAnswers(dir)).toEqual({ answers: {}, scope: {}, assumptions: {}, scenarios: {}, accounts: {}, plan_requests: [], approvals: {} });
   });
 
   it("답이 있으면 열린 항목이 줄고, hold 는 결정이며, 허용되지 않는 값은 결정 안 됨이다", () => {
