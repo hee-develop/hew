@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -307,5 +307,146 @@ describe("cd 와 pwd", () => {
   it("cd 뒤에도 범위 밖 절대 경로와 허용되지 않는 명령은 거부한다", () => {
     expect(bash(`cd ${repo} && cat ${join(other, "secret.txt")}`)).toBe("deny");
     expect(bash(`cd ${repo} && curl http://example.com`)).toBe("deny");
+  });
+});
+
+describe("도구 결과 파일 읽기", () => {
+  const sessionId = "5ac4a1b5-5c94-4d47-8066-a6a92c439eba";
+  let cfg = "";
+  let results = "";
+  let slugDir = "";
+  let toolEnv: Record<string, string>;
+  const slugOf = (dir: string) => dir.replace(/[^A-Za-z0-9]/g, "-");
+
+  beforeAll(() => {
+    cfg = join(base, "claude-cfg");
+    const realRun = realpathSync(run);
+    slugDir = join(cfg, "projects", slugOf(realRun));
+    results = join(slugDir, sessionId, "tool-results");
+    mkdirSync(results, { recursive: true });
+    mkdirSync(join(results, "deeper"), { recursive: true });
+    mkdirSync(join(cfg, "projects", slugOf(other), sessionId, "tool-results"), { recursive: true });
+    writeFileSync(join(results, "out.txt"), "big output");
+    writeFileSync(join(results, "deeper", "x.txt"), "x");
+    writeFileSync(join(slugDir, `${sessionId}.jsonl`), "{}");
+    writeFileSync(join(cfg, "projects", slugOf(other), sessionId, "tool-results", "o.txt"), "o");
+    writeFileSync(join(cfg, "settings.json"), "{}");
+    symlinkSync(join(cfg, "settings.json"), join(results, "link-out.txt"));
+    symlinkSync(join(slugDir, `${sessionId}.jsonl`), join(results, "link-jsonl.txt"));
+    toolEnv = { ...env, CLAUDE_CONFIG_DIR: cfg };
+  });
+
+  const verdict = (payload: unknown, e: Record<string, string> = toolEnv) => decide(payload, e).decision;
+  const readOf = (file: string, e?: Record<string, string>) => verdict({ tool_name: "Read", tool_input: { file_path: file }, cwd: run }, e);
+  const bashOf = (command: string, e?: Record<string, string>) => verdict({ tool_name: "Bash", tool_input: { command }, cwd: run }, e);
+
+  it("Read: 도구 결과 파일은 허용한다", () => {
+    expect(readOf(join(results, "out.txt"))).toBe("allow");
+  });
+  it("Read: 슬러그는 실행 폴더 경로의 영숫자 아닌 문자를 -로 바꾼 것이어야 한다", () => {
+    expect(slugOf("/Users/example/hew-runs/20261114-app3008-s1")).toBe("-Users-example-hew-runs-20261114-app3008-s1");
+  });
+  it("Read: 설정 폴더 환경 변수가 다르면 거부한다", () => {
+    expect(readOf(join(results, "out.txt"), { ...env, CLAUDE_CONFIG_DIR: join(base, "elsewhere") })).toBe("deny");
+  });
+  it("Read: 설정 폴더 환경 변수가 없으면 ~/.claude 기준이라 거부한다", () => {
+    expect(readOf(join(results, "out.txt"), env)).toBe("deny");
+  });
+  it("Read: 세션 기록(.jsonl) 거부", () => {
+    expect(readOf(join(slugDir, `${sessionId}.jsonl`))).toBe("deny");
+  });
+  it("Read: 다른 실행의 슬러그 폴더 거부", () => {
+    expect(readOf(join(cfg, "projects", slugOf(other), sessionId, "tool-results", "o.txt"))).toBe("deny");
+  });
+  it("Read: tool-results/.. 로 나가는 경로 거부", () => {
+    expect(readOf(join(results, "..", `..`, `${sessionId}.jsonl`))).toBe("deny");
+    expect(readOf(`${results}/../x`)).toBe("deny");
+  });
+  it("Read: 더 깊은 경로 거부", () => {
+    expect(readOf(join(results, "deeper", "x.txt"))).toBe("deny");
+  });
+  it("Read: 세션 id 가 UUID 모양이 아니면 거부", () => {
+    mkdirSync(join(slugDir, "not-a-uuid", "tool-results"), { recursive: true });
+    writeFileSync(join(slugDir, "not-a-uuid", "tool-results", "a.txt"), "a");
+    expect(readOf(join(slugDir, "not-a-uuid", "tool-results", "a.txt"))).toBe("deny");
+  });
+  it("Read: 밖을 가리키는 심볼릭 링크 거부", () => {
+    expect(readOf(join(results, "link-out.txt"))).toBe("deny");
+    expect(readOf(join(results, "link-jsonl.txt"))).toBe("deny");
+  });
+  it("Read: 설정 폴더의 다른 파일 거부", () => {
+    expect(readOf(join(cfg, "settings.json"))).toBe("deny");
+  });
+  it("Bash: 읽기 명령의 인자로 도구 결과 파일을 허용한다", () => {
+    expect(bashOf(`cat ${join(results, "out.txt")}`)).toBe("allow");
+    expect(bashOf(`head -n 5 ${join(results, "out.txt")}`)).toBe("allow");
+    expect(bashOf(`rg foo ${join(results, "out.txt")}`)).toBe("allow");
+    expect(bashOf(`jq . ${join(results, "out.txt")} | head`)).toBe("allow");
+  });
+  it("Bash: 세션 기록·더 깊은 경로·폴더 자체·링크는 거부한다", () => {
+    expect(bashOf(`cat ${join(slugDir, `${sessionId}.jsonl`)}`)).toBe("deny");
+    expect(bashOf(`cat ${join(results, "deeper", "x.txt")}`)).toBe("deny");
+    expect(bashOf(`ls ${results}`)).toBe("deny");
+    expect(bashOf(`cat ${join(results, "link-out.txt")}`)).toBe("deny");
+    expect(bashOf(`cat ${results}/*.txt`)).toBe("deny");
+  });
+  it("Bash: 도구 결과 파일로 쓰기는 거부한다", () => {
+    expect(bashOf(`echo x > ${join(results, "out.txt")}`)).toBe("deny");
+  });
+});
+
+describe("명령별 인자 규칙", () => {
+  const bashOf = (command: string, cwd = run) => decide({ tool_name: "Bash", tool_input: { command }, cwd }, env).decision;
+  const allow = (...commands: string[]) => {
+    for (const c of commands) expect(bashOf(c), c).toBe("allow");
+  };
+  const denied = (...commands: string[]) => {
+    for (const c of commands) expect(bashOf(c), c).toBe("deny");
+  };
+
+  it("sed -n 줄 범위", () => {
+    allow("sed -n 1,2p sources/units.json", "sed -n '2,19p' sources/units.json", "sed -n '5p;10p' sources/units.json", "sed -n '$p' sources/units.json", "sed -n -e 1p -e '2p' sources/units.json", "sed -nE 1p sources/units.json", "cat sources/units.json | sed -n 1p");
+  });
+  it("sed 거부: -n 없음·-i·-f·모르는 옵션", () => {
+    denied("sed 1p sources/units.json", "sed -i -n 1p doc/x", "sed -n -i 1p doc/x", "sed --in-place -n 1p doc/x", "sed -n -f s.sed sources/units.json", "sed -n -s 1p sources/units.json", "sed -n --expression=1p sources/units.json", "sed -n", "sed -ni 1p doc/x");
+  });
+  it("sed 거부: w·e·r·s 스크립트", () => {
+    denied("sed -n '1w out.txt' sources/units.json", "sed 's/a/b/w file' sources/units.json", "sed -n 's/a/b/p' sources/units.json", "sed -n '1e cat /etc/hosts' sources/units.json", "sed -n '1r /etc/hosts' sources/units.json", "sed -n -e 1p -e '2w x' sources/units.json");
+  });
+  it("sed 거부: 파일이 읽기 뿌리 밖", () => {
+    denied("sed -n 1p /etc/hosts", `sed -n 1p ${join(other, "secret.txt")}`);
+  });
+  it("paste·column·nl", () => {
+    allow("paste sources/units.json sources/units.json", "column -t sources/units.json", "nl sources/units.json", "cat sources/units.json | column -t | nl");
+    denied("paste /etc/hosts", "column /etc/hosts", "nl ../other/secret.txt", "nl x > /tmp/y");
+  });
+  it("tr 의 인자는 경로가 아니다", () => {
+    allow("echo a/b | tr '/' '\\n'", "echo 'a  b' | tr -s ' '", "echo a/b | tr -d '/'", "echo a/b | tr / -");
+    denied("echo a | tr a b > /tmp/x", "echo a | tr a b > out.txt", "echo $HOME | tr / x");
+  });
+  it("cut 구분자 인자", () => {
+    allow("echo a/b | cut -d/ -f1", "echo a/b | cut -d / -f2", "echo a/b | cut -f2 -d/");
+    denied("cut -d/ -f1 /etc/hosts", "cut -f1 /etc/hosts", "cut -d, -f1 ../other/secret.txt");
+  });
+  it("find 패턴 인자", () => {
+    allow("find sources -ipath '*/api/*'", "find . -path '*/src/*' -name '*.ts'", "find . -regex '.*/a/b' -type f", "find . -wholename './sources/*'");
+    denied("find /etc -name x", "find sources -name '*.json' /etc", "find / -ipath '*/api/*'", "find . -name '*/api/*' -exec cat x ;", "find . -name -delete", "find . -newer /etc/hosts", "find . -ipath '*/a/*' -fprint out.txt");
+  });
+  it("mkdir 은 쓰기 뿌리 안에서 -p 만", () => {
+    allow("mkdir work/w/new", "mkdir -p work/w/a/b", `mkdir -p ${join(work, "x")} ${join(work, "y")}`);
+    denied("mkdir doc/new", "mkdir -p /tmp/x", "mkdir -m 777 work/w/a", "mkdir -p -m 700 work/w/a", "mkdir", "mkdir -p work/w/../../doc/x", "mkdir -p work/w/out-link/x", `mkdir ${join(repo, "x")}`, "mkdir -p work/w/a doc/b", "mkdir -pv work/w/a");
+  });
+  it("sips 제자리 변경은 입력이 모두 쓰기 뿌리 안일 때만", () => {
+    writeFileSync(join(work, "crop.png"), "x");
+    allow("sips -Z 1800 work/w/crop.png", `sips -Z 1800 ${join(work, "crop.png")}`, "sips -g pixelWidth sources/a.png");
+    denied("sips -Z 1800 sources/a.png", `sips -Z 1800 ${join(work, "crop.png")} sources/a.png`, "sips -Z 1800", "sips -Z 1800 /tmp/x.png", "sips -Z 1800 work/w/out-link/a.png", `sips -m /etc/x.icc ${join(work, "crop.png")}`);
+    expect(bashOf("sips -Z 1800 crop.png", work)).toBe("allow");
+  });
+  it("rg·grep 패턴 인자는 경로가 아니다", () => {
+    allow("rg 'app/api' sources", "rg -e 'a/b' .", "rg -n -i 'a/b' sources", "rg -A 2 'a/b' sources", "grep -rn 'app/api' sources", "grep -e 'a/b' sources/units.json", "grep -E 'a/(b|c)' sources/units.json", "rg -e 'x/y' -e 'z/w' sources");
+    denied("rg x /etc", "rg 'a/b' /etc", "rg -f /etc/hosts x", "rg --file /etc/hosts", "grep -f /etc/hosts x", "rg --files /etc", "rg --weird '/etc/hosts' .", "rg -e a /etc/hosts", "rg -e a/b /etc", "grep a/b /etc/hosts", "rg -g '/etc/*' x .");
+  });
+  it("계속 거부: 반복·변수·치환·cd 규칙", () => {
+    denied("for f in a b; do cat $f; done", "while true; do ls; done", "x=1; cat $x", "cat ${x}", "cat $(ls)", "cat `ls`", "ls && cd sources", `cd ${repo} && cat ../other/secret.txt`, "cat ~/x");
   });
 });

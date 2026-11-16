@@ -7,12 +7,49 @@ import { pathToFileURL } from "node:url";
 
 const ALLOWED_COMMANDS = new Set([
   "rg", "grep", "ls", "find", "cat", "head", "tail", "wc", "jq", "sort", "uniq", "cut", "tr", "sips", "file", "stat",
-  "basename", "dirname", "echo", "true", "test", "[", "git", "pwd",
+  "basename", "dirname", "echo", "true", "test", "[", "git", "pwd", "sed", "paste", "column", "nl", "mkdir",
 ]);
 const GIT_SUBCOMMANDS = new Set(["log", "show", "diff", "status", "ls-files", "grep", "rev-parse", "cat-file", "blame", "branch"]);
 const GIT_FORBIDDEN_FLAGS = ["--output", "--ext-diff", "--textconv", "--filters", "--open-files-in-pager", "--exec-path", "--upload-pack"];
 const GIT_BRANCH_FLAGS = new Set(["--list", "-l", "-a", "--all", "-r", "--remotes", "-v", "-vv", "--show-current", "--no-color", "--color=never"]);
 const FIND_FORBIDDEN = /^-(exec|execdir|delete|ok|okdir|fprint\w*|fls)$/;
+const FIND_PATTERN_OPTIONS = new Set(["-name", "-iname", "-path", "-ipath", "-wholename", "-iwholename", "-regex", "-iregex"]);
+const SED_SCRIPT = /^[0-9,$;p\s]+$/;
+const SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// rg·grep 옵션 표: 값을 받는 짧은 옵션 글자, 값이 없는 짧은 옵션 글자, 긴 옵션 이름.
+const PATTERN_SPECS = {
+  rg: {
+    shortValue: new Set("efgtTABCmjMdEr"),
+    shortFlag: new Set("iInNlcvwFsSuHhoUqLpPx0"),
+    longValue: new Set([
+      "--file", "--glob", "--iglob", "--type", "--type-not", "--type-add", "--max-count", "--max-depth", "--maxdepth", "--context",
+      "--after-context", "--before-context", "--replace", "--threads", "--max-columns", "--color", "--sort", "--sortr", "--ignore-file",
+      "--encoding", "--max-filesize", "--colors", "--path-separator", "--engine",
+    ]),
+    longFlag: new Set([
+      "--ignore-case", "--case-sensitive", "--smart-case", "--line-number", "--no-line-number", "--files-with-matches", "--files-without-match",
+      "--count", "--count-matches", "--hidden", "--no-ignore", "--fixed-strings", "--word-regexp", "--line-regexp", "--invert-match",
+      "--heading", "--no-heading", "--json", "--only-matching", "--no-filename", "--with-filename", "--follow", "--multiline", "--quiet",
+      "--no-messages", "--vimgrep", "--pretty", "--text", "--null", "--stats", "--files", "--type-list", "--column", "--no-config",
+    ]),
+    noPattern: new Set(["--files", "--type-list"]),
+  },
+  grep: {
+    shortValue: new Set("efmABCdD"),
+    shortFlag: new Set("ivnclLrRwxFEGPHhoqsaIzUZbTV0123456789"),
+    longValue: new Set([
+      "--file", "--max-count", "--after-context", "--before-context", "--context", "--include", "--exclude", "--exclude-dir", "--exclude-from",
+      "--directories", "--devices", "--binary-files", "--label",
+    ]),
+    longFlag: new Set([
+      "--ignore-case", "--no-ignore-case", "--invert-match", "--line-number", "--count", "--files-with-matches", "--files-without-match",
+      "--recursive", "--dereference-recursive", "--word-regexp", "--line-regexp", "--extended-regexp", "--basic-regexp", "--fixed-strings",
+      "--perl-regexp", "--only-matching", "--quiet", "--silent", "--no-messages", "--with-filename", "--no-filename", "--text", "--null",
+      "--color", "--colour", "--byte-offset", "--initial-tab", "--null-data",
+    ]),
+    noPattern: new Set(),
+  },
+};
 const HEW_SUBCOMMANDS = new Set(["submit", "check", "status", "next", "units", "source"]);
 const HEW_SOURCE_SUBCOMMANDS = new Set(["list", "request"]);
 const SIPS_READ_FLAGS = new Set(["-g", "--getProperty", "-1", "--oneLine"]);
@@ -81,10 +118,40 @@ const parseRoots = (value) =>
     .map((entry) => physicalPath(entry))
     .filter((entry) => entry !== null);
 
-function checkRead(p, cwd, roots, label) {
+/**
+ * 세션의 도구 결과 파일(<설정 폴더>/projects/<슬러그>/<세션 id>/tool-results/<파일>)인지 판정하는 함수를 만든다.
+ * 슬러그는 실행 폴더 절대 경로에서 영숫자가 아닌 문자를 모두 -로 바꾼 것이다.
+ */
+function toolResultsMatcher(env) {
+  const never = () => false;
+  const runDir = env.HEW_GUARD_RUN_DIR;
+  if (typeof runDir !== "string" || !runDir.startsWith("/")) return never;
+  const configured = env.CLAUDE_CONFIG_DIR;
+  const configDir = configured === undefined || configured.length === 0 ? join(homedir(), ".claude") : configured;
+  if (!configDir.startsWith("/")) return never;
+  const configReal = physicalPath(configDir);
+  if (configReal === null) return never;
+  const runVariants = new Set([resolve(runDir)]);
+  const runReal = physicalPath(runDir);
+  if (runReal !== null) runVariants.add(runReal);
+  const prefixes = [...runVariants].map((dir) => `${join(configReal, "projects", dir.replace(/[^A-Za-z0-9]/g, "-"))}/`);
+  return (real) => {
+    if (/[*?[\]]/.test(real)) return false;
+    for (const prefix of prefixes) {
+      if (!real.startsWith(prefix)) continue;
+      const parts = real.slice(prefix.length).split("/");
+      if (parts.length === 3 && SESSION_ID.test(parts[0]) && parts[1] === "tool-results" && parts[2].length > 0) return true;
+    }
+    return false;
+  };
+}
+
+function checkRead(p, cwd, roots, label, allowToolResults = false) {
   const real = resolvePhysical(p, cwd);
   if (real === null) deny(`${label} 경로를 확인할 수 없습니다: ${p}`);
-  if (!within(real, roots.read)) deny(`${label} 읽기 범위 밖입니다: ${p}`);
+  if (within(real, roots.read)) return;
+  if (allowToolResults && roots.isToolResult !== undefined && roots.isToolResult(real)) return;
+  deny(`${label} 읽기 범위 밖입니다: ${p}`);
 }
 
 function checkWrite(p, cwd, roots, label) {
@@ -274,7 +341,7 @@ function checkArg(word, base, roots) {
     if (candidate.length === 0) continue;
     if (isPathLike(candidate)) {
       if (/[*?[]/.test(candidate) && candidate.split("/").includes("..")) deny(`'..' 와 와일드카드를 함께 쓴 경로는 허용되지 않습니다: ${candidate}`);
-      checkRead(candidate, base, roots, "인자의");
+      checkRead(candidate, base, roots, "인자의", true);
     } else if (!candidate.startsWith("-")) {
       const absolute = `${base}/${candidate}`;
       let stat = null;
@@ -283,7 +350,7 @@ function checkArg(word, base, roots) {
       } catch {
         stat = null;
       }
-      if (stat !== null && stat.isSymbolicLink()) checkRead(candidate, base, roots, "인자의 링크");
+      if (stat !== null && stat.isSymbolicLink()) checkRead(candidate, base, roots, "인자의 링크", true);
     }
   }
 }
@@ -366,6 +433,25 @@ function checkGit(args, ctx) {
   for (const word of rest) checkArg(word, base, ctx.roots);
 }
 
+/** sips 인자 중 입력 파일로 볼 단어를 모은다. 경로 모양이거나 작업 디렉터리에 실제로 있는 이름만 파일로 본다. */
+function sipsInputFiles(args, ctx) {
+  const files = [];
+  for (const word of args) {
+    if (word.startsWith("-") || /^\d+(\.\d+)?$/.test(word)) continue;
+    if (isPathLike(word)) {
+      files.push(word);
+      continue;
+    }
+    try {
+      lstatSync(`${ctx.cwd}/${word}`);
+      files.push(word);
+    } catch {
+      // 파일이 아닌 옵션 값(png, horizontal 등)
+    }
+  }
+  return files;
+}
+
 function checkSips(args, ctx) {
   let out = null;
   const flags = [];
@@ -383,7 +469,12 @@ function checkSips(args, ctx) {
   }
   if (out === null) {
     const bad = flags.filter((f) => !SIPS_READ_FLAGS.has(f));
-    if (bad.length > 0) deny(`sips 는 --out 없이 원본을 바꿀 수 없습니다: ${bad.join(" ")}`);
+    if (bad.length > 0) {
+      // --out 없이 바꾸려면 입력 파일이 모두 쓰기 뿌리 안이어야 한다.
+      const files = sipsInputFiles(args, ctx);
+      if (files.length === 0) deny(`sips 는 --out 없이 원본을 바꿀 수 없습니다: ${bad.join(" ")}`);
+      for (const file of files) checkWrite(file, ctx.cwd, ctx.roots, "sips 제자리 변경 대상의");
+    }
   } else {
     checkWrite(out, ctx.cwd, ctx.roots, "sips --out 의");
   }
@@ -396,6 +487,154 @@ function checkSips(args, ctx) {
     if (word.startsWith("--out=")) continue;
     checkArg(word, ctx.cwd, ctx.roots);
   }
+}
+
+/** mkdir 은 -p 만 받고, 모든 경로가 쓰기 뿌리 안이어야 한다. */
+function checkMkdir(args, ctx) {
+  const paths = [];
+  for (const word of args) {
+    if (word === "-p") continue;
+    if (word.startsWith("-")) deny(`mkdir 옵션이 허용되지 않습니다: ${word}`);
+    paths.push(word);
+  }
+  if (paths.length === 0) deny("mkdir 에 경로가 없습니다");
+  for (const path of paths) checkWrite(path, ctx.cwd, ctx.roots, "mkdir 대상의");
+}
+
+/** sed 는 -n 과 줄 번호·범위·p 로만 된 스크립트만 받는다. 경로 검사에서 뺄 스크립트 위치를 돌려준다. */
+function checkSed(args) {
+  const skip = new Set();
+  const scripts = [];
+  const positional = [];
+  let hasN = false;
+  let viaE = false;
+  for (let i = 0; i < args.length; i += 1) {
+    const word = args[i];
+    if (word === "-" || !word.startsWith("-")) {
+      positional.push(i);
+      continue;
+    }
+    if (!/^-[nEe]+$/.test(word) || word.slice(1, -1).includes("e")) deny(`sed 옵션이 허용되지 않습니다: ${word}`);
+    if (word.includes("n")) hasN = true;
+    if (word.endsWith("e")) {
+      if (i + 1 >= args.length) deny("sed -e 스크립트가 없습니다");
+      viaE = true;
+      scripts.push(i + 1);
+      skip.add(i + 1);
+      i += 1;
+    }
+  }
+  if (!hasN) deny("sed 는 -n 과 함께만 허용됩니다");
+  if (!viaE) {
+    if (positional.length === 0) deny("sed 스크립트가 없습니다");
+    scripts.push(positional[0]);
+    skip.add(positional[0]);
+  }
+  for (const index of scripts) {
+    if (!SED_SCRIPT.test(args[index])) deny(`sed 스크립트가 허용되지 않습니다: ${args[index]}`);
+  }
+  return skip;
+}
+
+/** rg·grep 인자에서 검색 패턴인 단어의 위치를 모은다. 앞선 옵션을 모두 알아볼 수 있을 때만 첫 비옵션 인자를 패턴으로 본다. */
+function patternIndexes(args, spec) {
+  const found = new Set();
+  let sure = true;
+  let havePatternOption = false;
+  let noPattern = false;
+  let afterDashes = false;
+  let firstPositional = -1;
+  let sureAtFirst = false;
+  for (let i = 0; i < args.length; i += 1) {
+    const word = args[i];
+    if (afterDashes || !word.startsWith("-") || word === "-") {
+      if (firstPositional < 0) {
+        firstPositional = i;
+        sureAtFirst = sure;
+      }
+      continue;
+    }
+    if (word === "--") {
+      afterDashes = true;
+      continue;
+    }
+    if (word.startsWith("--")) {
+      const eq = word.indexOf("=");
+      const name = eq >= 0 ? word.slice(0, eq) : word;
+      if (name === "--regexp") {
+        havePatternOption = true;
+        if (eq >= 0) {
+          if (sure) found.add(i);
+        } else if (i + 1 < args.length) {
+          if (sure) found.add(i + 1);
+          i += 1;
+        }
+        continue;
+      }
+      if (name === "--file") havePatternOption = true;
+      if (spec.noPattern.has(name)) noPattern = true;
+      if (eq >= 0) continue;
+      if (spec.longValue.has(name)) {
+        i += 1;
+        continue;
+      }
+      if (!spec.longFlag.has(name)) sure = false;
+      continue;
+    }
+    for (let k = 1; k < word.length; k += 1) {
+      const letter = word[k];
+      if (spec.shortValue.has(letter)) {
+        const attached = k + 1 < word.length;
+        if (letter === "e") {
+          havePatternOption = true;
+          if (attached) {
+            if (sure) found.add(i);
+          } else if (i + 1 < args.length && sure) {
+            found.add(i + 1);
+          }
+        } else if (letter === "f") {
+          havePatternOption = true;
+        }
+        if (!attached) i += 1;
+        break;
+      }
+      if (!spec.shortFlag.has(letter)) {
+        sure = false;
+        break;
+      }
+    }
+  }
+  if (!havePatternOption && !noPattern && firstPositional >= 0 && sureAtFirst) found.add(firstPositional);
+  return found;
+}
+
+/** 명령별로 경로 검사에서 뺄 인자 위치(패턴·구분자 등)를 돌려준다. */
+function nonPathIndexes(first, args) {
+  const skip = new Set();
+  if (first === "tr") {
+    args.forEach((_, i) => skip.add(i));
+  } else if (first === "cut") {
+    for (let i = 0; i < args.length; i += 1) {
+      if (args[i] === "-d") {
+        if (i + 1 < args.length) skip.add(i + 1);
+        i += 1;
+      } else if (/^-d.+$/.test(args[i])) {
+        skip.add(i);
+      }
+    }
+  } else if (first === "find") {
+    for (let i = 0; i < args.length; i += 1) {
+      if (FIND_PATTERN_OPTIONS.has(args[i]) && i + 1 < args.length) {
+        skip.add(i + 1);
+        i += 1;
+      }
+    }
+  } else if (first === "sed") {
+    return checkSed(args);
+  } else if (first === "rg" || first === "grep") {
+    return patternIndexes(args, PATTERN_SPECS[first]);
+  }
+  return skip;
 }
 
 function checkSimple(first, args, ctx) {
@@ -420,7 +659,10 @@ function checkSimple(first, args, ctx) {
     deny("jq 에서 환경 변수·입력 파일명 접근은 허용되지 않습니다");
   }
   if (first === "jq" && args.some((w) => /(^|[^A-Za-z0-9_])(import|include)([^A-Za-z0-9_]|$)/.test(w))) deny("jq 모듈 불러오기는 허용되지 않습니다");
-  for (const word of args) checkArg(word, ctx.cwd, ctx.roots);
+  const skip = nonPathIndexes(first, args);
+  args.forEach((word, i) => {
+    if (!skip.has(i)) checkArg(word, ctx.cwd, ctx.roots);
+  });
 }
 
 function checkSegment(seg, ctx) {
@@ -440,6 +682,7 @@ function checkSegment(seg, ctx) {
   if (!ALLOWED_COMMANDS.has(first)) deny(`허용되지 않는 명령입니다: ${first}`);
   if (first === "git") return checkGit(args, ctx);
   if (first === "sips") return checkSips(args, ctx);
+  if (first === "mkdir") return checkMkdir(args, ctx);
   return checkSimple(first, args, ctx);
 }
 
@@ -470,13 +713,13 @@ function checkBash(input, cwd, roots, env) {
 /** 훅 입력과 환경 변수로 판정을 낸다. { decision: "allow"|"deny", reason } */
 export function decide(payload, env = process.env) {
   try {
-    const roots = { read: parseRoots(env.HEW_GUARD_READ_ROOTS), write: parseRoots(env.HEW_GUARD_WRITE_ROOTS) };
+    const roots = { read: parseRoots(env.HEW_GUARD_READ_ROOTS), write: parseRoots(env.HEW_GUARD_WRITE_ROOTS), isToolResult: toolResultsMatcher(env) };
     const tool = payload?.tool_name;
     const input = payload?.tool_input ?? {};
     const cwd = typeof payload?.cwd === "string" && payload.cwd.length > 0 ? payload.cwd : process.cwd();
     if (tool === "Read") {
       if (typeof input.file_path !== "string") deny("Read 에 file_path 가 없습니다");
-      checkRead(input.file_path, cwd, roots, "Read 대상의");
+      checkRead(input.file_path, cwd, roots, "Read 대상의", true);
     } else if (tool === "Write" || tool === "Edit") {
       if (typeof input.file_path !== "string") deny(`${tool} 에 file_path 가 없습니다`);
       checkWrite(input.file_path, cwd, roots, `${tool} 대상의`);
