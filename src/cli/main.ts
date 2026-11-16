@@ -2,6 +2,7 @@
 import { Command, CommanderError } from "commander";
 import "../core/analysis/index.js";
 import "../core/scenarios/index.js";
+import "../core/plan/index.js";
 import { EXIT, usageError } from "../core/errors.js";
 import { register as registerApprove } from "./commands/approve.js";
 import { register as registerCheck } from "./commands/check.js";

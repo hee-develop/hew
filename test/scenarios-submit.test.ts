@@ -267,9 +267,9 @@ describe("hew check: scenarios", () => {
     expect(run("sck-5", "--only", "analysis").status).toBe(0);
   });
 
-  it("--only 가 analysis·scenarios 가 아니면 종료 2", () => {
+  it("--only 가 analysis·scenarios·plan 이 아니면 종료 2", () => {
     setupAnalyzed({ runId: "sck-6" });
-    expect(run("sck-6", "--only", "plan").status).toBe(2);
+    expect(run("sck-6", "--only", "weird").status).toBe(2);
   });
 });
 

@@ -49,6 +49,8 @@ export function affectedRequirements(items: AnalysisItems, work: string, scenari
         const affects = q?.affects ?? [];
         return affects.flatMap((id) => (isId("requirement", id) ? [id] : scenarioReqs(id)));
       }
+      case "T1":
+        return [];
     }
   })();
   return [...new Set(ids)].filter((id) => reqs.some((r) => r.id === id));

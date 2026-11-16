@@ -164,11 +164,13 @@ describe("패킷: 반송과 답 반영", () => {
     expect(/```sh\n(.+)\n```/.exec(text)?.[1]).toContain("submit analysis");
   });
 
-  it("분해안 반송 패킷에는 답변 안내가 없다", () => {
+  it("분해안 반송 패킷에는 --for plan 답변 안내가 있다", () => {
     const { dir, run } = makeRun("answers_applied", { rework: { analysis: 0, plan: 1 } });
     writeFileSync(join(runPaths(dir).findingsDir, "plan-1.json"), JSON.stringify({ items: { findings: [{ id: "F-1", work: "T1", verdict: "issue", claim: "c" }] } }));
     saveRun(dir, { ...run, submissions: { findings_plan: { attempt: 1, at: "t", hash: "h" } } });
-    expect(read(buildPacket({ runDir: dir, role: "ticket-maker", env: env() }).path)).not.toContain("sasu respond");
+    const text = read(buildPacket({ runDir: dir, role: "ticket-maker", env: env() }).path);
+    expect(text).toContain(`sasu respond --for plan --run ${dir} --file ${join(runPaths(dir).work, "ticket-maker-1", "responses.json")}`);
+    expect(text).toContain("티켓 id");
   });
 
   it("ticket-maker 반송은 plan 용 findings 를 본다", () => {

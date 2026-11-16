@@ -13,6 +13,7 @@ import { HEW_ROOT, findingsBatchPath, findingsPath, runPaths } from "./paths.js"
 import { roleConfig, type RoleConfig, type RoleName } from "./roles.js";
 import { loadRun, type Run } from "./run.js";
 import { createPlan } from "./sasu/plan.js";
+import type { SasuTarget } from "./sasu/types.js";
 import { currentRound, isBatchSubmitted, loadPlan, pendingBatches } from "./sasu/store.js";
 import { RUN_STATES, type RunState } from "./state-machine.js";
 
@@ -135,7 +136,12 @@ export function buildSpawnPlan(
     ...(config.isolated ? ["--setting-sources", "project,local", "--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}'] : []),
   ];
   const sasu = role === "manager-sasu" || role === "ticket-sasu";
-  const readRoots = [runDir, ...(!sasu && run.repo.path !== null ? [resolve(expandHome(run.repo.path))] : []), join(HEW_ROOT, "refs")];
+  const readRoots = [
+    runDir,
+    ...(!sasu && run.repo.path !== null ? [resolve(expandHome(run.repo.path))] : []),
+    join(HEW_ROOT, "refs"),
+    ...(role === "ticket-maker" ? [join(HEW_ROOT, "rules")] : []),
+  ];
   const producedBy: ProducedBy = { role, model: config.model, effort: config.effort, role_sha: roleSha(role), session_id: null };
   return {
     bin: claudeBin(env),
@@ -266,7 +272,7 @@ const sum = (values: (number | null)[]): number | null => {
 
 function describeStop(next: NextAction): string {
   switch (next.action) {
-    case "sasu": return next.for === "plan" ? "분해안(plan) 사수는 아직 지원하지 않습니다" : "분석 사수 단계입니다";
+    case "sasu": return next.for === "plan" ? "분해안 사수 단계입니다" : "분석 사수 단계입니다";
     case "publish_gate": return `게이트(${next.phase}) 게시 차례입니다`;
     case "wait_human": return `사람의 ${next.for === "answers" ? "답" : "승인"}을 기다립니다`;
     case "done": return "끝났습니다";
@@ -335,9 +341,10 @@ export async function runLoop(opts: RunnerOptions): Promise<RunnerResult> {
   };
 
   /** 이번 회차의 사수 묶음을 순서대로 하나씩 띄운다. 모든 묶음이 끝나면 회차 완료 처리로 상태가 바뀐다. */
-  const runSasuRound = async (): Promise<"done" | "max_steps"> => {
-    const config = roleConfig("manager-sasu", env);
-    const created = createPlan(opts.runDir, "analysis", new Date(), null);
+  const runSasuRound = async (target: SasuTarget): Promise<"done" | "max_steps"> => {
+    const role: RoleName = target === "analysis" ? "manager-sasu" : "ticket-sasu";
+    const config = roleConfig(role, env);
+    const created = createPlan(opts.runDir, target, new Date(), null);
     if (created.completed !== null) return "done";
     const round = created.plan.round;
     const costs: (number | null)[] = [];
@@ -351,7 +358,7 @@ export async function runLoop(opts: RunnerOptions): Promise<RunnerResult> {
       while (attemptsMade < MAX_ATTEMPTS && !submitted) {
         if (launches >= maxSteps) return "max_steps";
         attemptsMade += 1;
-        const r = await launchOnce("manager-sasu", "first", config, attemptsMade, () => isBatchSubmitted(opts.runDir, round, batch.k), batch.k);
+        const r = await launchOnce(role, "first", config, attemptsMade, () => isBatchSubmitted(opts.runDir, round, batch.k, target), batch.k);
         costs.push(r.parsed.total_cost_usd);
         durations.push(r.parsed.duration_ms);
         lastPlan = r.plan;
@@ -359,16 +366,16 @@ export async function runLoop(opts: RunnerOptions): Promise<RunnerResult> {
         timedOut = r.timedOut;
         submitted = r.progressed;
         if (submitted) {
-          fillProvenance([findingsBatchPath(paths, "analysis", round, batch.k)], r.plan, r.parsed.session_id, r.parsed.total_cost_usd, r.parsed.duration_ms);
+          fillProvenance([findingsBatchPath(paths, target, round, batch.k)], r.plan, r.parsed.session_id, r.parsed.total_cost_usd, r.parsed.duration_ms);
         }
       }
       if (!submitted) {
-        appendEvent(paths.events, "agent_failed", { role: "manager-sasu", purpose: "first", batch: batch.k, attempts: attemptsMade });
+        appendEvent(paths.events, "agent_failed", { role, purpose: "first", batch: batch.k, attempts: attemptsMade });
         const why = timedOut ? "시간 제한 초과" : "묶음 제출이 없음";
-        throw new HewError("external", `manager-sasu 묶음 ${batch.k} 실행이 ${attemptsMade}회 모두 실패했습니다(마지막 사유: ${why}). 작업 폴더의 stdout.json·stderr.txt 를 확인하세요: ${lastPlan?.work_dir ?? ""}`);
+        throw new HewError("external", `${role} 묶음 ${batch.k} 실행이 ${attemptsMade}회 모두 실패했습니다(마지막 사유: ${why}). 작업 폴더의 stdout.json·stderr.txt 를 확인하세요: ${lastPlan?.work_dir ?? ""}`);
       }
     }
-    if (lastPlan !== null) fillProvenance([findingsPath(paths, "analysis", round)], lastPlan, lastSession, sum(costs), sum(durations));
+    if (lastPlan !== null) fillProvenance([findingsPath(paths, target, round)], lastPlan, lastSession, sum(costs), sum(durations));
     return "done";
   };
 
@@ -376,21 +383,23 @@ export async function runLoop(opts: RunnerOptions): Promise<RunnerResult> {
     const run = loadRun(opts.runDir);
     const next = nextAction(run.state, { rework: run.rework, progress: run.progress });
     if (opts.until !== undefined && run.state === opts.until) return result("until_reached", run, next, `상태 ${run.state} 에 닿아 멈춥니다`);
-    if (next.action === "sasu" && next.for === "analysis") {
-      if (!existsSync(join(HEW_ROOT, "agents", "manager-sasu.md"))) {
-        return result("role_missing", run, next, "역할 정의 파일(agents/manager-sasu.md)이 없어 manager-sasu 를 띄울 수 없습니다");
+    if (next.action === "sasu") {
+      const target = next.for;
+      const sasuRole: RoleName = target === "analysis" ? "manager-sasu" : "ticket-sasu";
+      if (!existsSync(join(HEW_ROOT, "agents", `${sasuRole}.md`))) {
+        return result("role_missing", run, next, `역할 정의 파일(agents/${sasuRole}.md)이 없어 ${sasuRole} 를 띄울 수 없습니다`);
       }
       if (opts.dry === true) {
-        const plan = loadPlan(opts.runDir, currentRound(run));
+        const plan = loadPlan(opts.runDir, currentRound(run, target), target);
         const pending = plan === null ? [] : pendingBatches(opts.runDir, plan);
         const first = pending[0];
-        if (first === undefined) return result("dry", run, next, "사수 계획이 아직 없습니다. hew sasu plan --for analysis 로 만든 뒤 다시 보세요");
-        const config = roleConfig("manager-sasu", env);
-        const planned = planPacket(opts.runDir, "manager-sasu");
-        const dry = buildSpawnPlan(opts.runDir, run, "manager-sasu", "first", config, planned, env, opts.timeoutMs);
-        return result("dry", run, next, `manager-sasu(묶음 ${first.k}) 를 띄울 명령을 출력만 합니다`, dry);
+        if (first === undefined) return result("dry", run, next, `사수 계획이 아직 없습니다. hew sasu plan --for ${target} 로 만든 뒤 다시 보세요`);
+        const config = roleConfig(sasuRole, env);
+        const planned = planPacket(opts.runDir, sasuRole);
+        const dry = buildSpawnPlan(opts.runDir, run, sasuRole, "first", config, planned, env, opts.timeoutMs);
+        return result("dry", run, next, `${sasuRole}(묶음 ${first.k}) 를 띄울 명령을 출력만 합니다`, dry);
       }
-      if ((await runSasuRound()) === "max_steps") return result("max_steps", loadRun(opts.runDir), next, `띄우는 횟수 상한(${maxSteps})에 닿아 멈춥니다`);
+      if ((await runSasuRound(target)) === "max_steps") return result("max_steps", loadRun(opts.runDir), next, `띄우는 횟수 상한(${maxSteps})에 닿아 멈춥니다`);
       continue;
     }
     if (next.action !== "spawn") return result("stopped", run, next, describeStop(next));

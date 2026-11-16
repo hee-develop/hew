@@ -7,7 +7,7 @@ import { appendEvent } from "./events.js";
 import { writeJsonAtomic } from "./fsx.js";
 import { hashJson } from "./hash.js";
 import { collectRunOpen } from "./open.js";
-import { findingsPath, runPaths } from "./paths.js";
+import { runPaths } from "./paths.js";
 import { computeRevision } from "./revision.js";
 import { loadRun, saveRun, type Run, type SubmissionKey } from "./run.js";
 import {
@@ -111,8 +111,7 @@ export interface SubmitResult {
   warnings: Issue[];
 }
 
-const stageOf = (kind: SubmitKind, target: FindingsTarget | null): Stage =>
-  kind === "findings" ? (target === "plan" ? "findings_plan" : "findings_analysis") : kind;
+const stageOf = (kind: Exclude<SubmitKind, "findings">): Stage => kind;
 
 const contextOf = (run: Run, revision: string): TransitionContext => ({
   rework: run.rework,
@@ -167,8 +166,8 @@ export function submitArtifact(opts: SubmitOptions): SubmitResult {
   // 상태가 이 종류를 받을 수 있는지 먼저 확인한다(받을 수 없으면 종료 4).
   transition(run.state, eventFor(opts.kind, target, {}, 0), contextOf(run, currentRevision));
 
-  if (opts.kind === "findings" && target === "analysis") {
-    throw usageError("분석용 findings 는 묶음 단위로 냅니다. --batch <k> 를 붙여 hew submit findings 를 부르세요");
+  if (opts.kind === "findings") {
+    throw usageError("findings 는 묶음 단위로 냅니다. --batch <k> 를 붙여 hew submit findings 를 부르세요");
   }
 
   const parsed = parseItems(text, spec);
@@ -192,7 +191,7 @@ export function submitArtifact(opts: SubmitOptions): SubmitResult {
   }
 
   const items = parsed.items;
-  const key: SubmissionKey = stageOf(opts.kind, target);
+  const key: SubmissionKey = stageOf(opts.kind);
   const attempt = (run.submissions[key]?.attempt ?? 0) + 1;
   const openIds = spec.collectOpen(items, opts.runDir);
   const totalOpen = opts.kind === "analysis" || opts.kind === "scenarios" ? collectRunOpen(opts.runDir, { kind: opts.kind, items }).length : run.open;
@@ -212,8 +211,7 @@ export function submitArtifact(opts: SubmitOptions): SubmitResult {
   const docPath =
     opts.kind === "analysis" ? paths.analysis
     : opts.kind === "scenarios" ? paths.scenarios
-    : opts.kind === "plan" ? paths.plan
-    : findingsPath(paths, target ?? "analysis", attempt);
+    : paths.plan;
   writeJsonAtomic(docPath, envelope);
 
   const revision = computeRevision(opts.runDir);

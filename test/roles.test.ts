@@ -15,11 +15,27 @@ describe("roles.yaml", () => {
     expect(roles.collector).toMatchObject({ model: "claude-sonnet-5-5", effort: "medium", isolated: false, timeout_minutes: 45 });
   });
 
-  it("technical-manager 만 heka 규칙 10개를 가진다", () => {
+  it("technical-manager 는 heka 규칙 10개, ticket-maker 는 6개를 가지고 나머지는 없다", () => {
     const roles = loadRoles();
     expect(roles["technical-manager"]?.heka).toHaveLength(10);
     expect(roles["technical-manager"]?.heka[0]).toBe("requirement-source-priority-figma-first");
-    for (const r of ROLE_NAMES.filter((n) => n !== "technical-manager")) expect(roles[r]?.heka).toEqual([]);
+    expect(roles["ticket-maker"]?.heka).toEqual([
+      "jira-ticket-title-format",
+      "jira-mo-ticket-body-format",
+      "app-team-feature-flag-replaces-epic-branch",
+      "app-feature-story-role-prefixed-subtasks",
+      "small-commits",
+      "commit-split-ui-and-feature",
+    ]);
+    for (const r of ROLE_NAMES.filter((n) => n !== "technical-manager" && n !== "ticket-maker")) expect(roles[r]?.heka).toEqual([]);
+  });
+
+  it("ticket-maker·ticket-sasu 의 refs 는 모두 존재하고 ticket-sasu 는 Read·Write·Bash 만 쓴다", () => {
+    const roles = loadRoles();
+    expect(roles["ticket-maker"]?.refs).toEqual(["refs/plan-format.md", "refs/plan.example.json", "rules/plan.yaml"]);
+    expect(roles["ticket-sasu"]?.refs).toEqual(["refs/findings-format.md", "refs/findings.plan.example.json", "refs/sasu-batch.plan.example.json"]);
+    expect(roles["ticket-sasu"]?.allowed_tools).toEqual(["Read", "Write", "Bash"]);
+    for (const r of ["ticket-maker", "ticket-sasu"]) for (const ref of roles[r]?.refs ?? []) expect(existsSync(join(HEW_ROOT, ref))).toBe(true);
   });
 
   it("manager-sasu 는 형식 안내 세 개를 refs 로 가지고 대상 저장소 도구 없이 Read·Write·Bash 만 쓴다", () => {

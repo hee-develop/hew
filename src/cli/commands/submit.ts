@@ -15,7 +15,7 @@ export function register(program: Command): void {
     .requiredOption("--run <폴더|id>", "실행 폴더 경로 또는 run_id")
     .requiredOption("--file <경로>", "제출할 items JSON 파일")
     .option("--for <대상>", "findings 의 대상: analysis|plan")
-    .option("--batch <k>", "분석용 findings 의 묶음 번호")
+    .option("--batch <k>", "findings 의 묶음 번호")
     .option("--withdraw <id,…>", "철회할 항목 id(analysis·scenarios 에서 처리)")
     .action((kind: string, options: { run: string; file: string; for?: string; batch?: string; withdraw?: string }, command: Command) =>
       runAction(command, () => {
@@ -25,20 +25,21 @@ export function register(program: Command): void {
         if (options.for !== undefined && options.for !== "analysis" && options.for !== "plan") {
           throw usageError(`--for 는 analysis|plan 중 하나여야 합니다: ${options.for}`);
         }
-        if (options.batch !== undefined && !(kind === "findings" && options.for === "analysis")) {
-          throw usageError("--batch 는 findings --for analysis 제출에만 쓸 수 있습니다");
+        if (options.batch !== undefined && kind !== "findings") {
+          throw usageError("--batch 는 findings 제출에만 쓸 수 있습니다");
         }
-        if (kind === "findings" && options.for === "analysis") {
+        if (kind === "findings" && options.for !== undefined) {
+          const target = options.for as "analysis" | "plan";
           const batch = Number(options.batch);
           if (options.batch === undefined || !Number.isInteger(batch) || batch < 1) {
-            throw usageError("분석용 findings 제출에는 --batch <1 이상의 정수> 가 필요합니다");
+            throw usageError("findings 제출에는 --batch <1 이상의 정수> 가 필요합니다");
           }
-          const r = submitFindingsBatch({ runDir: resolveRunDir(options.run), batch, file: resolve(options.file), producedBy: producedByFromEnv() });
+          const r = submitFindingsBatch({ runDir: resolveRunDir(options.run), target, batch, file: resolve(options.file), producedBy: producedByFromEnv() });
           const tail = r.completed !== null ? `, 회차 ${r.round} 완료: 상태 ${r.previous_state} → ${r.state}` : "";
           return {
             data: {
               kind: "findings",
-              for: "analysis",
+              for: target,
               round: r.round,
               batch: r.batch,
               path: r.path,
@@ -50,7 +51,7 @@ export function register(program: Command): void {
               completed: r.completed,
             },
             warnings: r.warnings,
-            text: `findings(analysis) 회차 ${r.round} 묶음 ${r.batch} 제출이 통과했습니다: 단위 ${r.units}개, issue ${r.issues}건, 차단 ${r.blocking}건${tail}`,
+            text: `findings(${target}) 회차 ${r.round} 묶음 ${r.batch} 제출이 통과했습니다: 단위 ${r.units}개, issue ${r.issues}건, 차단 ${r.blocking}건${tail}`,
           };
         }
         const result = submitArtifact({

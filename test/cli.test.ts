@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import { runPaths } from "../src/core/paths.js";
 import { loadRun } from "../src/core/run.js";
 import { PRD_URL, makeRun, useTempRunsDir, writeItemsFile } from "./helpers.js";
+import { buildPlan, setupAnswersApplied } from "./plan-fixtures.js";
 import { buildScenarios, setupAnalyzed } from "./scenarios-fixtures.js";
 
 const runs = useTempRunsDir();
@@ -95,9 +96,9 @@ describe("CLI 계약(자식 프로세스)", () => {
   });
 
   it("submit --withdraw 를 처리하지 않는 종류는 경고를 낸다", () => {
-    const { dir } = makeRun("planned", {}, "sub-3");
-    const file = writeItemsFile(dir, "in.json", { findings: [] });
-    const r = hew(["--json", "submit", "findings", "--for", "plan", "--run", "sub-3", "--file", file, "--withdraw", "Q-1,Q-2"]);
+    const { dir } = setupAnswersApplied();
+    const file = writeItemsFile(dir, "in.json", buildPlan());
+    const r = hew(["--json", "submit", "plan", "--run", loadRun(dir).run_id, "--file", file, "--withdraw", "T1,T2"]);
     expect(r.code).toBe(0);
     expect(parse(r.stdout).warnings.map((w: any) => w.code)).toEqual(["withdraw_unsupported"]);
   });

@@ -259,9 +259,9 @@ describe("hew check", () => {
     expect(body.errors.map((e: any) => e.code)).toContain("quote_not_found");
   });
 
-  it("--only 가 analysis 가 아니면 종료 2", () => {
+  it("--only 가 analysis·scenarios·plan 이 아니면 종료 2", () => {
     setupRun({ runId: "ck-3" });
-    expect(hew(["--json", "check", "--run", "ck-3", "--only", "plan"]).status).toBe(2);
+    expect(hew(["--json", "check", "--run", "ck-3", "--only", "weird"]).status).toBe(2);
   });
 });
 

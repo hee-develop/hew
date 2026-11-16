@@ -1,0 +1,17 @@
+{
+  "answers": {
+    "Q-1": { "option": "a", "at": "2026-11-14T09:00:00.000Z", "by": "사람" },
+    "Q-2": { "option": "a", "at": "2026-11-14T09:00:00.000Z", "by": "사람" },
+    "Q-3": { "option": "b", "at": "2026-11-14T09:00:00.000Z", "by": "사람" }
+  },
+  "scope": {
+    "D-1": { "decision": "hold", "note": "배너 개수는 PO 확인 뒤에 정한다", "at": "2026-11-14T09:00:00.000Z", "by": "사람" },
+    "D-2": { "decision": "follow_figma", "at": "2026-11-14T09:00:00.000Z", "by": "사람" }
+  },
+  "assumptions": {
+    "A-1": { "status": "confirmed", "at": "2026-11-14T09:00:00.000Z", "by": "사람" }
+  },
+  "scenarios": {},
+  "plan_requests": [],
+  "approvals": {}
+}

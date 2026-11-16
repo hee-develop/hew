@@ -3,7 +3,9 @@ import { z } from "zod";
 import { BoxSchema } from "../analysis/schema.js";
 import { ID_PATTERNS } from "../ids.js";
 
-export const WORK_CODES = ["W2", "W3", "W4", "W5", "W6", "W7", "W8", "W9"] as const;
+export const ANALYSIS_WORK_CODES = ["W2", "W3", "W4", "W5", "W6", "W7", "W8", "W9"] as const;
+export const PLAN_WORK_CODES = ["T1"] as const;
+export const WORK_CODES = [...ANALYSIS_WORK_CODES, ...PLAN_WORK_CODES] as const;
 export type WorkCode = (typeof WORK_CODES)[number];
 
 export const FINDING_VERDICTS = ["ok", "issue"] as const;
@@ -17,6 +19,9 @@ export const FINDING_KINDS = [
   "visual_unlisted",
   "bad_pairing",
   "already_answered",
+  "ticket_contradicts",
+  "ticket_missing_change",
+  "ticket_missing_context",
 ] as const;
 export const FINDING_ACTIONS = ["fix", "ask", "drop"] as const;
 
@@ -33,6 +38,7 @@ export const KINDS_BY_CODE: Record<WorkCode, readonly FindingKind[]> = {
   W7: ["visual_unlisted"],
   W8: ["bad_pairing"],
   W9: ["already_answered"],
+  T1: ["ticket_contradicts", "ticket_missing_change", "ticket_missing_context"],
 };
 
 /** 지적 종류를 실수 기록(§12)의 type 으로 옮기는 표. */
@@ -46,6 +52,9 @@ export const MISTAKE_TYPE_BY_KIND: Record<FindingKind, string> = {
   visual_unlisted: "visual_missed",
   bad_pairing: "other",
   already_answered: "needless_question",
+  ticket_contradicts: "bad_plan",
+  ticket_missing_change: "bad_plan",
+  ticket_missing_context: "bad_plan",
 };
 
 const FindingEvidenceSchema = z.object({
@@ -71,8 +80,10 @@ export const FindingsItemsSchema = z.object({ findings: z.array(FindingSchema) }
 export const StoredFindingSchema = FindingSchema.extend({
   blocking: z.boolean(),
   reused: z.boolean().optional(),
-  /** 반송 상한에 닿아 사람에게 묻는 질문으로 바뀐 차단 지적. */
+  /** 반송 상한에 닿아 사람에게 묻는 질문으로 바뀐 차단 지적(분석용). */
   to_question: z.boolean().optional(),
+  /** 반송 상한에 닿아 게이트의 확인 필요로 올라가는 차단 지적(분해안용). */
+  to_gate: z.boolean().optional(),
 });
 
 export type Finding = z.infer<typeof FindingSchema>;

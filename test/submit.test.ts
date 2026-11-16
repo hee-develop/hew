@@ -111,17 +111,13 @@ describe("submit: 통과", () => {
     expect(loadRun(dir).state).toBe("qa_designed");
   });
 
-  it("분해안 findings 는 plan-<회차>.json 에 쓴다", () => {
+  it("분해안 findings 도 submitArtifact 로 낼 수 없고 묶음 제출(--batch)을 쓰라고 알린다(종료 2)", () => {
     const { dir } = makeRun("planned");
-    const result = submitArtifact({
-      runDir: dir,
-      kind: "findings",
-      for: "plan",
-      file: writeItemsFile(dir, "f.json", { findings: [{ verdict: "issue", evidence: "e" }] }),
-    });
-    expect(result.path.endsWith("findings/plan-1.json")).toBe(true);
-    expect(result.state).toBe("answers_applied");
-    expect(loadRun(dir).rework.plan).toBe(1);
+    const file = writeItemsFile(dir, "f.json", { findings: [{ verdict: "issue", evidence: "e" }] });
+    const err = fail(() => submitArtifact({ runDir: dir, kind: "findings", for: "plan", file }));
+    expect(err.exitCode).toBe(2);
+    expect(err.message).toContain("--batch");
+    expect(loadRun(dir)).toMatchObject({ state: "planned", rework: { plan: 0 } });
   });
 
   it("차단 지적 수는 verdict 가 issue 이고 evidence 가 있는 것만 센다", () => {

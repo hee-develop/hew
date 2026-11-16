@@ -663,8 +663,8 @@ function planLayers(tickets) {
     var empty = h("p", { class: "muted" }, "확인할 것이 없습니다.");
     model.needs.forEach(function (n) {
       var li = h("li", null,
-        h("div", { class: "row" }, chip(n.kind === "reanswer" ? "다시 답 필요" : "검사 경고", n.kind === "reanswer" ? "crit" : "warn"),
-          n.ref && /^(Q|D|A|요구|시나리오)-/.test(n.ref) ? linkChip(n.ref, n.ref) : null),
+        h("div", { class: "row" }, chip(n.kind === "reanswer" ? "다시 답 필요" : n.kind === "plan_sasu" ? "티켓 사수 지적" : "검사 경고", n.kind === "reanswer" ? "crit" : "warn"),
+          n.ref && /^(Q|D|A|요구|시나리오|PR)-|^T\d+$/.test(n.ref) ? linkChip(n.ref, n.ref) : null),
         h("div", null, n.message));
       list.append(li);
       if (n.kind === "reanswer") onRefresh(function () { li.hidden = !view.openSet[n.ref]; });
@@ -1025,12 +1025,35 @@ function planLayers(tickets) {
     if (model.head.phase !== "approve") { section.append(h("p", { class: "muted" }, "답이 끝나면 만들어집니다.")); return section; }
     if (!plan) { section.append(h("p", { class: "muted" }, "분해안이 아직 없습니다.")); return section; }
     var hasList = plan.tickets.length > 0 || plan.prs.length > 0;
+    function textList(items) { return h("ul", { class: "plainlist" }, items.map(function (x) { return h("li", null, x); })); }
+    function ticketBody(t) {
+      var b = t.body;
+      if (!b) return h("span", { class: "muted small" }, "본문 없음");
+      var parts = [h("div", null, h("b", null, "배경"), h("div", null, b.background || "—")), h("div", null, h("b", null, "작업 내용"), textList(b.work))];
+      if (t.partial_changes.length > 0) parts.push(h("div", null, h("b", null, "맡은 변경 항목"), textList(t.partial_changes.map(function (c) { return c.requirement_id + ": " + c.text; }))));
+      if (b.checks.length > 0) parts.push(h("div", null, h("b", null, "확인 사항"), textList(b.checks)));
+      if (b.depends_note) parts.push(h("div", null, h("b", null, "선행 의존"), h("div", null, b.depends_note)));
+      if (b.tracker_events.length > 0) {
+        parts.push(h("div", null, h("b", null, "트래커 이벤트"), h("table", { class: "plain" },
+          h("thead", null, h("tr", null, h("th", null, "이벤트명"), h("th", null, "수집 시점"), h("th", null, "프로퍼티"))),
+          h("tbody", null, b.tracker_events.map(function (e) { return h("tr", null, h("td", null, e.name), h("td", null, e.when), h("td", null, e.properties.join(", ") || "—")); })))));
+      }
+      if (b.refs.length > 0) parts.push(h("div", null, h("b", null, "참고"), textList(b.refs)));
+      return h("details", { class: "fold" }, h("summary", null, "본문 보기"), h("div", { class: "stack" }, parts));
+    }
+    if (plan.epic_name || plan.parent) {
+      section.append(h("div", { class: "card" }, h("div", { class: "row" }, h("b", null, "일감명"), plan.epic_name || "—",
+        plan.parent ? h("span", { class: "muted small" }, "상위 스토리 " + plan.parent) : null)));
+    }
     if (plan.tickets.length > 0) {
       var total = plan.tickets.reduce(function (n, t) { return n + (t.sp || 0); }, 0);
       section.append(h("div", { class: "card" }, h("h3", null, "티켓 " + plan.tickets.length + "개 · 합계 " + total + "SP"),
-        h("table", { class: "plain" }, h("thead", null, h("tr", null, h("th", null, "티켓"), h("th", null, "제목"), h("th", null, "덮는 요구"), h("th", null, "SP"))),
+        h("table", { class: "plain" }, h("thead", null, h("tr", null, h("th", null, "티켓"), h("th", null, "제목"), h("th", null, "덮는 요구"), h("th", null, "SP"), h("th", null, "PR"), h("th", null, "본문"))),
           h("tbody", null, plan.tickets.map(function (t) {
-            return h("tr", { id: "t-" + t.id }, h("td", null, t.id), h("td", null, t.title), h("td", null, h("div", { class: "row gap-sm" }, t.requirement_ids.map(function (id) { return linkChip(id, id); }))), h("td", null, t.sp === null ? "—" : String(t.sp)));
+            var covers = t.requirements.length > 0 ? t.requirements.map(function (r) { return linkChip(r.id, r.id, r.label); }) : t.requirement_ids.map(function (id) { return linkChip(id, id); });
+            return h("tr", { id: "t-" + t.id }, h("td", null, t.id), h("td", null, t.title),
+              h("td", null, covers.length > 0 ? h("div", { class: "row gap-sm" }, covers) : h("span", { class: "muted" }, "—")),
+              h("td", null, t.sp === null ? "—" : String(t.sp)), h("td", null, t.pr || "—"), h("td", null, ticketBody(t)));
           })))));
       section.append(h("div", { class: "card" }, h("h3", null, "의존 순서"), h("div", { class: "layers" }, planLayers(plan.tickets).map(function (layer) {
         return h("div", { class: "layer" }, layer.map(function (t) {
@@ -1039,8 +1062,20 @@ function planLayers(tickets) {
       }))));
     }
     if (plan.prs.length > 0) section.append(h("div", { class: "card" }, h("h3", null, "PR 묶음"),
-      h("table", { class: "plain" }, h("thead", null, h("tr", null, h("th", null, "PR"), h("th", null, "제목"), h("th", null, "티켓"), h("th", null, "base"))),
-        h("tbody", null, plan.prs.map(function (p) { return h("tr", { id: "p-" + p.id }, h("td", null, p.id), h("td", null, p.title), h("td", null, p.ticket_ids.join(", ") || "—"), h("td", null, p.base || "—")); })))));
+      h("table", { class: "plain" }, h("thead", null, h("tr", null, h("th", null, "PR"), h("th", null, "제목"), h("th", null, "티켓"), h("th", null, "base"), h("th", null, "순서"))),
+        h("tbody", null, plan.prs.map(function (p) { return h("tr", { id: "p-" + p.id }, h("td", null, p.id), h("td", null, p.title), h("td", null, p.ticket_ids.join(", ") || "—"), h("td", null, p.base || "—"), h("td", null, p.order === null ? "—" : String(p.order))); })))));
+    if (plan.feature_flag) {
+      var flag = plan.feature_flag;
+      section.append(h("div", { class: "card" }, h("h3", null, "피처플래그"), flag.used
+        ? h("div", null, "플래그 " + (flag.name || "(이름 없음)") + " 를 씁니다. 제거 티켓: " + (flag.removal_ticket || "없음"))
+        : h("div", { class: "muted" }, "피처플래그를 쓰지 않습니다.")));
+    }
+    if (plan.excluded.length > 0) {
+      var kindLabel = { delta: "차이", requirement: "요구", change: "변경 항목" };
+      section.append(h("div", { class: "card" }, h("h3", null, "뺀 항목"),
+        h("table", { class: "plain" }, h("thead", null, h("tr", null, h("th", null, "종류"), h("th", null, "대상"), h("th", null, "이유"))),
+          h("tbody", null, plan.excluded.map(function (e) { return h("tr", null, h("td", null, kindLabel[e.kind] || e.kind), h("td", null, e.label), h("td", null, e.reason)); })))));
+    }
     if (!hasList) section.append(h("div", { class: "card" }, h("p", { class: "muted" }, "티켓과 PR 목록을 읽지 못해 원본을 그대로 보여 줍니다."),
       h("details", { class: "fold", open: true }, h("summary", null, "원본 JSON"), h("pre", { class: "raw" }, JSON.stringify(plan.raw, null, 2)))));
 

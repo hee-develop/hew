@@ -1,0 +1,39 @@
+{
+  "for": "plan",
+  "round": 1,
+  "batch": 1,
+  "code": "T1",
+  "question": "이 티켓이 요구와 모순되거나 요구에 없는 일을 시키는가(ticket_contradicts), 맡았다고 한 변경 항목이 본문에 빠졌는가(ticket_missing_change), 티켓만 읽은 사람이 무엇을 해야 하는지 알 수 있는가(ticket_missing_context)",
+  "units": [
+    {
+      "id": "T1:T1",
+      "target": "T1",
+      "inputs": {
+        "epic_name": "배너 노출",
+        "title": "[MO] 배너 노출 / 홈 상단 배너 영역",
+        "body": {
+          "background": "PRD 에서 홈 상단에 배너를 노출하기로 했고, 시안에 배너 영역이 새로 들어왔다.",
+          "work": ["홈 화면 상단에 배너 영역을 노출한다", "배너가 화면에 보이면 노출 이벤트를 남긴다"],
+          "checks": [],
+          "refs": ["PRD: 배너 노출"]
+        },
+        "requirements": [{ "id": "요구-1", "title": "홈에 배너를 노출한다", "changes": ["홈 상단에 배너를 노출한다"] }]
+      }
+    },
+    {
+      "id": "T1:T2",
+      "target": "T2",
+      "inputs": {
+        "epic_name": "배너 노출",
+        "title": "[MO] 배너 노출 / 배너가 없을 때 빈 상태",
+        "body": {
+          "background": "시안에 빈 상태가 추가되었다.",
+          "work": ["시안대로 변경한다"],
+          "checks": [],
+          "refs": []
+        },
+        "requirements": [{ "id": "요구-1", "title": "홈에 배너를 노출한다", "changes": ["배너가 없으면 빈 상태를 보인다"] }]
+      }
+    }
+  ]
+}

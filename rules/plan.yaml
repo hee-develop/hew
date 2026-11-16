@@ -1,0 +1,22 @@
+# 티켓 분해 규칙. src/core/plan/checks.ts 가 읽어 결정적으로 검사한다.
+sp:
+  min: 2
+  max: 4
+  hours_per_sp: 1
+title_pattern: "^\\[MO\\] .+ / .+$"
+# 티켓 본문(배경·작업 내용·확인 사항·선행 의존)에 있으면 안 되는 것의 정규식.
+body_forbidden:
+  - pattern: "\\.(ts|tsx|js|jsx|json|kt|swift)\\b"
+    label: 파일 확장자
+  - pattern: "\\b(app|src)/[\\w./-]+"
+    label: 파일 경로
+  - pattern: "[\\w/-]+\\.\\w+:\\d+\\b"
+    label: 경로 뒤의 줄 번호
+  - pattern: "line \\d+"
+    label: 줄 번호
+  - pattern: "\\d+번째 줄"
+    label: 줄 번호
+  - pattern: "\\b[a-zA-Z_][\\w.]*\\(\\)"
+    label: 함수 호출
+pr:
+  max_tickets: 6

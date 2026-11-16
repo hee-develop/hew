@@ -89,6 +89,7 @@ describe("지적 제출: 거부 코드", () => {
       W7: ["visual_unlisted"],
       W8: ["bad_pairing"],
       W9: ["already_answered"],
+      T1: ["ticket_contradicts", "ticket_missing_change", "ticket_missing_context"],
     });
     expect(Object.keys(MISTAKE_TYPE_BY_KIND).sort()).toEqual([...FINDING_KINDS].sort());
     expect(splitWorkId("W2:요구-3")).toEqual({ code: "W2", target: "요구-3" });

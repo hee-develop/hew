@@ -1,9 +1,9 @@
 # 지적(`findings`) 형식 안내
 
-매니저 사수가 `hew submit findings` 로 내는 JSON 파일의 형식이다. 짝이 맞는 예시는 이 폴더의 두 파일이다.
+매니저 사수(분석 문서 대조)와 티켓 사수(분해안 대조)가 `hew submit findings` 로 내는 JSON 파일의 형식이다. 짝이 맞는 예시는 이 폴더의 파일이다.
 
-- 코어가 준 작업 묶음 파일 예시: `refs/sasu-batch.example.json`
-- 그 묶음에 대한 지적 파일 예시: `refs/findings.example.json`
+- 매니저 사수: 작업 묶음 파일 `refs/sasu-batch.example.json`, 지적 파일 `refs/findings.example.json`
+- 티켓 사수: 작업 묶음 파일 `refs/sasu-batch.plan.example.json`, 지적 파일 `refs/findings.plan.example.json`
 
 예시는 형식을 보이는 합성 자료다. 내용은 베끼지 않고, 받은 묶음 파일의 본문만 보고 판정한다.
 
@@ -13,11 +13,11 @@
 
 | 칸 | 뜻 |
 |---|---|
-| `for`, `round`, `batch` | 대상(분석), 회차, 묶음 번호 |
-| `code` | 작업 단위 종류(W2~W9). 한 묶음은 한 종류만 담는다 |
+| `for`, `round`, `batch` | 대상(`analysis` 분석 문서, `plan` 분해안), 회차, 묶음 번호 |
+| `code` | 작업 단위 종류(분석은 W2~W9, 분해안은 T1). 한 묶음은 한 종류만 담는다 |
 | `question` | 이 종류가 묻는 것 한 문장. 단위마다 이 질문에만 답한다 |
-| `units[].id` | 작업 단위 id. `<종류>:<대상>` 형식(예: `W3:U-12`, `W2:요구-3`) |
-| `units[].target` | 대상 id. 원문 단위(`U-n`), 요구, 화면, 차이, 질문 중 하나 |
+| `units[].id` | 작업 단위 id. `<종류>:<대상>` 형식(예: `W3:U-12`, `W2:요구-3`, `T1:T2`) |
+| `units[].target` | 대상 id. 원문 단위(`U-n`), 요구, 화면, 차이, 질문, 티켓(`Tn`) 중 하나 |
 | `units[].inputs` | 판정에 쓰는 본문. 인용은 여기에 실린 글에서만 옮긴다 |
 | `units[].inputs.previous` | 같은 단위를 직전 회차에도 `issue` 로 판정했을 때만 있다. 아래 설명 |
 
@@ -34,6 +34,31 @@
 
 - 단위를 이번 본문으로 다시 판정한다. 답변을 읽고 지적이 풀렸는지 본다. 답변이 근거를 들어 반박했고 그 근거가 맞으면 `ok` 다. 고쳤다고 했으면 고쳐졌는지 본문에서 확인한다.
 - `previous` 의 글은 원문이 아니다. 지적의 `evidence.quote` 는 `previous` 가 아니라 `inputs` 의 나머지 본문에서만 옮긴다.
+
+### W2·W3 단위의 `status` 와 `linked`
+
+| 단위 | 칸 | 뜻 |
+|---|---|---|
+| W2 | `status` | 요구의 확정도(`confirmed`·`pending`) |
+| W2 | `linked.deltas[]`, `linked.questions[]`, `linked.assumptions[]` | 그 요구에 걸린 차이(`id`, `kind`, `title`, `rows`), 질문(`id`, `text`), 가정(`id`, `text`). 분석과 시나리오의 질문 모두 |
+| W3 | `linked.deltas[]` | 그 원문 단위를 PRD·시안 근거로 든 차이 |
+| W3 | `linked.questions[]` | 그 원문 단위를 질문의 근거로 든 질문 |
+| W3 | `linked.requirements[]` | 그 원문 단위를 근거로 든 요구의 `id` 와 `status` |
+
+- 원문과 요구의 어긋남이 `linked` 의 차이나 질문으로 이미 올라가 있으면 사람이 정할 일이므로 지적하지 않는다. `linked` 에 없는 어긋남만 지적한다. 요구가 `pending` 이면 더 그렇다.
+
+### T1 단위의 입력
+
+T1 단위는 티켓 하나다. `inputs` 에 다음이 실린다.
+
+| 칸 | 뜻 |
+|---|---|
+| `epic_name` | 일감명 |
+| `title`, `body` | 티켓 제목과 본문 전체(`background`, `work`, `checks`, `depends_note`, `refs`, `tracker_events`) |
+| `requirements[]` | 그 티켓이 맡은 요구의 사람용 문장. `id`, `title`, 그 티켓이 맡은 변경 항목의 문장(`changes`) |
+
+- `requirements[].changes` 는 티켓이 맡은 것만 담는다. 요구의 일부 변경만 맡은 티켓이면 나머지 변경 항목은 다른 티켓의 몫이라 여기에 없다. 없다고 지적하지 않는다.
+- 코드 경로·함수 이름이 본문에 없는 것은 규칙이라 지적하지 않는다. 양식과 요구 덮임은 코어가 이미 검사했다.
 
 ### W7 단위의 변경 항목
 
@@ -78,6 +103,17 @@ W7 단위의 `inputs` 에는 그 화면 또는 변형에 걸린 변경 항목이
 | W7 | `visual_unlisted` |
 | W8 | `bad_pairing` |
 | W9 | `already_answered` |
+| T1 | `ticket_contradicts`, `ticket_missing_change`, `ticket_missing_context` |
+
+T1 의 `kind` 는 다음 뜻이다. `action` 은 `fix`(티켓 메이커가 고침)·`ask`(요구가 모호해 사람의 확인이 필요함)만 쓴다.
+
+| `kind` | 뜻 |
+|---|---|
+| `ticket_contradicts` | 티켓이 요구와 다른 문구·조건·대상을 적었거나, 요구에 없는 일을 시킨다 |
+| `ticket_missing_change` | 티켓이 맡았다고 한 변경 항목이 본문에 빠졌다 |
+| `ticket_missing_context` | 티켓만 읽은 사람이 어느 화면의 무엇을 해야 하는지 알 수 없다(배경 없음, 내용 없는 문장) |
+
+분해안 지적이 반송 상한(2회)을 채우고도 남으면 질문으로 바뀌지 않는다. 게이트의 분해안 확인 단계에 "티켓 사수 지적(미해결)" 로 올라가 사람이 승인할 때 본다.
 
 ## 근거를 어떻게 적어야 차단으로 인정되는가
 
@@ -86,6 +122,7 @@ W7 단위의 `inputs` 에는 그 화면 또는 변형에 걸린 변경 항목이
 | 단위 | 근거 | 차단으로 인정되는 조건 |
 |---|---|---|
 | W2~W6, W8, W9 | `evidence.quote` (`evidence.unit_id` 는 원문 단위 id) | 인용이 그 단위의 `inputs` 에 실린 텍스트 어딘가에 실제로 있다 |
+| T1 | `evidence.quote` (`unit_id` 는 쓰지 않아도 된다) | 인용이 그 단위의 `inputs` 에 실린 티켓 본문이나 요구 문장 어딘가에 실제로 있다 |
 | W7 | `evidence.image` (필요하면 `box`) | 이미지 경로가 그 단위의 `as_is` 또는 `to_be` 이다 |
 
 - 인용은 `inputs` 의 글에서 글자 그대로 옮긴다. 대조 전에 양쪽에서 공백·줄바꿈과 Markdown 강조 표시(`**`, `__`, 백틱)를 지운다. 뜻을 풀어 쓴 문장은 인용이 아니다.
@@ -99,6 +136,7 @@ W7 단위의 `inputs` 에는 그 화면 또는 변형에 걸린 변경 항목이
 | `finding_duplicate` | 한 단위에 판정이 둘 이상이다 | 단위마다 하나만 남긴다 |
 | `finding_unknown_work` | 묶음에 없는 단위를 가리킨다 | `work` 를 묶음 파일의 `units[].id` 와 똑같이 쓴다 |
 | `finding_incomplete` | `issue` 인데 `kind`·`claim`·`action` 이 없다 | 셋을 모두 채운다 |
+| `finding_action_mismatch` | T1 에 `drop` 을 썼다 | `fix` 또는 `ask` 로 바꾼다 |
 | `finding_kind_mismatch` | `kind` 가 그 종류에 맞지 않는다 | 위 표의 허용 `kind` 로 바꾼다 |
 | `batch_already_submitted` | 이미 낸 묶음을 다시 냈다 | 이미 통과한 묶음이다. 다시 내지 않는다 |
 | `batch_unknown` | 계획에 없는 묶음 번호다 | 패킷의 제출 명령에 적힌 번호를 쓴다 |

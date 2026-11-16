@@ -15,13 +15,16 @@ import {
   type Screen,
 } from "../analysis/schema.js";
 import { HewError, stateError, type Issue } from "../errors.js";
+import { splitWorkId } from "../findings/schema.js";
 import { readJsonFile } from "../fsx.js";
 import { sha256Bytes } from "../hash.js";
 import { loadManifest } from "../manifest.js";
 import { collectRunOpen } from "../open.js";
-import { runPaths } from "../paths.js";
+import { findingsPath, runPaths } from "../paths.js";
 import { computeRevision } from "../revision.js";
 import { loadRun, type Run } from "../run.js";
+import { runPlanChecks } from "../plan/checks.js";
+import { PlanItemsSchema, type PlanItems } from "../plan/schema.js";
 import { runScenarioChecks } from "../scenarios/checks.js";
 import { BACKENDS, ScenarioItemsSchema, type ScenarioItems } from "../scenarios/schema.js";
 import type { CheckContext } from "../submit.js";
@@ -128,9 +131,36 @@ export interface GateScenario {
   platforms: string[];
 }
 
+export interface GateTicket {
+  id: string;
+  title: string;
+  requirement_ids: string[];
+  /** 덮는 요구의 사람용 이름. */
+  requirements: GateRef[];
+  /** 요구의 일부 변경만 맡았을 때 그 변경 항목의 문장. 요구 전체를 맡았으면 비어 있다. */
+  partial_changes: { requirement_id: string; text: string }[];
+  sp: number | null;
+  depends_on: string[];
+  pr: string | null;
+  /** 본문. 분해안을 새 스키마로 읽지 못했으면 null. */
+  body: {
+    background: string;
+    work: string[];
+    checks: string[];
+    depends_note: string;
+    refs: string[];
+    tracker_events: { name: string; when: string; properties: string[] }[];
+  } | null;
+}
+
 export interface GatePlan {
-  tickets: { id: string; title: string; requirement_ids: string[]; sp: number | null; depends_on: string[]; pr: string | null }[];
+  epic_name: string;
+  parent: string | null;
+  tickets: GateTicket[];
   prs: { id: string; title: string; ticket_ids: string[]; base: string; order: number | null }[];
+  feature_flag: { used: boolean; name: string; removal_ticket: string | null } | null;
+  /** 보류·구현 안 함으로 뺀 항목. */
+  excluded: { kind: "delta" | "requirement" | "change"; ref: string; label: string; reason: string }[];
   /** 티켓·PR 배열을 읽지 못했을 때 접어서 보여 줄 원본. */
   raw: unknown;
 }
@@ -152,7 +182,7 @@ export interface GateModel {
     open_ids: string[];
     built_at: string;
   };
-  needs: { kind: "warning" | "reanswer"; code: string; ref: string | null; message: string }[];
+  needs: { kind: "warning" | "reanswer" | "plan_sasu"; code: string; ref: string | null; message: string }[];
   screens: GateScreen[];
   unbound_requirements: GateRequirement[];
   unbound_deltas: GateDelta[];
@@ -424,30 +454,107 @@ const asString = (v: unknown): string => (typeof v === "string" ? v : "");
 const asNumber = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
 const asRecords = (v: unknown): Record<string, unknown>[] => (Array.isArray(v) ? v.filter((x): x is Record<string, unknown> => x !== null && typeof x === "object" && !Array.isArray(x)) : []);
 
-/** plan 정본을 느슨하게 읽는다. 스키마가 정해지기 전이라 tickets·prs 배열의 알려진 칸만 꺼낸다. */
-function buildPlan(runDir: string): GatePlan | null {
+function loadPlanItems(runDir: string): { items: PlanItems | null; raw: unknown } | null {
   const file = runPaths(runDir).plan;
   if (!existsSync(file)) return null;
-  const items = (readJsonFile(file) as { items?: unknown }).items;
-  const rec = items !== null && typeof items === "object" ? (items as Record<string, unknown>) : {};
-  return {
-    tickets: asRecords(rec.tickets).map((t) => ({
-      id: asString(t.id),
-      title: asString(t.title),
-      requirement_ids: asStrings(t.requirement_ids),
-      sp: asNumber(t.sp),
-      depends_on: asStrings(t.depends_on),
-      pr: typeof t.pr === "string" ? t.pr : null,
-    })),
-    prs: asRecords(rec.prs).map((p) => ({
-      id: asString(p.id),
-      title: asString(p.title),
-      ticket_ids: asStrings(p.ticket_ids),
-      base: asString(p.base),
-      order: asNumber(p.order),
-    })),
-    raw: items ?? null,
+  const raw = (readJsonFile(file) as { items?: unknown }).items ?? null;
+  const parsed = PlanItemsSchema.safeParse(raw);
+  return { items: parsed.success ? parsed.data : null, raw };
+}
+
+/** plan 정본을 스키마로 읽어 게이트가 그릴 모양으로 옮긴다. 스키마에 맞지 않으면 티켓·PR 의 알려진 칸만 느슨하게 꺼낸다. */
+function buildPlan(runDir: string, analysis: AnalysisItems): GatePlan | null {
+  const loaded = loadPlanItems(runDir);
+  if (loaded === null) return null;
+  const { items, raw } = loaded;
+  if (items === null) {
+    const rec = raw !== null && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+    return {
+      epic_name: asString(rec.epic_name),
+      parent: null,
+      tickets: asRecords(rec.tickets).map((t) => ({
+        id: asString(t.id),
+        title: asString(t.title),
+        requirement_ids: asStrings(t.requirement_ids),
+        requirements: [],
+        partial_changes: [],
+        sp: asNumber(t.sp),
+        depends_on: asStrings(t.depends_on),
+        pr: typeof t.pr === "string" ? t.pr : null,
+        body: null,
+      })),
+      prs: asRecords(rec.prs).map((p) => ({
+        id: asString(p.id),
+        title: asString(p.title),
+        ticket_ids: asStrings(p.ticket_ids),
+        base: asString(p.base),
+        order: asNumber(p.order),
+      })),
+      feature_flag: null,
+      excluded: [],
+      raw,
+    };
+  }
+  const reqById = new Map(analysis.requirements.map((r) => [r.id, r]));
+  const deltaById = new Map(analysis.deltas.map((d) => [d.id, d]));
+  const excludedLabel = (kind: string, ref: string): string => {
+    if (kind === "delta") return deltaById.get(ref)?.title ?? ref;
+    const [reqId = "", index] = ref.split("#");
+    const req = reqById.get(reqId);
+    if (req === undefined) return ref;
+    return kind === "change" ? `${req.title}: ${req.changes[Number(index)]?.text ?? ref}` : req.title;
   };
+  return {
+    epic_name: items.epic_name,
+    parent: items.parent ?? null,
+    tickets: items.tickets.map((t) => ({
+      id: t.id,
+      title: t.title,
+      requirement_ids: t.requirement_ids,
+      requirements: t.requirement_ids.map((id) => ({ id, label: reqById.get(id)?.title ?? id })),
+      partial_changes: t.changes.map((c) => ({ requirement_id: c.requirement_id, text: reqById.get(c.requirement_id)?.changes[c.index]?.text ?? "" })),
+      sp: t.sp,
+      depends_on: t.depends_on,
+      pr: t.pr,
+      body: {
+        background: t.body.background,
+        work: t.body.work,
+        checks: t.body.checks,
+        depends_note: t.body.depends_note ?? "",
+        refs: t.body.refs,
+        tracker_events: t.body.tracker_events,
+      },
+    })),
+    prs: items.prs.map((p) => ({ id: p.id, title: p.title, ticket_ids: p.ticket_ids, base: p.base, order: p.order })),
+    feature_flag: items.feature_flag === undefined ? null : { used: items.feature_flag.used, name: items.feature_flag.name ?? "", removal_ticket: items.feature_flag.removal_ticket ?? null },
+    excluded: items.excluded.map((e) => ({ kind: e.kind, ref: e.ref, label: excludedLabel(e.kind, e.ref), reason: e.reason })),
+    raw,
+  };
+}
+
+/** 승인 단계의 확인 필요: 분해안 검사의 경고와, 반송 상한을 채우고도 남은 티켓 사수의 차단 지적. */
+function planNeeds(runDir: string, run: Run): GateModel["needs"] {
+  const out: GateModel["needs"] = [];
+  const loaded = loadPlanItems(runDir);
+  if (loaded !== null && loaded.items !== null) {
+    const ctx: CheckContext = { kind: "plan", for: null, run, runDir };
+    for (const i of runPlanChecks(loaded.items, ctx)) {
+      if (i.severity === "warn") out.push({ kind: "warning", code: i.code, ref: i.ref, message: i.message });
+    }
+  }
+  const attempt = run.submissions.findings_plan?.attempt;
+  const file = attempt === undefined ? null : findingsPath(runPaths(runDir), "plan", attempt);
+  if (file !== null && existsSync(file)) {
+    const findings = (readJsonFile(file) as { items?: { findings?: unknown } }).items?.findings;
+    for (const f of Array.isArray(findings) ? findings : []) {
+      const rec = f !== null && typeof f === "object" ? (f as Record<string, unknown>) : {};
+      if (rec.to_gate !== true || rec.verdict !== "issue") continue;
+      const work = asString(rec.work);
+      const target = splitWorkId(work)?.target ?? work;
+      out.push({ kind: "plan_sasu", code: asString(rec.kind), ref: target, message: `티켓 사수 지적(미해결): ${asString(rec.claim)} (대상 ${target})` });
+    }
+  }
+  return out;
 }
 
 function sourceHead(runDir: string, run: Run): { title: string; version: string | null } {
@@ -517,6 +624,7 @@ export function buildGateModel(runDir: string, phase: GatePhase, now: Date = new
     ref: i.ref,
     message: i.message,
   }));
+  if (phase === "approve") needs.push(...planNeeds(runDir, run));
   for (const q of allQuestions) {
     if (isQuestionSuperseded(q, answers)) {
       needs.push({ kind: "reanswer", code: "question_superseded", ref: q.id, message: `${q.id} 는 답한 뒤에 질문이 바뀌어 다시 답해야 합니다` });
@@ -574,7 +682,7 @@ export function buildGateModel(runDir: string, phase: GatePhase, now: Date = new
       })),
     },
     scenarios: buildScenarios(index),
-    plan: phase === "approve" ? buildPlan(runDir) : null,
+    plan: phase === "approve" ? buildPlan(runDir, items) : null,
     answers,
     rules: { delta_choices: DELTA_CHOICES, backends: BACKENDS },
   };
