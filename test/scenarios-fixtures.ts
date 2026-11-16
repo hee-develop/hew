@@ -67,21 +67,31 @@ export function buildScenarios(): Doc {
         platforms: ["ios", "android"],
       },
     ],
+    preflight: [
+      {
+        id: "PF-1",
+        text: "QA 하는 날 배너 설정 변경이 staging 에 반영돼 있다",
+        kind: "deploy",
+        scenario_ids: ["시나리오-2"],
+        check: "어드민에서 배너를 6개 등록한 환경의 홈을 열어 배너가 6개 내려오는지 본다",
+        fallback: "hold",
+      },
+    ],
     accounts: [
-      { state: "원가가 입력되지 않은 팩을 가진 판매자", available: true },
-      { state: "배너를 받지 못한 구매자", available: false, note: "지금 가진 테스트 계정은 모두 배너를 받는다" },
+      { id: "AC-1", state: "원가가 입력되지 않은 팩을 가진 판매자", available: true, scenario_ids: ["시나리오-1"] },
+      { id: "AC-2", state: "배너를 받지 못한 구매자", available: false, scenario_ids: ["시나리오-3"], note: "지금 가진 테스트 계정은 모두 배너를 받는다" },
     ],
     questions: [
       {
         id: "Q-3",
-        text: "배너를 받지 못한 상태의 테스트 계정을 만들 수 있나요",
+        text: "배너를 받지 못한 구매자 시나리오를 모킹으로만 확인해도 되나요",
         origin: "qa",
         blocking: false,
         options: [
-          { key: "a", label: "만들어 준다", consequence: "시나리오-3 을 실서버로 바꿀 수 있다" },
-          { key: "b", label: "어렵다", consequence: "시나리오-3 은 모킹으로 남는다" },
+          { key: "a", label: "모킹으로 충분하다", consequence: "시나리오-3 은 모킹으로 남는다" },
+          { key: "b", label: "실서버로 확인해야 한다", consequence: "시나리오-3 을 실서버로 바꾼다" },
         ],
-        recommended: "b",
+        recommended: "a",
         rationale: [],
         affects: ["시나리오-3"],
         audience: ["backend"],

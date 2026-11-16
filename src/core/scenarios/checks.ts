@@ -85,6 +85,14 @@ function checkIds(env: Env): Issue[] {
       dup("기대 결과", e.id);
     }
   }
+  for (const pf of items.preflight) {
+    if (!isId("preflight", pf.id)) out.push(issue("id_format", "reject", pf.id, `실행 전 확인 id '${pf.id}' 의 형식이 올바르지 않습니다(PF-n)`));
+    dup("실행 전 확인", pf.id);
+  }
+  for (const a of items.accounts) {
+    if (!isId("account", a.id)) out.push(issue("id_format", "reject", a.id, `계정 id '${a.id}' 의 형식이 올바르지 않습니다(AC-n)`));
+    dup("계정", a.id);
+  }
   const analysisQuestions = new Set(env.analysis.questions.map((q) => q.id));
   for (const q of items.questions) {
     if (!isId("question", q.id)) out.push(issue("id_format", "reject", q.id, `질문 id '${q.id}' 의 형식이 올바르지 않습니다`));
@@ -119,6 +127,9 @@ function checkRefs(env: Env): Issue[] {
       if (!env.reqIds.has(id) && !env.scenarioIds.has(id)) missing(q.id, "요구 또는 시나리오", id);
     }
   }
+  for (const item of [...env.items.preflight, ...env.items.accounts]) {
+    for (const id of item.scenario_ids) if (!env.scenarioIds.has(id)) missing(item.id, "시나리오", id);
+  }
   return out;
 }
 
@@ -136,9 +147,27 @@ function checkBodies(env: Env): Issue[] {
   return out;
 }
 
+/** 실행하는 날의 환경·계정 상태를 묻는 질문으로 보게 하는 낱말. */
+const GATE_UNFIT_WORDS = [
+  "staging", "스테이징", "dev-", "QA 시점", "QA 하는", "실행 시점", "배포돼", "배포되어", "켜져", "준비돼", "준비되어", "테스트 계정", "계정이 있", "계정이 필요",
+];
+
+/**
+ * 질문 문장이 실행하는 날의 상태를 묻는 것으로 보이는가. 위 낱말이 들어 있으면 맞다.
+ * `questions` 의 항목은 모두 질문이므로 물음표로 끝나는지는 보지 않는다(실제 실행의 질문 7건 중 2건이 물음표 없이 끝났다).
+ */
+export function isRunTimeQuestion(text: string): boolean {
+  const body = text.trim();
+  const lower = body.toLowerCase();
+  return GATE_UNFIT_WORDS.some((word) => lower.includes(word.toLowerCase()));
+}
+
 function checkQuestions(env: Env): Issue[] {
   const out: Issue[] = [];
   for (const q of env.items.questions) {
+    if (isRunTimeQuestion(q.text)) {
+      out.push(issue("qa_question_not_for_gate", "warn", q.id, `${q.id} 는 실행하는 날의 환경·계정 상태를 묻는 것으로 보입니다. 실행하는 날 확인할 것은 preflight 로, 필요한 계정은 accounts 로 옮기세요`));
+    }
     if (q.origin !== "qa") out.push(issue("question_origin", "reject", q.id, `${q.id} 의 origin 은 'qa' 여야 합니다(받은 값: ${q.origin})`));
     if (q.options.length === 0 && q.affects.length === 0) {
       out.push(issue("question_without_options", "reject", q.id, `${q.id} 에 선택지도, 답이 걸린 요구·시나리오(affects)도 없습니다`));
@@ -157,6 +186,8 @@ function checkQuestions(env: Env): Issue[] {
 function checkBackends(env: Env): Issue[] {
   const out: Issue[] = [];
   const { apis, environment } = env.analysis.impact;
+  // 실행 전 확인이 안 되면 모킹으로 돌리기로 한 시나리오는 real 이어도 mock 칸을 채워 둬야 한다.
+  const mockFallback = new Set(env.items.preflight.filter((pf) => pf.fallback === "mock").flatMap((pf) => pf.scenario_ids));
   for (const s of env.items.scenarios) {
     const human = env.answers.scenarios[s.id]?.backend;
     if (human !== undefined && !isBackend(human)) {
@@ -170,7 +201,7 @@ function checkBackends(env: Env): Issue[] {
       if (endpoints.length === 0) out.push(issue("mock_without_reason", "reject", s.id, `${s.id} 는 mock 인데 mock.endpoints 가 비어 있습니다`));
       continue;
     }
-    if (endpoints.length > 0 || reason.length > 0) {
+    if ((endpoints.length > 0 || reason.length > 0) && !mockFallback.has(s.id)) {
       out.push(issue("mock_ignored", "warn", s.id, `${s.id} 는 real 이라 mock 칸을 쓰지 않습니다`));
     }
     const name = (s.environment ?? "").trim();
@@ -234,19 +265,31 @@ function checkCoverage(env: Env): Issue[] {
   return out;
 }
 
-// ---- 계정 ----
+// ---- 실행 전 확인, 계정 ----
+
+function checkPreflight(env: Env): Issue[] {
+  const out: Issue[] = [];
+  const byId = new Map(env.items.scenarios.map((s) => [s.id, s]));
+  for (const pf of env.items.preflight) {
+    if (pf.check.trim().length === 0) {
+      out.push(issue("preflight_without_check", "reject", pf.id, `${pf.id} 에 무엇을 어떻게 확인하는지(check)가 없습니다`));
+    }
+    if (pf.fallback !== "mock") continue;
+    const unprepared = pf.scenario_ids.filter((id) => {
+      const s = byId.get(id);
+      return s !== undefined && effectiveBackend(s, env.answers) === "real" && (s.mock === undefined || s.mock.endpoints.length === 0);
+    });
+    if (unprepared.length > 0) {
+      out.push(issue("preflight_mock_unprepared", "warn", pf.id, `${pf.id} 는 안 되면 모킹으로 돌린다고 했는데 ${unprepared.join(", ")} 에 모킹 정보(mock)가 없어 모킹으로 돌릴 준비가 안 됐습니다`));
+    }
+  }
+  return out;
+}
 
 function checkAccounts(env: Env): Issue[] {
   const lacking = env.items.accounts.filter((a) => !a.available);
-  const asked = env.items.questions.length > 0;
-  return lacking.map((a) =>
-    issue(
-      "accounts_unavailable",
-      asked ? "info" : "warn",
-      null,
-      asked ? `지금 가진 계정으로 안 되는 상태가 있습니다: ${a.state}` : `지금 가진 계정으로 안 되는 상태(${a.state})가 있는데 이를 묻는 질문이 없습니다`,
-    ),
-  );
+  if (lacking.length === 0) return [];
+  return [issue("accounts_unavailable", "info", null, `지금 가진 계정으로 안 되는 계정이 ${lacking.length}개 있습니다: ${lacking.map((a) => a.id).join(", ")}`)];
 }
 
 // ---- 재제출 보호 ----
@@ -294,6 +337,7 @@ export function runScenarioChecks(items: ScenarioItems, ctx: CheckContext): Issu
     ...checkCoverage(env),
     ...checkMockOnly(env),
     ...checkReach(env),
+    ...checkPreflight(env),
     ...checkAccounts(env),
     ...checkRemoved(env),
   ];

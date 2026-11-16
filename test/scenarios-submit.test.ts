@@ -388,7 +388,7 @@ describe("CLI 끝에서 끝까지: init → source add·done → submit analysis
           reach: "deeplink",
         },
       ],
-      accounts: [{ state: "일반 구매자", available: true }],
+      accounts: [{ id: "AC-1", state: "일반 구매자", available: true, scenario_ids: ["시나리오-1"] }],
       questions: [],
     };
     const submitS = hew(["--json", "submit", "scenarios", "--run", "e2e-sc", "--file", writeItemsFile(dir, "scenarios-in.json", scenarios)]);

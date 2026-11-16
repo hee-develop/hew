@@ -133,6 +133,25 @@ export interface GateScenario {
   platforms: string[];
 }
 
+export interface GatePreflight {
+  id: string;
+  text: string;
+  kind: "env" | "deploy" | "flag" | "data";
+  kind_label: string;
+  check: string;
+  fallback: "mock" | "hold";
+  fallback_label: string;
+  scenarios: GateRef[];
+}
+
+export interface GateAccount {
+  id: string;
+  state: string;
+  available: boolean;
+  note: string;
+  scenarios: GateRef[];
+}
+
 export interface GateTicket {
   id: string;
   title: string;
@@ -205,6 +224,9 @@ export interface GateModel {
     blockers: { id: string; kind: string; detail: string; question: GateRef | null }[];
   };
   scenarios: GateScenario[];
+  /** 실행 전 확인과 계정 목록. 열린 항목이 아니다. */
+  preflight: GatePreflight[];
+  accounts: GateAccount[];
   plan: GatePlan | null;
   answers: AnswersFile;
   rules: { delta_choices: Record<string, readonly DecisionChoice[]>; backends: readonly string[] };
@@ -234,6 +256,10 @@ const ORIGIN_LABELS: Partial<Record<Question["origin"], string>> = {
   qa: "QA 설계",
   impact: "영향 분석",
 };
+
+const PREFLIGHT_KIND_LABELS: Record<GatePreflight["kind"], string> = { env: "환경", deploy: "배포", flag: "플래그", data: "데이터" };
+
+const PREFLIGHT_FALLBACK_LABELS: Record<GatePreflight["fallback"], string> = { mock: "모킹으로 돌림", hold: "보류하고 보고" };
 
 const DISPOSITION_LABELS = { out_of_scope: "범위 밖", not_app: "앱 몫이 아님" } as const;
 
@@ -449,6 +475,30 @@ function buildScenarios(index: Index): GateScenario[] {
     mock: s.mock === undefined ? null : { reason: s.mock.reason, endpoints: s.mock.endpoints },
     environment: s.environment ?? null,
     platforms: s.platforms,
+  }));
+}
+
+function buildPreflight(index: Index): GatePreflight[] {
+  const refs = (ids: string[]): GateRef[] => ids.map((id) => ({ id, label: refLabel(id, index) }));
+  return (index.scenarios?.preflight ?? []).map((p) => ({
+    id: p.id,
+    text: p.text,
+    kind: p.kind,
+    kind_label: PREFLIGHT_KIND_LABELS[p.kind],
+    check: p.check,
+    fallback: p.fallback,
+    fallback_label: PREFLIGHT_FALLBACK_LABELS[p.fallback],
+    scenarios: refs(p.scenario_ids),
+  }));
+}
+
+function buildAccounts(index: Index): GateAccount[] {
+  return (index.scenarios?.accounts ?? []).map((a) => ({
+    id: a.id,
+    state: a.state,
+    available: a.available,
+    note: a.note ?? "",
+    scenarios: a.scenario_ids.map((id) => ({ id, label: refLabel(id, index) })),
   }));
 }
 
@@ -687,6 +737,8 @@ export function buildGateModel(runDir: string, phase: GatePhase, now: Date = new
       })),
     },
     scenarios: buildScenarios(index),
+    preflight: buildPreflight(index),
+    accounts: buildAccounts(index),
     plan: phase === "approve" ? buildPlan(runDir, items) : null,
     answers,
     rules: { delta_choices: DELTA_CHOICES, backends: BACKENDS },

@@ -20,6 +20,7 @@ export const AnswersFileSchema = z.object({
     .record(z.object({ status: z.enum(["confirmed", "rejected"]), note: z.string().optional(), at: At, by: By }))
     .default({}),
   scenarios: z.record(z.object({ backend: z.string(), note: z.string().optional(), at: At, by: By })).default({}),
+  accounts: z.record(z.object({ note: z.string(), at: At, by: By })).default({}),
   plan_requests: z.array(z.object({ target: z.string(), text: z.string(), at: At, by: By })).default([]),
   approvals: z.record(z.object({ revision: z.string(), at: At, by: By, note: z.string().optional() })).default({}),
 });

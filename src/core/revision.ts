@@ -33,10 +33,10 @@ export function normalizeForRevision(value: unknown): unknown {
   return value;
 }
 
-/** 승인 기록은 revision 을 잠그는 것이라 revision 계산에서 뺀다. */
+/** 승인 기록은 revision 을 잠그는 것이라, 계정 메모는 승인 대상이 아니라 revision 계산에서 뺀다. */
 function withoutApprovals(answers: unknown): unknown {
   if (answers === null || typeof answers !== "object" || Array.isArray(answers)) return answers;
-  const { approvals: _approvals, ...rest } = answers as Record<string, unknown>;
+  const { approvals: _approvals, accounts: _accounts, ...rest } = answers as Record<string, unknown>;
   return rest;
 }
 

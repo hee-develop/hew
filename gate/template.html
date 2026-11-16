@@ -138,6 +138,7 @@ details.ai { background: var(--surface-2); border-radius: 8px; padding: 6px 10px
 .choice:hover { border-color: var(--accent); }
 .choice[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
 .choice small { display: block; opacity: .85; font-size: 12px; }
+.account-note { width: 100%; margin-top: 6px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
 .apply-similar { display: block; margin-top: 8px; }
 .note { width: 100%; min-height: 56px; margin-top: 6px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); resize: vertical; }
 .opts { display: grid; gap: 6px; margin-top: 8px; }
@@ -193,10 +194,10 @@ code { font-family: var(--mono); font-size: 13px; background: var(--surface-2); 
 <script id="gate-logic">
 /* 게이트 페이지의 순수 로직. DOM 과 저장소를 건드리지 않는다. */
 var NOTE_LIMIT = 500;
-var SECTION_KEYS = ["answers", "scope", "assumptions", "scenarios"];
+var SECTION_KEYS = ["answers", "scope", "assumptions", "scenarios", "accounts"];
 
 function emptyState() {
-  return { answers: {}, scope: {}, assumptions: {}, scenarios: {}, plan_requests: [], approvals: {} };
+  return { answers: {}, scope: {}, assumptions: {}, scenarios: {}, accounts: {}, plan_requests: [], approvals: {} };
 }
 
 function normalizeState(raw) {
@@ -392,6 +393,17 @@ function setDecisionWithSimilar(state, rules, delta, decision, similar, at) {
   return changed ? next : state;
 }
 
+/* 계정 메모. 열린 항목·승인과 무관하다. */
+function setAccountNote(state, id, note, at) {
+  var text = trimNote(note);
+  var prev = state.accounts[id];
+  if (!prev && text === "") return state;
+  if (prev && prev.note === text) return state;
+  var next = cloneState(state);
+  next.accounts[id] = { note: text, at: at };
+  return next;
+}
+
 function setAssumption(state, id, status, at) {
   var prev = state.assumptions[id];
   if (prev && prev.status === status) return state;
@@ -471,6 +483,7 @@ function buildExport(model, state, now) {
     scope: scope,
     assumptions: s.assumptions,
     scenarios: s.scenarios,
+    accounts: s.accounts,
     plan_requests: s.plan_requests,
     approvals: approvals
   };
@@ -1056,7 +1069,53 @@ function planLayers(tickets) {
         h("div", null, h("b", null, "기대 결과"), h("ul", { class: "plainlist" }, s.expected.map(function (e) { return h("li", null, e.text); }))),
         h("div", { class: "row", style: "margin-top:10px" }, h("span", { class: "muted small" }, "서버"), seg), mockInfo));
     });
+    var prep = buildQaPrep();
+    if (prep) section.append(prep);
     return section;
+  }
+
+  /* ---------- QA 준비: 실행 전 확인과 계정. 열린 항목이 아니다 ---------- */
+  function scenarioChips(list) {
+    return list.map(function (r) { return linkChip(r.id, r.label ? truncate(r.label, 24) : r.id, r.label); });
+  }
+  function buildQaPrep() {
+    if (model.preflight.length === 0 && model.accounts.length === 0) return null;
+    var wrap = h("div", { id: "qa-prep", style: "margin-top:20px" }, h("h3", null, "QA 준비"));
+    if (model.preflight.length > 0) {
+      wrap.append(h("p", { class: "muted small" }, "실행하는 날 QA 가 먼저 확인합니다. 승인하는 날에는 답하지 않아도 됩니다."),
+        h("div", { style: "overflow-x:auto" }, h("table", { class: "plain" },
+          h("thead", null, h("tr", null, h("th", null, "확인할 것"), h("th", null, "확인 방법"), h("th", null, "걸린 시나리오"), h("th", null, "안 되면"))),
+          h("tbody", null, model.preflight.map(function (p) {
+            return h("tr", { id: "pf-" + p.id },
+              h("td", { "data-label": "확인할 것" }, chip(p.kind_label), " ", p.text),
+              h("td", { "data-label": "확인 방법" }, p.check),
+              h("td", { "data-label": "걸린 시나리오" }, h("div", { class: "row gap-sm" }, scenarioChips(p.scenarios))),
+              h("td", { "data-label": "안 되면" }, p.fallback_label));
+          })))));
+    }
+    if (model.accounts.length > 0) {
+      wrap.append(h("p", { class: "muted small", style: "margin-top:14px" }, "필요한 계정입니다. 가진 계정으로 안 되는 줄에는 준비 상황을 메모로 남길 수 있습니다. 승인과는 무관합니다."),
+        h("div", { style: "overflow-x:auto" }, h("table", { class: "plain" },
+          h("thead", null, h("tr", null, h("th", null, "필요한 계정 상태"), h("th", null, "걸린 시나리오"), h("th", null, "지금 가진 계정으로"))),
+          h("tbody", null, model.accounts.map(function (a) {
+            var cell = h("td", { "data-label": "지금 가진 계정으로" }, a.available ? chip("됨", "good") : chip("안 됨", "warn"));
+            if (a.note) cell.append(h("div", { class: "small muted" }, a.note));
+            if (!a.available) {
+              var memo = h("input", { class: "account-note", type: "text", maxlength: String(NOTE_LIMIT), placeholder: "예: 계정 준비해 둠: …  /  없음, 모킹으로", "aria-label": a.id + " 메모" });
+              memo.addEventListener("input", function () { commit(setAccountNote(state, a.id, memo.value, nowIso())); });
+              onRefresh(function () {
+                var e = state.accounts[a.id];
+                if (document.activeElement !== memo) memo.value = e ? e.note : "";
+              });
+              cell.append(memo);
+            }
+            return h("tr", { id: "ac-" + a.id },
+              h("td", { "data-label": "필요한 계정 상태" }, a.state),
+              h("td", { "data-label": "걸린 시나리오" }, h("div", { class: "row gap-sm" }, scenarioChips(a.scenarios))),
+              cell);
+          })))));
+    }
+    return wrap;
   }
 
   /* ---------- 분해안 ---------- */

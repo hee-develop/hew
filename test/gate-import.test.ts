@@ -51,6 +51,35 @@ function answering(): { dir: string } {
   return r;
 }
 
+describe("gate import: 계정 메모", () => {
+  it("계정 메모를 병합하고, 없는 id 는 건너뛰며, 더 늦은 시각만 반영한다", () => {
+    const { dir } = answering();
+    const first = importAnswers({ runDir: dir, file: exportFile(dir, base(dir, { accounts: { "AC-2": { note: "  계정 준비함  ", at: T1 }, "AC-9": { note: "x", at: T1 } } })) });
+    expect(first.applied.accounts).toBe(1);
+    expect(first.skipped).toEqual([{ section: "accounts", id: "AC-9", reason: "unknown_id" }]);
+    expect(first.warnings.map((w) => w.code)).toContain("unknown_id");
+    expect(loadAnswers(dir).accounts).toEqual({ "AC-2": { note: "계정 준비함", at: T1 } });
+
+    const stale = importAnswers({ runDir: dir, file: exportFile(dir, base(dir, { accounts: { "AC-2": { note: "옛 메모", at: T1 } } }), "e2.json") });
+    expect(stale.applied.accounts).toBe(0);
+    expect(stale.skipped).toEqual([{ section: "accounts", id: "AC-2", reason: "stale" }]);
+    expect(loadAnswers(dir).accounts["AC-2"]?.note).toBe("계정 준비함");
+
+    const later = importAnswers({ runDir: dir, file: exportFile(dir, base(dir, { accounts: { "AC-2": { note: "없음, 모킹으로", at: T2 } } }), "e3.json") });
+    expect(later.applied.accounts).toBe(1);
+    expect(loadAnswers(dir).accounts["AC-2"]?.note).toBe("없음, 모킹으로");
+  });
+
+  it("계정 메모가 바뀌어도 revision 은 그대로이고 열린 항목도 늘지 않는다", () => {
+    const { dir } = answering();
+    const before = computeRevision(dir);
+    const open = collectRunOpen(dir);
+    importAnswers({ runDir: dir, file: exportFile(dir, base(dir, { accounts: { "AC-2": { note: "준비함", at: T1 } } })) });
+    expect(computeRevision(dir)).toBe(before);
+    expect(collectRunOpen(dir)).toEqual(open);
+  });
+});
+
 describe("gate import: 답변 단계", () => {
   it("일부만 답하면 gate_answering 그대로, 열린 항목이 줄고 원본을 보관한다", () => {
     const { dir } = answering();
