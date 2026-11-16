@@ -138,6 +138,7 @@ details.ai { background: var(--surface-2); border-radius: 8px; padding: 6px 10px
 .choice:hover { border-color: var(--accent); }
 .choice[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
 .choice small { display: block; opacity: .85; font-size: 12px; }
+.apply-similar { display: block; margin-top: 8px; }
 .note { width: 100%; min-height: 56px; margin-top: 6px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); resize: vertical; }
 .opts { display: grid; gap: 6px; margin-top: 8px; }
 .opt { display: block; width: 100%; border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 8px 12px; text-align: left; }
@@ -359,9 +360,36 @@ function setDecisionNote(state, deltaId, note, at) {
   var next = cloneState(state);
   var text = trimNote(note);
   var entry = { decision: prev.decision, at: at };
+  if (prev.from) entry.from = prev.from;
   if (text !== "") entry.note = text;
   next.scope[deltaId] = entry;
   return next;
+}
+
+/* 모델에서 이 차이와 같은 결정으로 묶을 수 있어 보이는 다른 차이들을 id 순서로 꺼낸다. */
+function similarDeltas(model, delta) {
+  var ids = delta.similar_ids || [];
+  return allDeltas(model).filter(function (d) { return d.id !== delta.id && ids.indexOf(d.id) >= 0; });
+}
+
+/* 결정을 이 차이와 묶을 수 있어 보이는 차이들에도 같은 결정·같은 시각으로 적용한다. 종류에 허용되지 않는 결정은 그 차이에 적용하지 않는다. */
+function setDecisionWithSimilar(state, rules, delta, decision, similar, at) {
+  if (!decisionAllowed(rules, delta.kind, decision)) return state;
+  var next = cloneState(state);
+  var changed = false;
+  function put(target, from) {
+    var prev = next.scope[target.id];
+    if (prev && prev.decision === decision) return;
+    var entry = { decision: decision, at: at };
+    if (from) entry.from = from;
+    next.scope[target.id] = entry;
+    changed = true;
+  }
+  put(delta, null);
+  similar.forEach(function (d) {
+    if (decisionAllowed(rules, d.kind, decision)) put(d, delta.id);
+  });
+  return changed ? next : state;
 }
 
 function setAssumption(state, id, status, at) {
@@ -430,12 +458,17 @@ function buildExport(model, state, now) {
   Object.keys(s.approvals).forEach(function (id) {
     if (s.approvals[id].revision === model.head.revision) approvals[id] = s.approvals[id];
   });
+  var scope = {};
+  Object.keys(s.scope).forEach(function (id) {
+    scope[id] = { decision: s.scope[id].decision, at: s.scope[id].at };
+    if (s.scope[id].note) scope[id].note = s.scope[id].note;
+  });
   return {
     exported_at: now.toISOString(),
     run_id: model.head.run_id,
     revision: model.head.revision,
     answers: s.answers,
-    scope: s.scope,
+    scope: scope,
     assumptions: s.assumptions,
     scenarios: s.scenarios,
     plan_requests: s.plan_requests,
@@ -704,9 +737,15 @@ function planLayers(tickets) {
     var rec = d.recommendation
       ? h("p", { class: "small" }, h("b", null, "추천 "), d.recommendation.label, d.recommendation.reason ? " — " + d.recommendation.reason : "")
       : null;
+    var similar = similarDeltas(model, d);
+    var applyBox = h("input", { type: "checkbox" });
+    var applyRow = similar.length > 0
+      ? h("label", { class: "apply-similar small" }, applyBox, " 같은 결정을 " + similar.map(function (x) { return x.id; }).join(", ") + " 에도 적용")
+      : null;
+    var applied = h("p", { class: "small muted" });
     var buttons = (model.rules.delta_choices[d.kind] || []).map(function (c) {
       var b = h("button", { class: "choice", type: "button", "aria-pressed": "false", onclick: function () {
-        commit(setDecision(state, model.rules, d, c.value, nowIso()));
+        commit(applyBox.checked ? setDecisionWithSimilar(state, model.rules, d, c.value, similar, nowIso()) : setDecision(state, model.rules, d, c.value, nowIso()));
       } }, c.label, d.recommendation && d.recommendation.decision === c.value ? h("small", null, "추천") : null);
       onRefresh(function () { var e = state.scope[d.id]; b.setAttribute("aria-pressed", e && e.decision === c.value ? "true" : "false"); });
       return b;
@@ -718,10 +757,12 @@ function planLayers(tickets) {
       var e = state.scope[d.id];
       status.textContent = e ? "결정됨" : "미결정";
       status.className = "chip " + (e ? "good" : "warn");
+      applied.hidden = !(e && e.from);
+      applied.textContent = e && e.from ? e.from + " 과 같은 결정으로 적용됨" : "";
       noteWrap.hidden = !e;
       if (document.activeElement !== note) note.value = e && e.note ? e.note : "";
     });
-    details.append(summary, h("div", { class: "body" }, rows.length > 0 ? table : h("p", { class: "muted small" }, "비교 행이 없습니다."), quotes, rec, h("div", { class: "choices" }, buttons), noteWrap));
+    details.append(summary, h("div", { class: "body" }, rows.length > 0 ? table : h("p", { class: "muted small" }, "비교 행이 없습니다."), quotes, rec, h("div", { class: "choices" }, buttons), applyRow, applied, noteWrap));
     return details;
   }
 

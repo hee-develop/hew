@@ -96,6 +96,51 @@ describe("페이지 로직: 결정과 메모", () => {
   });
 });
 
+describe("페이지 로직: 비슷한 차이에 같은 결정", () => {
+  const rules = { delta_choices: JSON.parse(JSON.stringify(DELTA_CHOICES)) };
+  const d1 = { id: "D-1", kind: "mismatch", similar_ids: ["D-3", "D-4"] };
+  const d3 = { id: "D-3", kind: "mismatch", similar_ids: ["D-1"] };
+  const d4 = { id: "D-4", kind: "figma_only", similar_ids: ["D-1"] };
+  const model = { screens: [{ requirements: [{ deltas: [d3, d1] }] }], unbound_requirements: [], unbound_deltas: [d4] };
+
+  it("모델에서 비슷한 차이만 id 순서로 꺼낸다", () => {
+    expect(logic.similarDeltas(model, d1).map((d: any) => d.id)).toEqual(["D-3", "D-4"]);
+    expect(logic.similarDeltas(model, { id: "D-9", similar_ids: [] })).toEqual([]);
+  });
+
+  it("같은 결정을 같은 시각으로 적용하고, 그 종류에 허용되지 않는 결정은 건너뛴다", () => {
+    const similar = logic.similarDeltas(model, d1);
+    const s = logic.setDecisionWithSimilar(logic.emptyState(), rules, d1, "follow_prd", similar, T1);
+    expect(s.scope["D-1"]).toEqual({ decision: "follow_prd", at: T1 });
+    expect(s.scope["D-3"]).toEqual({ decision: "follow_prd", at: T1, from: "D-1" });
+    expect(s.scope["D-4"]).toBeUndefined();
+    const ok = logic.setDecisionWithSimilar(logic.emptyState(), rules, d1, "follow_figma", similar, T1);
+    expect(ok.scope["D-4"]).toEqual({ decision: "follow_figma", at: T1, from: "D-1" });
+  });
+
+  it("자기 종류에 허용되지 않는 결정이면 아무것도 바꾸지 않는다", () => {
+    const s = logic.emptyState();
+    expect(logic.setDecisionWithSimilar(s, rules, d4, "follow_prd", [d1], T1)).toBe(s);
+  });
+
+  it("이미 같은 결정이면 그대로 둔다. 따로 결정을 바꾸면 적용됨 표시가 사라진다", () => {
+    const similar = logic.similarDeltas(model, d1);
+    const s = logic.setDecisionWithSimilar(logic.emptyState(), rules, d1, "follow_prd", similar, T1);
+    expect(logic.setDecisionWithSimilar(s, rules, d1, "follow_prd", similar, T2)).toBe(s);
+    const changed = logic.setDecision(s, rules, d3, "drop", T2);
+    expect(changed.scope["D-3"]).toEqual({ decision: "drop", at: T2 });
+  });
+
+  it("적용된 결정도 내보내기에는 결정·시각만 담겨 import 스키마를 통과한다", () => {
+    const { dir } = setupGateRun();
+    const m = modelOf(dir);
+    const state = { ...logic.emptyState(), scope: { "D-1": { decision: "follow_figma", at: T1, from: "D-9", note: "메모" } } };
+    const exp = logic.buildExport(m, state, new Date(T2));
+    expect(exp.scope["D-1"]).toEqual({ decision: "follow_figma", at: T1, note: "메모" });
+    expect(ExportFileSchema.safeParse(exp).success).toBe(true);
+  });
+});
+
 describe("페이지 로직: 합치기와 내보내기", () => {
   it("항목마다 시각이 늦은 쪽을 쓰고 수정 요청은 합친다", () => {
     const base = { answers: { "Q-1": { option: "a", at: T2 }, "Q-2": { option: "a", at: T1 } }, plan_requests: [{ target: "전체", text: "x", at: T1 }] };

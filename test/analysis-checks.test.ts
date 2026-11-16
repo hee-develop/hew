@@ -272,6 +272,22 @@ describe("차이", () => {
       d.deltas[0].requirement_ids = ["요구-1", "요구-2", "요구-4", "요구-5"];
     });
   });
+  it("delta_same_decision: 비교 내용이 같은 차이는 뒤쪽 차이에 경고가 붙는다", () => {
+    const issues = expectWarn("delta_same_decision", (d) => {
+      d.deltas.push({ ...clone(d.deltas[0]), id: "D-3", title: "다른 화면의 같은 차이", requirement_ids: ["요구-1"] });
+    });
+    const same = issues.filter((i) => i.code === "delta_same_decision");
+    expect(same).toHaveLength(1);
+    expect(same[0]?.ref).toBe("D-3");
+    expect(same[0]?.message).toContain("D-1");
+  });
+  it("delta_same_decision: 내용이 다르거나 추천이 갈리면 경고하지 않는다", () => {
+    expect(codes(make().run(buildAnalysis()))).not.toContain("delta_same_decision");
+    const c = make();
+    const doc = clone(buildAnalysis());
+    doc.deltas.push({ ...clone(doc.deltas[0]), id: "D-3", recommendation: { decision: "follow_prd" } });
+    expect(codes(c.run(doc))).not.toContain("delta_same_decision");
+  });
 });
 
 describe("질문", () => {

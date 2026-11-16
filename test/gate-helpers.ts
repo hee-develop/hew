@@ -92,6 +92,7 @@ const LOGIC_NAMES = [
   "emptyState", "normalizeState", "mergeStates", "computeOpen", "computeProgress", "setAnswer", "setDecision", "setDecisionNote",
   "setAssumption", "setAssumptionNote", "setScenarioBackend", "addPlanRequest", "approveState", "canApprove", "buildExport",
   "storageKey", "planLayers", "decisionAllowed", "questionSuperseded", "isLaterAt", "effectiveBackend", "isApprovedInState",
+  "similarDeltas", "setDecisionWithSimilar",
 ];
 
 /** gate-logic 블록을 node:vm 에서 실행하고 함수들을 돌려준다. */
