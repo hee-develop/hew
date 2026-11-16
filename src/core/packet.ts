@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { usageError, type Issue } from "./errors.js";
+import { groupDuplicateFindings } from "./findings/group.js";
 import { readJsonFile } from "./fsx.js";
 import { HEW_ROOT, findingsPath, resolveRunDir, runPaths } from "./paths.js";
 import { nextAction } from "./next.js";
@@ -20,8 +21,9 @@ export const HEKA_BODY_LIMIT = 1500;
 
 /** 에이전트가 쓸 수 있는 Bash 명령 목록(훅의 허용 목록과 같다). */
 export const BASH_ALLOWED = [
-  "rg", "grep", "ls", "find", "cat", "head", "tail", "wc", "jq", "sort", "uniq", "cut", "tr", "sips", "file", "stat",
-  "basename", "dirname", "echo", "true", "test", "[", "git(읽기 전용 하위 명령만)", "hew(아래 제출 명령과 check·status·next·units·source list·source request)",
+  "rg", "grep", "ls", "find", "cat", "head", "tail", "wc", "jq", "sort", "uniq", "cut", "tr", "paste", "column", "nl", "sips", "file", "stat",
+  "basename", "dirname", "echo", "true", "test", "[", "pwd", "cd(맨 앞에서, 읽을 수 있는 폴더로만)", "sed -n(줄 범위 보기만)", "mkdir -p(작업 폴더 안에서만)",
+  "git(읽기 전용 하위 명령만)", "hew(아래 제출·답변 명령과 check·status·next·units·source list·source request)",
 ] as const;
 
 export interface PacketPlan {
@@ -193,19 +195,70 @@ function evidenceCell(evidence: unknown): string {
   return typeof e.image === "string" ? e.image : "";
 }
 
-/** 반송 지적 표의 행: 차단 지적 중 테크니컬 매니저가 고칠 것(fix·drop)만. 차단 표시가 없는 옛 지적은 issue 면 싣는다. */
-function issueRows(file: string): unknown[][] {
+interface ReturnedFinding {
+  id: string;
+  work: string;
+  kind: string;
+  claim: string;
+  evidence: unknown;
+  action: string;
+}
+
+/** 반송 대상 지적: 차단 지적 전체(fix·ask·drop). 차단 표시가 없는 옛 지적은 issue 면 싣는다. */
+function returnedFindings(file: string): ReturnedFinding[] {
   const doc = readJsonFile(file) as { items?: { findings?: unknown } } | null;
   const findings = doc?.items?.findings;
   if (!Array.isArray(findings)) return [];
-  const rows: unknown[][] = [];
+  const out: ReturnedFinding[] = [];
   for (const f of findings) {
     if (f === null || typeof f !== "object") continue;
     const rec = f as Record<string, unknown>;
-    if (rec.verdict !== "issue" || rec.blocking === false || rec.action === "ask") continue;
-    rows.push([rec.id ?? "", rec.work ?? "", rec.kind ?? "", rec.claim ?? "", evidenceCell(rec.evidence), rec.action ?? ""]);
+    if (rec.verdict !== "issue" || rec.blocking === false) continue;
+    const text = (v: unknown): string => (typeof v === "string" ? v : "");
+    out.push({ id: text(rec.id), work: text(rec.work), kind: text(rec.kind), claim: text(rec.claim), evidence: rec.evidence, action: text(rec.action) });
   }
-  return rows;
+  return out;
+}
+
+/** 반송 지적 표의 행. 종류·주장이 같은 지적은 한 줄로 묶고 id·대상은 한 칸에 모두 적는다. */
+function issueRows(file: string): unknown[][] {
+  return groupDuplicateFindings(returnedFindings(file)).map((group) => {
+    const first = group[0] as ReturnedFinding;
+    const join_ = (values: string[]): string => values.join(", ");
+    return [
+      join_(group.map((f) => f.id)),
+      join_(group.map((f) => f.work)),
+      first.kind,
+      first.claim,
+      evidenceCell(first.evidence),
+      join_([...new Set(group.map((f) => f.action))]),
+    ];
+  });
+}
+
+/** 반송 패킷에서 지적 표 아래에 두는 답변 안내(분석 반송 전용). */
+function respondGuide(runDir: string, workDir: string, hew: string): string[] {
+  const file = join(workDir, "responses.json");
+  const example = {
+    responses: [
+      { finding: "F-n", response: "fixed", reason: "무엇을 어떻게 고쳤는지" },
+      { finding: "F-n", response: "rejected", reason: "왜 지적이 틀렸는지", evidence: { unit_id: "U-n", quote: "원문에서 글자 그대로 옮긴 문장" } },
+      { finding: "F-n", response: "asked", reason: "원문만으로 정할 수 없어 질문으로 올렸다" },
+    ],
+  };
+  return [
+    "지적마다 고쳤는지(`fixed`), 근거를 들어 그대로 두는지(`rejected`), 사람에게 물을 질문으로 올렸는지(`asked`)를 `hew sasu respond` 로 낸 뒤 분석 문서를 다시 제출한다. `finding` 에는 표의 지적 id(`F-n`)를 쓰고, 한 줄에 id 가 여럿이면 각각에 답을 낸다.",
+    "",
+    `답변 명령: \`${hew} --json sasu respond --for analysis --run ${runDir} --file ${file}\``,
+    "",
+    "- `rejected` 는 `reason` 이 필수다. `evidence.quote` 는 `evidence.unit_id` 원문 단위 본문에서 글자 그대로 옮긴다(원문에 없으면 거부된다).",
+    "- 답변은 다음 회차 사수가 읽고 지적이 풀렸는지 다시 판정한다. 같은 지적에 다시 내면 덮어쓴다.",
+    "",
+    "```json",
+    JSON.stringify(example, null, 2),
+    "```",
+    "",
+  ];
 }
 
 function answerRows(file: string): unknown[][] {
@@ -330,6 +383,7 @@ export function renderPacket(opts: PacketOptions & { plan: PacketPlan }): { text
       lines.push("지적 파일이 아직 없습니다.", "");
     } else {
       lines.push(`지적 파일: \`${file}\``, "", ...table(["id", "대상", "종류", "주장", "근거", "처리"], issueRows(file)), "");
+      if (target === "analysis") lines.push(...respondGuide(opts.runDir, opts.plan.workDir, hew));
     }
   }
   if (purpose === "apply_answers") {

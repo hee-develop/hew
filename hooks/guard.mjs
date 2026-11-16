@@ -50,8 +50,9 @@ const PATTERN_SPECS = {
     noPattern: new Set(),
   },
 };
-const HEW_SUBCOMMANDS = new Set(["submit", "check", "status", "next", "units", "source"]);
+const HEW_SUBCOMMANDS = new Set(["submit", "check", "status", "next", "units", "source", "sasu"]);
 const HEW_SOURCE_SUBCOMMANDS = new Set(["list", "request"]);
+const HEW_SASU_SUBCOMMANDS = new Set(["respond"]);
 const SIPS_READ_FLAGS = new Set(["-g", "--getProperty", "-1", "--oneLine"]);
 const FORBIDDEN_FIRST = new Set(["eval", "exec", "source", ".", "sudo"]);
 
@@ -374,6 +375,7 @@ function checkHew(args, ctx) {
   const sub = args[index];
   if (sub === undefined || !HEW_SUBCOMMANDS.has(sub)) deny(`hew 하위 명령이 허용되지 않습니다: ${sub ?? "(없음)"}`);
   if (sub === "source" && !HEW_SOURCE_SUBCOMMANDS.has(args[index + 1] ?? "")) deny(`hew source 는 list·request 만 허용됩니다`);
+  if (sub === "sasu" && !HEW_SASU_SUBCOMMANDS.has(args[index + 1] ?? "")) deny(`hew sasu 는 respond 만 허용됩니다`);
   for (let i = 0; i < args.length; i += 1) {
     const word = args[i];
     let flag = null;

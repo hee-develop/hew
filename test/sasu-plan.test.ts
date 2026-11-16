@@ -122,11 +122,13 @@ describe("사수 계획: 코드별 작업 단위", () => {
     expect(unitsOf(dir, "W6")).toEqual([]);
   });
 
-  it("W7: as_is 와 to_be 가 모두 있는 화면·변형. 절대 경로와 그 화면의 변경 문장", () => {
+  it("W7: 화면은 그 화면의 변경과 모든 변형의 변경을, 변형은 직접 걸린 변경과 부모 화면 전체의 변경을 구분해 싣는다", () => {
     const { dir } = setupQaDesigned({
       analysis: (doc) => {
         doc.screens[0].images = [{ role: "as_is", path: "sources/figma/a.png" }, { role: "to_be", path: "sources/figma/b.png" }];
         doc.screens[0].variants[0].images = [{ role: "as_is", path: "sources/figma/v-a.png" }, { role: "to_be", path: "sources/figma/v-b.png" }];
+        // screen_id 가 없지만 요구의 screen_ids 에 화면-1 이 있는 변경.
+        doc.requirements[1].changes.push({ text: "화면 전체에 적용되는 변경", evidence: [{ unit_id: "U-4", quote: "최대 5개까지" }] });
       },
     });
     const w7 = unitsOf(dir, "W7");
@@ -134,9 +136,28 @@ describe("사수 계획: 코드별 작업 단위", () => {
     expect(w7[0]?.inputs).toEqual({
       as_is: join(dir, "sources/figma/a.png"),
       to_be: join(dir, "sources/figma/b.png"),
-      changes: ["홈 상단에 배너를 노출한다", "6번째부터는 그리지 않는다"],
+      changes_for_screen: ["홈 상단에 배너를 노출한다", "6번째부터는 그리지 않는다", "화면 전체에 적용되는 변경"],
+      changes_for_variants: ["배너가 없으면 빈 상태를 보인다"],
     });
-    expect((w7[1]?.inputs as Record<string, any>).changes).toEqual(["배너가 없으면 빈 상태를 보인다"]);
+    expect(w7[1]?.inputs).toEqual({
+      as_is: join(dir, "sources/figma/v-a.png"),
+      to_be: join(dir, "sources/figma/v-b.png"),
+      changes_for_variant: ["배너가 없으면 빈 상태를 보인다"],
+      changes_for_screen: ["홈 상단에 배너를 노출한다", "6번째부터는 그리지 않는다", "화면 전체에 적용되는 변경"],
+    });
+  });
+
+  it("W7: 변형만 이미지가 있어도 부모 화면의 변경이 실리고, 묶음의 질문이 화면 전체 변경까지 보라고 말한다", () => {
+    const { dir } = setupQaDesigned({
+      analysis: (doc) => {
+        doc.screens[0].variants[0].images = [{ role: "as_is", path: "sources/figma/v-a.png" }, { role: "to_be", path: "sources/figma/v-b.png" }];
+      },
+    });
+    const w7 = unitsOf(dir, "W7");
+    expect(w7.map((u) => u.target)).toEqual(["화면-1.1"]);
+    expect((w7[0]?.inputs as Record<string, any>).changes_for_screen).toEqual(["홈 상단에 배너를 노출한다", "6번째부터는 그리지 않는다"]);
+    const batch = planNow(dir).batches.find((b) => b.code === "W7");
+    expect(readBatch(batch?.path ?? "").question).toContain("이 변형과 그 화면 전체에 걸린 변경 항목 어디에도 없는 눈에 보이는 차이");
   });
 
   it("W7: 한쪽 이미지만 있거나 both 이미지뿐이면 대상이 아니다", () => {

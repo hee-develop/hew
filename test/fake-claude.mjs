@@ -1,5 +1,6 @@
-// 테스트용 가짜 claude. FAKE_CLAUDE_MODE: submit | noop | fail_once | timeout | sasu_ok | sasu_issue_first | by_role
-// by_role 은 FAKE_CLAUDE_PLAN(JSON: { <역할>: [{ mode, doc?, action? }, ...] })에서 그 역할의 몇 번째 호출인지에 따라 동작을 고른다.
+// 테스트용 가짜 claude. FAKE_CLAUDE_MODE: submit | noop | fail_once | timeout | sasu_ok | sasu_issue_first | tm_respond | by_role
+// tm_respond 는 반송 패킷 표의 모든 지적 id 에 response(기본 rejected)로 답한 뒤 doc 을 제출한다.
+// by_role 은 FAKE_CLAUDE_PLAN(JSON: { <역할>: [{ mode, doc?, action?, response? }, ...] })에서 그 역할의 몇 번째 호출인지에 따라 동작을 고른다.
 import { execSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -37,6 +38,21 @@ function submitFromPacket(doc) {
   mkdirSync(join(file, ".."), { recursive: true });
   copyFileSync(doc, file);
   execSync(command, { stdio: "ignore" });
+}
+
+/** 패킷의 지적 표에 있는 모든 id 에 답변을 내고(hew sasu respond), 이어서 doc 을 제출한다. */
+function respondThenSubmit(response, doc) {
+  const { packet } = readPacket();
+  const command = /`([^`]*sasu respond[^`]*--file[^`]*)`/.exec(packet)?.[1];
+  if (!command) throw new Error("패킷에 답변 명령이 없습니다");
+  const file = /--file (\S+)/.exec(command)?.[1];
+  if (!file) throw new Error("답변 파일이 없습니다");
+  const ids = [...packet.matchAll(/^\| (F-\d+(?:, F-\d+)*) \|/gm)].flatMap((m) => m[1].split(", "));
+  const responses = ids.map((finding) => ({ finding, response, reason: "가짜 테크니컬 매니저가 낸 이유" }));
+  mkdirSync(join(file, ".."), { recursive: true });
+  writeFileSync(file, JSON.stringify({ responses }));
+  execSync(command, { stdio: "ignore" });
+  submitFromPacket(doc);
 }
 
 const KIND_BY_CODE = { W2: "unsupported", W3: "missing", W4: "false_confirmed", W5: "ai_only_behavior", W6: "operator_row", W7: "visual_unlisted", W8: "bad_pairing", W9: "already_answered" };
@@ -92,6 +108,7 @@ if (behavior.mode === "timeout") {
 } else {
   if (behavior.mode === "sasu_ok") submitSasu(false);
   else if (behavior.mode === "sasu_issue_first") submitSasu(true, behavior.action);
+  else if (behavior.mode === "tm_respond") respondThenSubmit(behavior.response ?? "rejected", behavior.doc);
   else submitFromPacket(behavior.doc);
   process.stdout.write(result());
 }

@@ -6,9 +6,9 @@ import { writeJsonAtomic } from "../fsx.js";
 import { nextAction } from "../next.js";
 import { runPaths, sasuPlanPath } from "../paths.js";
 import { loadRun, type Run } from "../run.js";
-import { batchFilePath, currentRound, loadPlan, readRoundFindings } from "./store.js";
+import { batchFilePath, currentRound, loadPlan, readResponses, readRoundFindings } from "./store.js";
 import { completeRound, type CompleteResult } from "./complete.js";
-import { CODE_QUESTIONS, buildWorkUnits, type WorkUnit } from "./units.js";
+import { CODE_QUESTIONS, PREVIOUS_QUESTION, buildWorkUnits, withPrevious, type PreviousInput, type WorkUnit } from "./units.js";
 import {
   BATCH_CHAR_LIMIT,
   BATCH_IMAGE_UNIT_LIMIT,
@@ -50,6 +50,31 @@ function reusableVerdicts(runDir: string, round: number): Map<string, { hash: st
   return out;
 }
 
+/** 직전 회차에서 issue 였던 단위의 지적과 테크니컬 매니저의 답변을 단위 id 로 모은다. */
+function previousInputs(runDir: string, round: number): Map<string, PreviousInput> {
+  const out = new Map<string, PreviousInput>();
+  if (round < 2) return out;
+  const responses = readResponses(runDir, round - 1);
+  for (const f of readRoundFindings(runDir, round - 1)) {
+    if (f.verdict !== "issue") continue;
+    const answer = responses.find((r) => r.finding === f.id);
+    out.set(f.work, {
+      claim: f.claim ?? "",
+      kind: f.kind ?? "",
+      ...(answer !== undefined
+        ? {
+            response: {
+              response: answer.response,
+              reason: answer.reason,
+              ...(answer.evidence !== undefined ? { evidence: answer.evidence } : {}),
+            },
+          }
+        : {}),
+    });
+  }
+  return out;
+}
+
 export interface PlanResult {
   plan: SasuPlan;
   created: boolean;
@@ -74,7 +99,11 @@ export function createPlan(runDir: string, target: "analysis" | "plan", now: Dat
   const existing = loadPlan(runDir, round);
   if (existing !== null) return { plan: existing, created: false, completed: null };
 
-  const units = buildWorkUnits(runDir);
+  const previous = previousInputs(runDir, round);
+  const units = buildWorkUnits(runDir).map((u) => {
+    const before = previous.get(u.id);
+    return before === undefined ? u : withPrevious(u, before);
+  });
   const reusable = reusableVerdicts(runDir, round);
   const reused = new Set(units.filter((u) => reusable.get(u.id)?.hash === u.hash).map((u) => u.id));
   const todo = units.filter((u) => !reused.has(u.id));
@@ -102,7 +131,7 @@ export function createPlan(runDir: string, target: "analysis" | "plan", now: Dat
       round,
       batch: batch.k,
       code: batch.code,
-      question: CODE_QUESTIONS[batch.code],
+      question: batch.unit_ids.some((id) => previous.has(id)) ? `${CODE_QUESTIONS[batch.code]}. ${PREVIOUS_QUESTION}` : CODE_QUESTIONS[batch.code],
       units: batch.unit_ids.map((id) => {
         const u = byId.get(id) as WorkUnit;
         return { id: u.id, target: u.target, inputs: u.inputs };

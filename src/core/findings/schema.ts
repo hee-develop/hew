@@ -71,6 +71,8 @@ export const FindingsItemsSchema = z.object({ findings: z.array(FindingSchema) }
 export const StoredFindingSchema = FindingSchema.extend({
   blocking: z.boolean(),
   reused: z.boolean().optional(),
+  /** 반송 상한에 닿아 사람에게 묻는 질문으로 바뀐 차단 지적. */
+  to_question: z.boolean().optional(),
 });
 
 export type Finding = z.infer<typeof FindingSchema>;

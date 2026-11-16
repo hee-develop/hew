@@ -450,3 +450,14 @@ describe("명령별 인자 규칙", () => {
     denied("for f in a b; do cat $f; done", "while true; do ls; done", "x=1; cat $x", "cat ${x}", "cat $(ls)", "cat `ls`", "ls && cd sources", `cd ${repo} && cat ../other/secret.txt`, "cat ~/x");
   });
 });
+
+describe("hew sasu", () => {
+  const bash = (command: string) => decide({ tool_name: "Bash", tool_input: { command }, cwd: run }, env).decision;
+
+  it("respond 만 허용하고 --file 은 쓰기 범위 안이어야 한다", () => {
+    expect(bash(`${hew} --json sasu respond --run ${run} --for analysis --file ${join(work, "responses.json")}`)).toBe("allow");
+    expect(bash(`${hew} --json sasu plan --run ${run} --for analysis`)).toBe("deny");
+    expect(bash(`${hew} sasu respond --run ${other} --for analysis --file ${join(work, "responses.json")}`)).toBe("deny");
+    expect(bash(`${hew} sasu respond --run ${run} --for analysis --file ${join(other, "responses.json")}`)).toBe("deny");
+  });
+});

@@ -1,4 +1,4 @@
-/** 회차 완료 처리: 묶음별 지적을 합쳐 정본에 쓰고, 질문 변환·실수 기록·상태 전이를 한다. */
+/** 회차 완료 처리: 묶음별 지적을 합쳐 정본에 쓰고, 직전 지적 판정·질문 변환·상태 전이를 한다. */
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import "../analysis/index.js";
@@ -15,7 +15,7 @@ import { computeRevision } from "../revision.js";
 import { loadRun, saveRun, type Run } from "../run.js";
 import { REWORK_LIMIT, transition, type RunState } from "../state-machine.js";
 import { convertFindingsToQuestions } from "./questions.js";
-import { readBatchFindings, readRoundFindings } from "./store.js";
+import { readBatchFindings, readResponses, readRoundFindings } from "./store.js";
 import type { SasuPlan } from "./types.js";
 
 export interface CompleteResult {
@@ -27,7 +27,7 @@ export interface CompleteResult {
   findings: number;
   /** 차단 지적 전체의 수(질문으로 바뀐 것 포함). */
   blocking: number;
-  /** 질문으로 바뀌지 않고 테크니컬 매니저에게 돌아가는 차단 지적의 수. */
+  /** 질문으로 바뀌지 않고 테크니컬 매니저에게 돌아가는 차단 지적의 수(반송 상한에 닿으면 0). */
   remaining: number;
   questions_added: string[];
   revision: string;
@@ -65,6 +65,43 @@ function mistakeEvidence(f: StoredFinding): string {
   return parts.filter((x) => x.length > 0).join(" / ") || f.work;
 }
 
+/** 직전 회차의 차단 지적을 이번 판정과 답변으로 가려, 실수만 mistakes.jsonl 에 적고 사수의 오탐은 이벤트로 남긴다. */
+function judgePrevious(runDir: string, round: number, current: StoredFinding[], now: Date): void {
+  if (round < 2) return;
+  const previous = readRoundFindings(runDir, round - 1).filter((f) => isBlocking(f) && f.to_question !== true);
+  if (previous.length === 0) return;
+  const responses = readResponses(runDir, round - 1);
+  const paths = runPaths(runDir);
+  const versions = versionsOf(runDir);
+  for (const before of previous) {
+    const latest = current.find((f) => f.work === before.work);
+    if (latest !== undefined && latest.verdict !== "ok") continue;
+    const answer = responses.find((r) => r.finding === before.id);
+    if (answer?.response === "rejected") {
+      appendEvent(
+        paths.events,
+        "sasu_false_positive",
+        { round, finding: before.id, work: before.work, kind: before.kind ?? null, claim: before.claim ?? "", reason: answer.reason },
+        now,
+      );
+      continue;
+    }
+    appendMistake(
+      runDir,
+      {
+        found_stage: "sasu",
+        cause_stage: "analysis",
+        found_by: "sasu",
+        type: MISTAKE_TYPE_BY_KIND[before.kind ?? "unsupported"] ?? "other",
+        target: splitWorkId(before.work)?.target ?? before.work,
+        evidence: mistakeEvidence(before),
+        versions,
+      },
+      now,
+    );
+  }
+}
+
 /** 묶음 정본과 재사용한 직전 판정을 계획의 단위 순서로 합쳐 F-1.. 로 다시 번호 매긴다. */
 function mergeFindings(runDir: string, plan: SasuPlan): StoredFinding[] {
   const previous = readRoundFindings(runDir, plan.round - 1);
@@ -91,16 +128,17 @@ export function completeRound(runDir: string, plan: SasuPlan, now: Date = new Da
 
   const findings = mergeFindings(runDir, plan);
   const blocking = findings.filter(isBlocking);
-  const remainingList = blocking.filter((f) => f.action !== "ask");
   const capReached = run.rework.analysis >= REWORK_LIMIT;
-  const toConvert = capReached ? blocking : blocking.filter((f) => f.action === "ask");
+  const toConvert = capReached ? blocking : [];
+  const remaining = capReached ? 0 : blocking.length;
+  const stored = findings.map((f) => (toConvert.includes(f) ? { ...f, to_question: true } : f));
 
   const envelope = wrapEnvelope({
     stage: "findings_analysis",
     runId: run.run_id,
     attempt: plan.round,
     inputRevision: computeRevision(runDir),
-    items: { findings },
+    items: { findings: stored },
     verdictReasons: [...new Set(blocking.map((f) => f.kind ?? "issue"))],
     producedBy,
   });
@@ -108,23 +146,7 @@ export function completeRound(runDir: string, plan: SasuPlan, now: Date = new Da
   const docPath = findingsPath(paths, "analysis", plan.round);
   writeJsonAtomic(docPath, envelope);
 
-  const versions = versionsOf(runDir);
-  for (const f of blocking) {
-    const parts = splitWorkId(f.work);
-    appendMistake(
-      runDir,
-      {
-        found_stage: "sasu",
-        cause_stage: "analysis",
-        found_by: "sasu",
-        type: MISTAKE_TYPE_BY_KIND[f.kind ?? "unsupported"] ?? "other",
-        target: parts?.target ?? f.work,
-        evidence: mistakeEvidence(f),
-        versions,
-      },
-      now,
-    );
-  }
+  judgePrevious(runDir, plan.round, findings, now);
 
   const converted = toConvert.length > 0 ? convertFindingsToQuestions(runDir, toConvert) : { added: [], pended: [] };
   if (converted.added.length > 0) {
@@ -132,7 +154,7 @@ export function completeRound(runDir: string, plan: SasuPlan, now: Date = new Da
   }
 
   const openNow = converted.added.length > 0 ? collectRunOpen(runDir).length : run.open;
-  const result = transition(run.state, { type: "findings_complete", for: "analysis", blocking: remainingList.length }, ctx(run, openNow));
+  const result = transition(run.state, { type: "findings_complete", for: "analysis", blocking: blocking.length }, ctx(run, openNow));
   const revision = computeRevision(runDir);
   const analysisHash = existsSync(paths.analysis) ? hashJson((readJsonFile(paths.analysis) as { items: unknown }).items) : null;
   const next: Run = {
@@ -147,7 +169,7 @@ export function completeRound(runDir: string, plan: SasuPlan, now: Date = new Da
       ...(converted.added.length > 0 && run.submissions.analysis !== undefined && analysisHash !== null
         ? { analysis: { ...run.submissions.analysis, hash: analysisHash } }
         : {}),
-      findings_analysis: { attempt: plan.round, at: now.toISOString(), hash: hashJson({ findings }) },
+      findings_analysis: { attempt: plan.round, at: now.toISOString(), hash: hashJson({ findings: stored }) },
     },
   };
   saveRun(runDir, next, now);
@@ -162,7 +184,7 @@ export function completeRound(runDir: string, plan: SasuPlan, now: Date = new Da
       row: result.row,
       findings: findings.length,
       blocking: blocking.length,
-      remaining: remainingList.length,
+      remaining,
       questions_added: converted.added,
       revision,
       path: docPath,
@@ -176,7 +198,7 @@ export function completeRound(runDir: string, plan: SasuPlan, now: Date = new Da
     path: docPath,
     findings: findings.length,
     blocking: blocking.length,
-    remaining: remainingList.length,
+    remaining,
     questions_added: converted.added,
     revision,
     open: next.open,
