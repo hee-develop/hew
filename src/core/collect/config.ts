@@ -11,7 +11,6 @@ const CollectConfigSchema = z.object({
   max_related: z.number().int().min(0).default(5),
   mcp_allow: z.array(z.string().min(1)).default([]),
   curl_hosts: z.array(z.string().min(1)).default([]),
-  atlassian_cloud_id: z.string().min(1).default("example.atlassian.net"),
 });
 
 export type CollectConfig = z.infer<typeof CollectConfigSchema>;

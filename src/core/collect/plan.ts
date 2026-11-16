@@ -7,6 +7,7 @@ import { fileKeyOf, sourceMarkdown } from "../units/index.js";
 import { parseSourceJson } from "../units/extract.js";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { loadProfile } from "../profile.js";
 import { loadCollectConfig, type CollectConfig } from "./config.js";
 import { MAX_FAILURES, readFailures } from "./failures.js";
 
@@ -147,7 +148,7 @@ function candidates(runDir: string, run: Run, config: CollectConfig, blocked: st
   const sources = sortedSources(loadManifest(runDir));
   const of = (kind: SourceKind): SourceEntry[] => sources.filter((s) => s.kind === kind);
   const items: PlanItem[] = [];
-  const cloud = config.atlassian_cloud_id;
+  const cloud = loadProfile().connections.atlassian_cloud_id;
   const blockedJira = new Set((run.case_info?.block.jira_keys ?? []).map((k) => k.toUpperCase()));
 
   const confluenceHint = (id: string, version?: string): string =>

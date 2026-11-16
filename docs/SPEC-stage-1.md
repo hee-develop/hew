@@ -580,7 +580,7 @@ PR 묶음(`prs[]`): `id`, `title`, `ticket_ids[]`, `base`(`develop` 또는 앞�
 
 ### 7.2 분해 규칙
 
-`rules/plan.yaml` 에 두고 코드로 검사한다. 값은 heka 규칙에서 가져왔고 [가정]이다.
+`rules/plan.yaml`(본문 금지 규칙 `body_forbidden`)과 프로필의 `plan`(SP 범위, 제목 형식, PR 상한, 기본 base. §16)에 두고 코드로 검사한다. 값은 heka 규칙에서 가져왔고 [가정]이다. 아래 숫자와 `develop` 은 예시 프로필의 값이다.
 
 - 티켓은 2~4SP 를 기본으로 한다. 넘으면 나눈다(heka `prd-to-pr-pipeline-decisions-2026-09-r2`).
 - 티켓 하나가 PR 하나일 필요는 없다. 함께 리뷰해야 뜻이 통하는 티켓은 한 PR 로 묶는다(2026-10-20 결정 6, APP-3008 실제 작업).
@@ -600,7 +600,7 @@ PR 묶음(`prs[]`): `id`, `title`, `ticket_ids[]`, `base`(`develop` 또는 앞�
 | `pr_base_order` | PR 의 base 와 순서가 티켓 의존과 어긋난다 | 거부 |
 | `flag_removal_last` | 플래그를 쓰는데 제거 티켓이 없거나 마지막이 아니다 | 거부 |
 | `sp_range` | 2~4SP 를 벗어난 티켓 | 경고 |
-| `pr_too_large` | PR 하나의 티켓 수가 `rules/plan.yaml` 의 상한을 넘었다 | 경고 |
+| `pr_too_large` | PR 하나의 티켓 수가 프로필의 `plan.pr.max_tickets` 상한을 넘었다 | 경고 |
 | `excluded_missing` | 범위 밖 요구가 `excluded` 에 없다 | 경고 |
 | `plan_ref_missing` | 없는 요구·티켓·PR 을 가리킨다 | 거부 |
 | `ticket_without_pr`, `pr_ticket_mismatch` | 티켓의 `pr` 과 PR 의 `ticket_ids` 가 맞지 않는다 | 거부 |
@@ -713,7 +713,7 @@ PR 묶음(`prs[]`): `id`, `title`, `ticket_ids[]`, `base`(`develop` 또는 앞�
 | `hew eval score --runs <id,…>\|--source <원본> [--out <파일>]` | `eval/result.json` 들을 모아 종류별 포착률 표를 낸다 | 없음 |
 
 - 패킷은 역할이 읽어야 할 파일 경로, 이번 일의 범위(처음인지, 반송인지, 답 반영인지), 따를 규칙 id, 제출 방법만 담는다. 앞 단계 에이전트의 추론이나 대화는 담지 않는다.
-- 따를 규칙의 본문은 코어가 패킷에 싣는다. [가정] `rules/heka.<역할>.yaml` 에 역할별 규칙 id 를 두고(출발점은 설계 §16), 코어가 heka 명령줄 도구(`node ~/heka/bin/heka.js expand <id>`)로 제목과 "적용" 절을 읽어 넣는다. 시점으로 거르지 않고 사례의 차단 heka id 만 뺀다(§11.2). [사실: 옛 hew 의 기준선 주입 훅이 이 방식으로 동작했다]
+- 따를 규칙의 본문은 코어가 패킷에 싣는다. 역할별 규칙 id 는 프로필의 `heka` 에 두고(§16), 코어가 heka 명령줄 도구(`node ~/heka/bin/heka.js expand <id>`)로 제목과 "적용" 절을 읽어 넣는다. 시점으로 거르지 않고 사례의 차단 heka id 만 뺀다(§11.2). [사실: 옛 hew 의 기준선 주입 훅이 이 방식으로 동작했다]
 
 ---
 
@@ -962,3 +962,29 @@ role: dev                        # dev(프롬프트를 고치며 본 사례) | h
 
 - 옛 hew 의 테스트는 이 구간에 약 1,200건이 있다(게이트 430여 건, 리플레이 100여 건 포함. 테스트 선언 줄 수로 센 대략값). 모듈을 가져올 때 그 모듈의 테스트도 함께 가져온다.
 - 옛 게이트 README 는 페이지의 데이터베이스 왕복을 실제 Artifact 뷰어에서 확인하지 못했다고 적고 있다.
+
+## 16. 프로필: 도메인·팀에 특화된 값(설계 §17)
+
+도메인·팀에 묶인 값은 저장소 밖 프로필 폴더에서 읽는다. 코어는 `src/core/profile.ts` 의 `loadProfile()` 로 한 번만 읽는다(폴더별 캐시). 가드 훅의 "수집 프로필"(`HEW_GUARD_PROFILE`)과는 다른 것이다.
+
+**위치**: 환경 변수 `HEW_PROFILE_DIR` → `~/.hew/profile`(폴더가 있을 때) → 저장소의 `profiles/example`.
+
+**`profile.yaml`(필수, 엄격 검사)**
+
+| 키 | 값 | 쓰는 곳 |
+|---|---|---|
+| `actors.operator`·`provider`·`customer` | 정규식 조각 목록(대소문자 무시, `\|` 로 합침) | `judgeActor`(단위의 `actor` 판정) |
+| `plan.sp` | `{ min, max, hours_per_sp }` | `sp_range` 경고, `## 팀 규칙` |
+| `plan.title.format` | `{epic}` 이 `{summary}` 보다 앞에 있는 문자열 | `title_format` 검사, `## 팀 규칙` |
+| `plan.pr` | `{ max_tickets, base }` | `pr_too_large` 경고, base 참조 검사, `## 팀 규칙` |
+| `plan.notes` | 줄 목록(선택) | `## 팀 규칙` |
+| `heka.<역할>` | 규칙 노트 id 목록(없으면 빈 목록) | `roleConfig` 의 `heka`, `## 따를 규칙` |
+| `connections.atlassian_cloud_id` | 문자열 | 수집 도구 힌트, collector 패킷 |
+
+파일이 없거나 형식이 틀리면 내부 오류(종료 1)로 어느 파일의 어느 키가 틀렸는지 알린다.
+
+**`domain.md`(선택)**: 내용을 `## 도메인 안내` 절로 그대로 싣는다(`## 따를 규칙` 바로 앞). technical-manager 와 qa-designer 패킷에만 싣고 사수·ticket-maker·collector 에는 싣지 않는다. 없거나 비면 절을 뺀다. ticket-maker·ticket-sasu 패킷에는 `## 팀 규칙` 절이 `## 따를 규칙` 앞에 실린다.
+
+**저장소에 남는 것**: `rules/roles.yaml`(모델·도구·시간·참고 파일), `rules/collect.yaml`(한도·허용 도구·호스트), `rules/plan.yaml`(`body_forbidden`).
+
+**환경 변수**: `HEW_PROFILE_DIR`(프로필 폴더). 테스트는 `test/setup-profile.ts` 로 `profiles/example` 에 고정한다.

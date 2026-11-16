@@ -80,7 +80,7 @@ PRD 하나(또는 작은 Jira 티켓 하나)를 넣으면 요구사항을 분석
 7. 역할은 이름이 아니라 입력·출력·도구·권한으로 정의한다. [가정]
 8. 모든 루프에 상한을 두고, 상한 도달은 통과가 아니라 보류다. [가정]
 9. 실수 기록의 형식은 처음부터 남긴다. [가정]
-10. heka 에 남은 규칙을 그대로 적용한다. [결정] 분석·게이트 규칙(출처 우선순위 Figma > PRD > ADR·티켓, 화면 우선 구성, 운영자(사내 어드민) 행 제외, PRD–시안 차이의 관점별 비교표, id 표기 `요구-n`·`화면-n`·`Q-n`·`D-n`·`A-n`)뿐 아니라 티켓·커밋·주석·PR 본문·리뷰·리플레이 규칙도 가져온다. 단계별 목록은 §16 이다.
+10. heka 에 남은 규칙을 그대로 적용한다. [결정] 분석·게이트 규칙(출처 우선순위 Figma > PRD > ADR·티켓, 화면 우선 구성, 운영자(사내 어드민) 행 제외, PRD–시안 차이의 관점별 비교표, id 표기 `요구-n`·`화면-n`·`Q-n`·`D-n`·`A-n`)뿐 아니라 티켓·커밋·주석·PR 본문·리뷰·리플레이 규칙도 가져온다. 역할별 규칙 id 는 프로필에 둔다(§16, §17).
 
 ---
 
@@ -454,84 +454,16 @@ heka 노트: `prd-pr-workflow-new-decisions-2026-11-13`, `…-round2`, `…-roun
 
 ## 16. 적용하는 heka 규칙
 
-heka 에 남은 규칙을 단계별로 가져온다. [결정] 각 단계의 패킷에는 그 단계의 규칙 id 만 싣고, 에이전트는 본문을 `heka_expand` 로 읽는다. 아래 목록은 2026-11-13 검색 결과이고, 명세를 쓸 때 단계별로 다시 검색해 보탠다. "(추론)"은 사람이 말한 것이 아니라 AI 가 뽑아 검수되지 않은 노트라서 적용 전에 본문을 확인한다.
+역할별 규칙 id 는 프로필의 `heka` 에 둔다(§17). [결정] 각 단계의 패킷에는 그 단계의 규칙 id 만 싣고, 에이전트는 본문을 `heka_expand` 로 읽는다. 사람이 말한 것이 아니라 AI 가 뽑아 검수되지 않은 노트는 적용 전에 본문을 확인한다.
 
-### 16.1 요구 분석과 게이트
+## 17. 프로필: 도메인·팀에 특화된 값은 저장소 밖에 둔다
 
-| id | 내용 |
-|---|---|
-| `requirement-source-priority-figma-first` | 출처 우선순위 Figma > PRD > ADR·티켓 |
-| `hew-2026-10-21-figma-prd` | 화면 우선: Figma 앱 레인 화면 목록을 먼저 만들고 요구를 화면 아래에 둔다. 상태 변형은 그룹+변형, "기대 동작"은 변경 목록 |
-| `hew-scope-operator-journeys-excluded-2026-10-29` | 주체가 운영자·관리자인 PRD 행은 앱 요구의 근거로 쓰지 않는다 |
-| `hew-delta-comparison-rows-2026-10-28` | PRD–시안 차이는 관점별 3열 표(관점, PRD, 시안) |
-| `hew-2026-10-21-follow-figma` | 차이 결정은 네 값(시안대로, PRD 대로, 구현 안 함, 보류). 보류는 승인을 막지 않되 계획에서 뺀다 |
-| `hew-2026-10-21-requirement-ids` | 차이는 대표 요구 아래 한 번만 그리고 다른 관련 요구에는 링크만 둔다 |
-| `hew-6-2026-10-23-mismatch` | 차이 비중이 10%를 넘으면 PO·디자이너 확인 요청서를 함께 만든다. AS-IS·TO-BE 차이는 붉은 상자, 차이 하나에 결정 하나, 게이트 결정은 heka 에 기록 |
-| `hew-review-request-page-decisions-2026-10-28` | 확인 요청서에서 바로 선택하고, 선택지는 게이트와 같다 |
-| `hew-gate-layout-decisions-2026-11-11` | 노드 번호는 숨기고 시안 링크로, 화면은 탭, 시안은 왼쪽 고정·요구는 오른쪽, 의존 순서는 그래프. 이미지 크기는 이 노트(250px)와 10-23 노트(2배)가 다르므로 나중 결정인 이 노트를 따른다 [가정] |
-| `hew-id-labels-korean` | id 는 `요구-n`, `화면-n`, `화면-n.m`, `Q-n`, `D-n`, `A-n` |
-| `hew-superseded-79fa26` (추론) | 요구가 바뀌어 무효가 된 질문은 다시 답해야 승인된다 |
-| `figma-mcp-read-procedure` | Figma 읽기 절차: 메타데이터는 줄 단위, 문구는 스크린샷, as-is/to-be 는 좌표로 짝짓기 |
-| `figma-instance-app-3099` | 문구만 대조하면 아이콘·그래픽 instance 교체를 놓친다 |
-| `figma-to-mobile-component-lookup` (추론) | 시안의 변경 대상은 as-is 문구 grep 으로 코드에서 찾는다(영향 분석) |
+[결정] 특정 서비스·팀에 묶인 값(주체 낱말, 티켓 제목 형식, SP 범위, PR 상한, 역할별 heka id, 외부 서비스 주소, 도메인 설명)은 저장소가 아니라 프로필 폴더에 둔다. 저장소는 가상의 서비스로 채운 예시(`profiles/example`)만 가진다.
 
-### 16.2 티켓
-
-| id | 내용 |
-|---|---|
-| `jira-ticket-title-format` | 제목은 `[MO] {일감명} / {작업 요약}`, 본문에 코드 내용 없음 |
-| `app-feature-story-role-prefixed-subtasks` (추론) | 에픽 → 기능 스토리 → 역할 접두 하위 작업 구조 |
-| `jira-subtask-story-points-field-10008-r2` | 하위 작업의 Story Points 필드 |
-| `app-team-feature-flag-replaces-epic-branch` | 피처플래그가 에픽 브랜치를 대신한다. 플래그 제거가 마지막 작업 |
-| `prd-to-pr-pipeline-decisions-2026-09-r2` | 1SP=1h, 티켓 2~4SP. 이 노트의 "PR 1개=티켓 1개"는 2026-10-20 결정 6(티켓 1≠PR 1)으로 바뀌었다 |
-
-### 16.3 구현(빌더, 빌더 사수)
-
-| id | 내용 |
-|---|---|
-| `hee-commit-message-convention` | `[티켓ID] type: 한국어 요약` |
-| `mobile-commit-hooks` | commitlint type 13종, 티켓 ID 자동 주입, 브랜치명 검증 |
-| `small-commits`, `commit-split-ui-and-feature` | 커밋은 화면·작업 단위로 잘게, UI 와 기능은 나눈다 |
-| `hee-comment-convention`, `comment-exception-clause-abuse` (추론) | 변경 동기는 주석이 아니라 커밋 메시지에 |
-| `no-ticket-id-in-code-comments`, `hee-jsdoc-and-branch-style` | 주석의 티켓 ID, JSDoc·분기 스타일 |
-| `no-api-function-tests` | `app/api/*` 함수에는 테스트를 쓰지 않는다 |
-| `provider-customer-guest-role` (추론) | 역할 값은 provider·customer·guest |
-| `no-destructive-git-for-verification` | 검증 목적으로 전역·파괴적 git 조작을 쓰지 않는다 |
-
-### 16.4 리뷰
-
-| id | 내용 |
-|---|---|
-| `review-md-pr` | `REVIEW.md` 우선순위로 분류하고, PR 이 재정의한 줄의 기존 결함도 이번 PR 결함으로 본다 |
-| `copilot-code-review-instruction-sources` (추론), `copilot-review-request-async-and-limits` (추론) | Copilot 리뷰가 읽는 지침 파일과 요청 방식(지표 3 집계) |
-
-### 16.5 PR
-
-| id | 내용 |
-|---|---|
-| `hee-pr-body-style`, `hee-pr-background-business-context` | 배경은 공통 문장 + 이 PR 의 변경, `## 변경점` 절은 쓰지 않는다 |
-| `hee-pr-body-bugfix-format` | bugfix PR 만 `## 문제` / `## 기대결과` |
-| `hee-pr-body-no-adr-link`, `pr-body-no-claude-code-generated-line` | 상단 링크는 Jira 티켓만, 생성 도구 표기 줄은 붙이지 않는다 |
-| `hee-pr-body-change-type-must-match-diff-r2` | 묶음 PR 본문은 커밋별 diff 를 다시 보고 사실대로 쓴다 |
-| `pr-300px-img-width-300`, `github-image-upload-no-documented-api-gh-attach-2026-10` (추론) | 스크린샷은 HTML 표·가로 300px, `gh --attach` 두 단계 |
-| `github-work-account` | 사내 GitHub 은 gh CLI(업무용 계정)로 한다 |
-
-### 16.6 QA
-
-| id | 내용 |
-|---|---|
-| `mobile-repo-debug-app-cache-metro-port` | 디버그 앱 캐시 재사용과 Metro 포트 분리(worktree 병렬 검증) |
-| `hew-l3-maestro-run-evidence-2026-09-11` (추론) | 통과와 원하는 화면 캡처는 별개다. 과거 스모크 통과 화면은 ATT 대화상자였다 |
-| `e2e-2026-11-13-maestro-2` (추론) | Maestro MCP, agent-device 현황 |
-| `note-7d7419` (추론) | 디버그·스테이징 빌드에서는 Android 인앱결제를 테스트할 수 없다 |
-| `app-2970-dev10-openapi-check-2026-11-10` (추론) | 환경별 openapi 로 API 반영 여부를 확인한 사례 |
-
-### 16.7 평가와 하니스
-
-| id | 내용 |
-|---|---|
-| `github-pr-base-sha-not-creation-time-r2` (추론) | 리플레이 base 는 first-parent 이력에서 직접 계산한다 |
-| `confluence-version-history-via-atlassian-mcp-prd-d9-r3` (추론) | PRD 당시 버전 읽기와 버전 선택의 함정 |
-| `hew-slice1-decisions-2026-10-20` | 채점표는 Claude 초안을 사용자가 산출물을 보기 전에 교정한다 |
-| `subagent-tools-allowlist-excludes-mcp-heka` (추론), `mcp-figma-users-hee-claude-ai` (추론) | 에이전트 도구 허용 목록에 MCP 를 명시해야 하고, 헤드리스에서는 claude.ai 커넥터 이름만 보인다 |
-| `claude-plugin-eval-3-2026-11` (추론) | `claude plugin eval` 의 기능과 한계 |
+- 위치를 정하는 순서: 환경 변수 `HEW_PROFILE_DIR` → `~/.hew/profile`(폴더가 있을 때) → 저장소의 `profiles/example`(끝 기본값).
+- 파일 두 개: `profile.yaml`(필수), `domain.md`(선택. 없거나 비면 해당 패킷 절을 뺀다).
+- `profile.yaml` 키: `actors`(주체별 판정 낱말, 정규식 조각, 대소문자 무시), `plan`(`sp`, `title.format`, `pr.max_tickets`·`pr.base`, 선택 `notes`), `heka`(역할별 규칙 노트 id), `connections.atlassian_cloud_id`. 알 수 없는 키와 틀린 값은 어느 파일의 어느 키인지 알리고 내부 오류로 멈춘다.
+- 패킷: `domain.md` 는 `## 도메인 안내` 절로 그대로 실린다(`## 따를 규칙` 앞). 역할 정의가 이 절을 가리키는 테크니컬 매니저와 QA 설계의 패킷에만 싣는다. 사수 패킷에 실으면 결함 주입 평가에서 포착이 떨어졌다(같은 결함 하나를 반복해 쟀을 때 실으면 4번 중 0번, 싣지 않으면 10번 중 7번. 표본이 작아 다시 잴 필요가 있다). ticket-maker·ticket-sasu 패킷에는 `## 팀 규칙` 절(제목 형식, SP 범위, PR 상한, base, `notes`)이 실린다.
+- 저장소의 `rules/` 에 남는 것: 역할의 모델·도구·참고 파일(`roles.yaml`), 수집 한도와 허용 도구(`collect.yaml`), 티켓 본문 금지 규칙(`plan.yaml` 의 `body_forbidden`).
+- 가드 훅의 "수집 프로필"(`HEW_GUARD_PROFILE`)은 이것과 다른 것이다. 훅이 어떤 도구를 허용할지 정하는 모드일 뿐 프로필 폴더와 무관하다.
+- 테스트는 환경 변수로 `profiles/example` 을 고정해 개발자 홈의 실제 프로필이 섞이지 않게 한다.

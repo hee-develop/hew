@@ -6,17 +6,6 @@ roles:
     isolated: true
     allowed_tools: [Read, Write, Edit, Bash]
     timeout_minutes: 90
-    heka:
-      - requirement-source-priority-figma-first
-      - hew-2026-10-21-figma-prd
-      - hew-scope-operator-journeys-excluded-2026-10-29
-      - hew-delta-comparison-rows-2026-10-28
-      - hew-2026-10-21-follow-figma
-      - hew-2026-10-21-requirement-ids
-      - hew-id-labels-korean
-      - figma-mcp-read-procedure
-      - figma-instance-app-3099
-      - figma-to-mobile-component-lookup
     refs:
       - refs/analysis-format.md
       - refs/analysis.example.json
@@ -27,7 +16,6 @@ roles:
     isolated: true
     allowed_tools: [Read, Write, Edit, Bash]
     timeout_minutes: 60
-    heka: []
     refs:
       - refs/scenarios-format.md
       - refs/scenarios.example.json
@@ -38,13 +26,6 @@ roles:
     isolated: true
     allowed_tools: [Read, Write, Edit, Bash]
     timeout_minutes: 45
-    heka:
-      - jira-ticket-title-format
-      - jira-mo-ticket-body-format
-      - app-team-feature-flag-replaces-epic-branch
-      - app-feature-story-role-prefixed-subtasks
-      - small-commits
-      - commit-split-ui-and-feature
     refs:
       - refs/plan-format.md
       - refs/plan.example.json
@@ -54,7 +35,6 @@ roles:
     isolated: true
     allowed_tools: [Read, Write, Bash]
     timeout_minutes: 20
-    heka: []
     refs:
       - refs/findings-format.md
       - refs/findings.example.json
@@ -64,7 +44,6 @@ roles:
     isolated: true
     allowed_tools: [Read, Write, Bash]
     timeout_minutes: 20
-    heka: []
     refs:
       - refs/findings-format.md
       - refs/findings.plan.example.json
@@ -75,7 +54,4 @@ roles:
     isolated: false
     allowed_tools: [Read, Bash, ToolSearch]
     timeout_minutes: 45
-    heka:
-      - figma-mcp-read-procedure
-      - confluence-page-version-body-via-atlassian-mcp
     refs: []

@@ -5,6 +5,7 @@ import type { CheckContext } from "../submit.js";
 import { loadAnswers, type AnswersFile } from "../analysis/answers.js";
 import type { AnalysisItems, Requirement } from "../analysis/schema.js";
 import { loadAnalysis } from "../scenarios/checks.js";
+import { humanTitleFormat, titlePrefix } from "../profile.js";
 import { loadPlanRules, type PlanRules } from "./rules.js";
 import { PlanItemsSchema, type Pr, type PlanItems, type Ticket } from "./schema.js";
 
@@ -103,7 +104,7 @@ function checkRefs(env: Env): Issue[] {
   }
   for (const p of env.items.prs) {
     for (const id of p.ticket_ids) if (!env.ticketById.has(id)) missing(p.id, "티켓", id);
-    if (p.base !== "develop" && !env.prById.has(p.base)) missing(p.id, "base PR 묶음", p.base);
+    if (p.base !== env.rules.pr.base && !env.prById.has(p.base)) missing(p.id, "base PR 묶음", p.base);
   }
   const removal = env.items.feature_flag?.removal_ticket;
   if (removal !== undefined && !env.ticketById.has(removal)) missing("feature_flag", "티켓(removal_ticket)", removal);
@@ -178,8 +179,8 @@ function checkTitles(env: Env): Issue[] {
   const out: Issue[] = [];
   for (const t of env.items.tickets) {
     if (!pattern.test(t.title)) {
-      out.push(issue("title_format", "reject", t.id, `${t.id} 의 제목 '${t.title}' 이 형식 '[MO] {일감명} / {작업 요약}' 과 다릅니다`));
-    } else if (!t.title.startsWith(`[MO] ${env.items.epic_name} / `)) {
+      out.push(issue("title_format", "reject", t.id, `${t.id} 의 제목 '${t.title}' 이 형식 '${humanTitleFormat(env.rules.title_format)}' 과 다릅니다`));
+    } else if (!t.title.startsWith(titlePrefix(env.rules.title_format, env.items.epic_name))) {
       out.push(issue("title_format", "reject", t.id, `${t.id} 의 제목 '${t.title}' 의 일감명이 epic_name '${env.items.epic_name}' 와 다릅니다`));
     }
   }
