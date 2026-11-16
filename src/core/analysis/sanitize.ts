@@ -6,18 +6,20 @@ import { AnalysisItemsSchema } from "./schema.js";
 const isRecord = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === "object" && !Array.isArray(v);
 
 /** 묶음 이름, 그 안의 사람의 칸. */
-const HUMAN_FIELDS: readonly [string, string][] = [
+export type HumanFields = readonly (readonly [string, string])[];
+
+const HUMAN_FIELDS: HumanFields = [
   ["deltas", "decision"],
   ["questions", "answer"],
   ["assumptions", "status"],
 ];
 
 /** 에이전트가 채운 사람의 칸을 지운 사본과 경고를 돌려준다. */
-export function dropHumanFields(raw: unknown): { raw: unknown; issues: Issue[] } {
+export function dropHumanFields(raw: unknown, fields: HumanFields = HUMAN_FIELDS): { raw: unknown; issues: Issue[] } {
   if (!isRecord(raw)) return { raw, issues: [] };
   const issues: Issue[] = [];
   const out: Record<string, unknown> = { ...raw };
-  for (const [group, field] of HUMAN_FIELDS) {
+  for (const [group, field] of fields) {
     const list = raw[group];
     if (!Array.isArray(list)) continue;
     out[group] = list.map((item, index) => {
@@ -88,16 +90,21 @@ function strip(schema: z.ZodTypeAny, value: unknown, path: string, owner: string
   return value;
 }
 
-/** analysis 스키마에 없는 키를 떨어뜨린 사본과 경고를 돌려준다. */
-export function dropUnknownFields(raw: unknown): { raw: unknown; issues: Issue[] } {
+/** 스키마에 없는 키를 떨어뜨린 사본과 경고를 돌려준다. */
+export function dropUnknownFields(raw: unknown, schema: z.ZodTypeAny = AnalysisItemsSchema): { raw: unknown; issues: Issue[] } {
   const walk: Walk = { dropped: [] };
-  const cleaned = strip(AnalysisItemsSchema, raw, "", null, walk);
+  const cleaned = strip(schema, raw, "", null, walk);
   return { raw: cleaned, issues: walk.dropped };
 }
 
 /** 제출 원문 손질 전체: 사람의 칸 → 알 수 없는 키 순. */
-export function sanitizeAnalysis(raw: unknown): { raw: unknown; issues: Issue[] } {
-  const human = dropHumanFields(raw);
-  const unknown = dropUnknownFields(human.raw);
+export function sanitizeItems(raw: unknown, schema: z.ZodTypeAny, fields: HumanFields): { raw: unknown; issues: Issue[] } {
+  const human = dropHumanFields(raw, fields);
+  const unknown = dropUnknownFields(human.raw, schema);
   return { raw: unknown.raw, issues: [...human.issues, ...unknown.issues] };
+}
+
+/** analysis 제출 원문 손질. */
+export function sanitizeAnalysis(raw: unknown): { raw: unknown; issues: Issue[] } {
+  return sanitizeItems(raw, AnalysisItemsSchema, HUMAN_FIELDS);
 }

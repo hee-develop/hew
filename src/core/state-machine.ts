@@ -38,7 +38,7 @@ export type FindingsTarget = "analysis" | "plan";
 export type TransitionEvent =
   | { type: "sources_complete" }
   | { type: "analysis_accepted"; open: number }
-  | { type: "scenarios_accepted" }
+  | { type: "scenarios_accepted"; open: number }
   | { type: "plan_accepted" }
   | { type: "findings_complete"; for: FindingsTarget; blocking: number }
   | { type: "gate_published"; phase: "answer" | "approve" }
@@ -83,6 +83,7 @@ function transitionAnswersComplete(event: TransitionEvent, ctx: TransitionContex
   } else if (event.type === "scenarios_accepted") {
     progress.scenarios = true;
     progress.sasu = false;
+    open = event.open;
   } else if (event.type === "findings_complete" && event.for === "analysis") {
     if (!progress.analysis || !progress.scenarios) {
       throw stateError("분석과 시나리오 재제출이 끝나기 전에는 사수 재확인을 받을 수 없습니다");
@@ -113,7 +114,7 @@ export function transition(state: RunState, event: TransitionEvent, ctx: Transit
       return rejectEvent(state, event);
     }
     case "analyzed": {
-      if (event.type === "scenarios_accepted") return { state: "qa_designed", changes: {}, row: 3 };
+      if (event.type === "scenarios_accepted") return { state: "qa_designed", changes: { open: event.open }, row: 3 };
       return rejectEvent(state, event);
     }
     case "qa_designed": {

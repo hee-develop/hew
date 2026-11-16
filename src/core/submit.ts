@@ -6,6 +6,7 @@ import { rejectedError, usageError, type Issue } from "./errors.js";
 import { appendEvent } from "./events.js";
 import { writeJsonAtomic } from "./fsx.js";
 import { hashJson } from "./hash.js";
+import { collectRunOpen } from "./open.js";
 import { findingsPath, runPaths } from "./paths.js";
 import { computeRevision } from "./revision.js";
 import { loadRun, saveRun, type Run, type SubmissionKey } from "./run.js";
@@ -122,7 +123,7 @@ const contextOf = (run: Run, revision: string): TransitionContext => ({
 
 function eventFor(kind: SubmitKind, target: FindingsTarget | null, items: Record<string, unknown>, open: number): TransitionEvent {
   if (kind === "analysis") return { type: "analysis_accepted", open };
-  if (kind === "scenarios") return { type: "scenarios_accepted" };
+  if (kind === "scenarios") return { type: "scenarios_accepted", open };
   if (kind === "plan") return { type: "plan_accepted" };
   return { type: "findings_complete", for: target ?? "analysis", blocking: countBlocking(items) };
 }
@@ -190,7 +191,8 @@ export function submitArtifact(opts: SubmitOptions): SubmitResult {
   const key: SubmissionKey = stageOf(opts.kind, target);
   const attempt = (run.submissions[key]?.attempt ?? 0) + 1;
   const openIds = spec.collectOpen(items, opts.runDir);
-  const result = transition(run.state, eventFor(opts.kind, target, items, openIds.length), contextOf(run, currentRevision));
+  const totalOpen = opts.kind === "analysis" || opts.kind === "scenarios" ? collectRunOpen(opts.runDir, { kind: opts.kind, items }).length : run.open;
+  const result = transition(run.state, eventFor(opts.kind, target, items, totalOpen), contextOf(run, currentRevision));
 
   const envelope = wrapEnvelope({
     stage: key,
@@ -211,13 +213,14 @@ export function submitArtifact(opts: SubmitOptions): SubmitResult {
   writeJsonAtomic(docPath, envelope);
 
   const revision = computeRevision(opts.runDir);
+  const open = collectRunOpen(opts.runDir).length;
   const next: Run = {
     ...run,
     state: result.state,
     revision,
     rework: result.changes.rework ?? run.rework,
     progress: result.changes.progress ?? run.progress,
-    open: result.changes.open ?? run.open,
+    open,
     submissions: { ...run.submissions, [key]: { attempt, at: now.toISOString(), hash: hashJson(items) } },
   };
   saveRun(opts.runDir, next, now);
@@ -236,7 +239,7 @@ export function submitArtifact(opts: SubmitOptions): SubmitResult {
     previous_state: run.state,
     state: result.state,
     revision,
-    open: next.open,
+    open,
     warnings,
   };
 }

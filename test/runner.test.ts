@@ -256,12 +256,12 @@ describe("실행기: --dry, --until, 멈추는 곳", () => {
     expect(existsSync(log) ? readdirSync(log) : []).toEqual([]);
   });
 
-  it("역할 정의 파일이 없는 역할(qa-designer)은 멈추고 알린다", async () => {
-    const { dir } = makeRun("analyzed");
+  it("역할 정의 파일이 없는 역할(ticket-maker)은 멈추고 알린다", async () => {
+    const { dir } = makeRun("answers_applied");
     const { env } = fakeEnv("submit");
     const result = await runLoop({ runDir: dir, env });
     expect(result.outcome).toBe("role_missing");
-    expect(result.message).toContain("agents/qa-designer.md");
+    expect(result.message).toContain("agents/ticket-maker.md");
   });
 });
 

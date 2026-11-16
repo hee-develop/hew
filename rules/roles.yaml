@@ -28,7 +28,10 @@ roles:
     allowed_tools: [Read, Write, Edit, Bash]
     timeout_minutes: 60
     heka: []
-    refs: []
+    refs:
+      - refs/scenarios-format.md
+      - refs/scenarios.example.json
+      - refs/analysis.example.json
   ticket-maker:
     model: claude-sonnet-5-5
     effort: medium

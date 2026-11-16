@@ -16,7 +16,7 @@ import { computeOpenItems, openIdList, type OpenItems } from "./open-items.js";
 import { AnalysisItemsSchema, type AnalysisItems, type Evidence } from "./schema.js";
 
 /** 게이트에 한 번이라도 게시된 뒤의 상태(§1.5 철회 규칙이 적용된다). */
-const POST_GATE_STATES: readonly RunState[] = [
+export const POST_GATE_STATES: readonly RunState[] = [
   "gate_answering",
   "answers_complete",
   "answers_applied",
