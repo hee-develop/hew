@@ -10,7 +10,9 @@ const At = z.string();
 const By = z.string().optional();
 
 export const AnswersFileSchema = z.object({
-  answers: z.record(z.object({ option: z.string().optional(), text: z.string().optional(), at: At, by: By })).default({}),
+  answers: z
+    .record(z.object({ option: z.string().optional(), text: z.string().optional(), question_hash: z.string().optional(), at: At, by: By }))
+    .default({}),
   scope: z
     .record(z.object({ decision: z.enum(DELTA_DECISION_VALUES), note: z.string().optional(), at: At, by: By }))
     .default({}),
