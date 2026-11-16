@@ -11,7 +11,7 @@ import type { RunState } from "../state-machine.js";
 import type { CheckContext } from "../submit.js";
 import type { Unit } from "../units/types.js";
 import { loadAnswers, type AnswersFile } from "./answers.js";
-import { DELTA_DECISION_VALUES, isDecisionAllowed } from "./delta-decision.js";
+import { DELTA_DECISION_VALUES, isDecisionAllowed, sameDecisionPairs } from "./delta-decision.js";
 import { computeOpenItems, openIdList, type OpenItems } from "./open-items.js";
 import { AnalysisItemsSchema, type AnalysisItems, type Evidence } from "./schema.js";
 
@@ -318,13 +318,16 @@ function checkDeltas(env: Env): Issue[] {
       out.push(issue("delta_decision_kind", "warn", d.id, `${d.id}(${d.kind}) 에 들어온 사람의 결정 '${human.decision}' 은 이 종류에 허용되지 않아 결정 안 됨으로 다룹니다`));
     }
     if (d.requirement_ids.length >= 4) {
-      out.push(issue("delta_multi_decision", "warn", d.id, `${d.id} 가 요구 ${d.requirement_ids.length}개에 걸려 있습니다. 결정이 요구마다 갈릴 수 있으면 나누세요`));
+      out.push(issue("delta_multi_decision", "warn", d.id, `${d.id} 가 요구 ${d.requirement_ids.length}개에 걸려 있습니다. 요구마다 답이 달라질 수 있으면 나누고, 같은 결정이면 그대로 두세요`));
     }
     if (d.comparison === undefined || d.comparison.rows.length === 0) {
       out.push(issue("delta_comparison_missing", "warn", d.id, `${d.id} 에 비교 행이 없습니다`));
     } else if (d.kind === "mismatch" && !d.comparison.rows.some((row) => (row.prd ?? "").trim() !== "" && (row.figma ?? "").trim() !== "")) {
       out.push(issue("delta_comparison_unpaired", "warn", d.id, `${d.id} 는 mismatch 인데 PRD 와 시안이 짝지어진 비교 행이 없습니다`));
     }
+  }
+  for (const [a, b] of sameDecisionPairs(env.items.deltas)) {
+    out.push(issue("delta_same_decision", "warn", b.id, `${b.id} 는 ${a.id} 와 비교 내용이 같습니다. 사람이 내릴 결정이 같으면 차이 하나로 묶고 걸린 요구를 모두 적으세요`));
   }
   return out;
 }

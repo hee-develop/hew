@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { extname, isAbsolute, resolve } from "node:path";
 import { loadAnswers, type AnswersFile } from "../analysis/answers.js";
 import { runAnalysisChecks } from "../analysis/checks.js";
-import { DELTA_CHOICES, type DecisionChoice } from "../analysis/delta-decision.js";
+import { DELTA_CHOICES, similarDeltaIds, type DecisionChoice } from "../analysis/delta-decision.js";
 import { hasValidDecision, isQuestionAnswered, isQuestionSuperseded, questionHash } from "../analysis/open-items.js";
 import {
   AnalysisItemsSchema,
@@ -69,6 +69,8 @@ export interface GateDelta {
   requirement_ids: string[];
   /** 차이 카드가 놓인 대표 요구. 묶이지 않았으면 null. */
   home_requirement_id: string | null;
+  /** 같은 결정으로 묶을 수 있어 보이는 다른 차이의 id. */
+  similar_ids: string[];
 }
 
 export interface GateRequirement {
@@ -312,6 +314,7 @@ function toDelta(delta: Delta): GateDelta {
     audience: delta.audience,
     requirement_ids: delta.requirement_ids,
     home_requirement_id: null,
+    similar_ids: [],
   };
 }
 
@@ -583,7 +586,9 @@ export function buildGateModel(runDir: string, phase: GatePhase, now: Date = new
   const deltaModels = items.deltas.map(toDelta);
   const homeDeltasOf = (reqId: string): GateDelta[] =>
     deltaModels.filter((d) => d.requirement_ids[0] === reqId && index.reqById.has(reqId));
+  const similar = similarDeltaIds(items.deltas);
   for (const d of deltaModels) {
+    d.similar_ids = similar.get(d.id) ?? [];
     const home = d.requirement_ids[0];
     d.home_requirement_id = home !== undefined && index.reqById.has(home) ? home : null;
   }

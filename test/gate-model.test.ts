@@ -120,4 +120,17 @@ describe("게이트 모델", () => {
     expect(answer.rules.delta_choices.figma_only?.map((c) => c.value)).toEqual(["follow_figma", "drop", "hold"]);
     expect(readdirSync(dir)).toContain("run.json");
   });
+
+  it("비교 내용이 같은 차이는 서로의 id 를 similar_ids 에 단다", () => {
+    const { dir } = setupGateRun();
+    editAnalysis(dir, (items) => {
+      items.deltas.push({ ...structuredClone(items.deltas[0]), id: "D-3", title: "같은 차이" });
+    });
+    const { model } = buildGateModel(dir, "answer");
+    const deltas = [...model.screens.flatMap((s) => s.requirements.flatMap((r) => r.deltas)), ...model.unbound_requirements.flatMap((r) => r.deltas), ...model.unbound_deltas];
+    const byId = new Map(deltas.map((d) => [d.id, d]));
+    expect(byId.get("D-1")?.similar_ids).toEqual(["D-3"]);
+    expect(byId.get("D-3")?.similar_ids).toEqual(["D-1"]);
+    expect(byId.get("D-2")?.similar_ids).toEqual([]);
+  });
 });
