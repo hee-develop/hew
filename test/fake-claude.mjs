@@ -1,7 +1,8 @@
-// 테스트용 가짜 claude. FAKE_CLAUDE_MODE: submit | noop | fail_once | timeout | sasu_ok | sasu_issue_first | tm_respond | by_role
+// 테스트용 가짜 claude. FAKE_CLAUDE_MODE: submit | noop | fail_once | timeout | sasu_ok | sasu_issue_first | tm_respond | collect | by_role
+// collect 는 패킷의 수집 계획대로 hew source add(--from-call 또는 --file)·fail·done 을 부른다. FAKE_CLAUDE_CALLS(JSON: { <kind>: <호출 번호> })에 없는 kind 는 두 번 실패로 남긴다.
 // tm_respond 는 반송 패킷 표의 모든 지적 id 에 response(기본 rejected)로 답한 뒤 doc 을 제출한다.
 // by_role 은 FAKE_CLAUDE_PLAN(JSON: { <역할>: [{ mode, doc?, action?, response? }, ...] })에서 그 역할의 몇 번째 호출인지에 따라 동작을 고른다.
-import { execSync } from "node:child_process";
+import { execSync, spawnSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -53,6 +54,44 @@ function respondThenSubmit(response, doc) {
   writeFileSync(file, JSON.stringify({ responses }));
   execSync(command, { stdio: "ignore" });
   submitFromPacket(doc);
+}
+
+/** 수집 패킷의 계획을 따라 항목을 등록한다. 계획이 빌 때까지(최대 10바퀴) 되풀이하고 done 을 부른다. */
+function collectFromPacket() {
+  const prompt = argv[argv.indexOf("-p") + 1] ?? "";
+  const packet = readFileSync(prompt.split("를 읽고")[0], "utf8");
+  const found = /`(\S+) --json source plan --run (\S+)`/.exec(packet);
+  const workDir = /작업 폴더\(여기에만 쓸 수 있다\): `([^`]+)`/.exec(packet)?.[1];
+  if (!found || !workDir) throw new Error("패킷에 수집 명령이나 작업 폴더가 없습니다");
+  const [, hew, runDir] = found;
+  const calls = JSON.parse(process.env.FAKE_CLAUDE_CALLS ?? "{}");
+  const hewJson = (...args) => {
+    const r = spawnSync(hew, ["--json", ...args], { encoding: "utf8" });
+    return { status: r.status, body: r.stdout.trim() === "" ? null : JSON.parse(r.stdout) };
+  };
+  for (let round = 0; round < 10; round += 1) {
+    const items = (hewJson("source", "plan", "--run", runDir).body?.data.items ?? []).filter((i) => i.skip !== true);
+    if (items.length === 0) break;
+    for (const item of items) {
+      const r = item.register;
+      const args = ["source", "add", "--run", runDir, "--kind", r.kind, "--ref", r.ref];
+      if (r.version) args.push("--version", r.version);
+      if (r.node) args.push("--node", r.node);
+      if (r.kind === "figma_shot") {
+        const file = join(workDir, "shots", `${r.node.replace(":", "-")}.png`);
+        mkdirSync(join(file, ".."), { recursive: true });
+        writeFileSync(file, Buffer.from([0x89, 0x50, 0x4e, 0x47, ...Buffer.from(r.node)]));
+        args.push("--file", file);
+      } else if (calls[r.kind] !== undefined) {
+        args.push("--from-call", String(calls[r.kind]));
+      } else {
+        for (let i = 0; i < 2; i += 1) hewJson("source", "fail", "--run", runDir, "--item", item.id, "--reason", "가짜 수집이 가져오지 못함");
+        continue;
+      }
+      hewJson(...args);
+    }
+  }
+  hewJson("source", "done", "--run", runDir);
 }
 
 const KIND_BY_CODE = { W2: "unsupported", W3: "missing", W4: "false_confirmed", W5: "ai_only_behavior", W6: "operator_row", W7: "visual_unlisted", W8: "bad_pairing", W9: "already_answered", T1: "ticket_missing_context" };
@@ -108,6 +147,7 @@ if (behavior.mode === "timeout") {
 } else {
   if (behavior.mode === "sasu_ok") submitSasu(false);
   else if (behavior.mode === "sasu_issue_first") submitSasu(true, behavior.action);
+  else if (behavior.mode === "collect") collectFromPacket();
   else if (behavior.mode === "tm_respond") respondThenSubmit(behavior.response ?? "rejected", behavior.doc);
   else submitFromPacket(behavior.doc);
   process.stdout.write(result());

@@ -4,6 +4,9 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { inventoryFileFromContent } from "../src/core/figma/inventory.js";
+import { captureTargets } from "../src/core/collect/plan.js";
+import { parseCase } from "../src/core/case.js";
+import { markdownFromSource } from "../src/core/units/extract.js";
 import { parseMarkdownUnits } from "../src/core/units/markdown.js";
 
 const root = join(homedir(), "Desktop", "mobile-workflow-runs");
@@ -69,3 +72,46 @@ function countActors(units: { actor?: string }[]): Record<string, number> {
   for (const u of units) if (u.actor) out[u.actor] = (out[u.actor] ?? 0) + 1;
   return out;
 }
+
+// 무인 수집 세션이 받아 적은 실제 응답 사본(저장소에 넣지 않는다). HEW_RECORDED_SAMPLES 폴더(calls/001.json, keep/figma-tool-result.txt)가 있을 때만 돈다.
+const rec = process.env.HEW_RECORDED_SAMPLES ?? join(homedir(), "hew-recorded-samples");
+const recConfluence = join(rec, "calls", "001.json");
+const recFigma = join(rec, "keep", "figma-tool-result.txt");
+
+describe.skipIf(!existsSync(recConfluence))("실사본: Confluence 응답", () => {
+  it("한 번 풀어 얻은 응답 문자열을 payload 로 넣으면 단위가 나오고 Requirements 표의 행이 table_row 가 된다", () => {
+    const payload = JSON.parse(readFileSync(recConfluence, "utf8")) as string;
+    const md = markdownFromSource(payload, "payload.json");
+    const units = parseMarkdownUnits(md);
+    const rows = units.filter((u) => u.kind === "table_row" && u.locator.section.join("/") === "Requirements");
+    console.log(`Confluence 응답: 본문 ${md.length}자, 단위 ${units.length}개, table_row ${units.filter((u) => u.kind === "table_row").length}개(Requirements ${rows.length}개)`);
+    expect(md.length).toBeGreaterThan(0);
+    expect(units.length).toBeGreaterThan(0);
+    expect(rows.length).toBeGreaterThan(0);
+  });
+});
+
+describe.skipIf(!existsSync(recFigma))("실사본: Figma get_metadata 결과 파일", () => {
+  it("payload 로 넣으면 화면 목록이 만들어지고 캡처 대상이 계산된다", () => {
+    const inv = inventoryFileFromContent("S-1", "FigmaFileKeyExample001", readFileSync(recFigma, "utf8"));
+    const targets = captureTargets(inv.frames);
+    const app = inv.frames.filter((f) => !f.is_desc && f.platform === "app").length;
+    console.log(`Figma 결과: 프레임 ${inv.frames.length}개, 앱 ${app}개, 캡처 대상 ${targets.length}개`);
+    expect(inv.frames.length).toBeGreaterThan(0);
+    expect(app).toBeGreaterThan(0);
+    expect(targets.length).toBeGreaterThanOrEqual(app);
+  });
+});
+
+const oldCase = join(homedir(), "hew-old", "replay", "cases", "app-3008.yaml");
+
+describe.skipIf(!existsSync(oldCase))("실자료: 옛 사례 파일", () => {
+  it("옛 형식 사례 파일에서 PRD 버전·known_at·차단 목록을 읽는다", () => {
+    const { info } = parseCase(readFileSync(oldCase, "utf8"));
+    console.log(`옛 사례: prd_version ${info.prd_version}, known_at ${info.known_at}, 차단 Jira ${info.block.jira_keys.length}개, PR ${info.block.pr_numbers.length}개`);
+    expect(info.prd_version).toBe("22");
+    expect(info.known_at).toBe("2026-09-10");
+    expect(info.block.jira_keys).toContain("APP-3094");
+    expect(info.block.pr_numbers).toContain(1054);
+  });
+});

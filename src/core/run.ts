@@ -20,14 +20,40 @@ const SubmissionRecordSchema = z.object({
 
 export type SubmissionRecord = z.infer<typeof SubmissionRecordSchema>;
 
+export const CaseInfoSchema = z.object({
+  story: z.string().optional(),
+  known_at: z.string().optional(),
+  prd_version: z.string().optional(),
+  block: z.object({
+    jira_keys: z.array(z.string()),
+    pr_numbers: z.array(z.number().int()),
+    heka_ids: z.array(z.string()),
+  }),
+});
+
+export type CaseInfo = z.infer<typeof CaseInfoSchema>;
+
+/** 수집 중 필수가 아니라 넘어간 일(실패한 항목, 건너뛴 링크). */
+export const CollectWarningSchema = z.object({
+  code: z.string(),
+  item: z.string(),
+  message: z.string(),
+});
+
+export type CollectWarning = z.infer<typeof CollectWarningSchema>;
+
 export const RunSchema = z.object({
   run_id: z.string().min(1),
   mode: z.enum(RUN_MODES),
-  input: z.object({ kind: z.enum(INPUT_KINDS), url: z.string().min(1) }),
+  input: z.object({ kind: z.enum(INPUT_KINDS), url: z.string().min(1), figma: z.array(z.string().min(1)).optional() }),
   repo: z.object({ path: z.string().nullable(), base: z.string().nullable() }),
   case: z.string().nullable(),
   /** 리플레이에서 사례 시점까지의 지식만 쓰기 위한 기준 시점(날짜 또는 ISO 시각). */
   known_at: z.string().nullable().optional(),
+  /** 사례 파일에서 읽은 정보(replay). */
+  case_info: CaseInfoSchema.optional(),
+  /** hew source done 이 통과하면서 남긴 선택 항목 경고. */
+  collect_warnings: z.array(CollectWarningSchema).optional(),
   state: z.enum(RUN_STATES),
   revision: z.string(),
   rework: z.object({ analysis: z.number().int().min(0), plan: z.number().int().min(0) }),

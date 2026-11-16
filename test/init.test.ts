@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { HewError } from "../src/core/errors.js";
@@ -73,8 +73,10 @@ describe("init", () => {
   });
 
   it("replay 는 --case 와 함께 받는다", () => {
-    const { run } = initRun({ prd: PRD_URL, mode: "replay", case: "/cases/a.json", runId: "r" });
-    expect(run).toMatchObject({ mode: "replay", case: "/cases/a.json" });
+    const file = join(runs.dir, "a.yaml");
+    writeFileSync(file, "story: APP-1\n");
+    const { run } = initRun({ prd: PRD_URL, mode: "replay", case: file, runId: "r" });
+    expect(run).toMatchObject({ mode: "replay", case: file, case_info: { story: "APP-1" } });
   });
 
   describe("인자 오류는 종료 2", () => {

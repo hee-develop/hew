@@ -263,9 +263,14 @@ heka `hew-id-labels-korean` 을 따른다. 새 종류는 [가정]이다.
 
 ### 3.1 수집
 
-- `hew init` 이 수집 계획을 만든다. 입력이 PRD URL 이면 PRD 를, Jira 티켓 URL 이면 티켓과 그 상위 스토리·에픽에 연결된 PRD 를 필수 원천으로 둔다.
-- `collector` 가 계획대로 가져와 `hew source add` 로 등록한다. 등록할 때 코어가 본문을 파일로 저장하고 해시를 `manifest.json` 에 적는다.
-- 본문은 모델이 다시 적지 않는다. 모델이 옮겨 적으면 글자가 바뀌기 때문이다. 코어가 수집 세션의 기록에서 도구가 돌려준 결과를 그대로 꺼내 저장한다. [사실: 옛 hew 의 `toolcalls extract` 가 같은 이유로 이 방식을 썼다]
+- 수집 계획은 코어가 결정적으로 계산한다(`hew source plan --run`. 아무것도 바꾸지 않는다). `run.json`·`sources/manifest.json`·실패 기록(`sources/failures.jsonl`)에서 다음에 가져올 항목(`id`, `what`, `tool_hint`, `register`, `note`, `skip`)과 실패로 빠진 항목(`failed`), 막힌 일(`blocked`)을 낸다. 입력이 PRD URL 이면 PRD(페이지 id 는 URL 의 `pageId=` 또는 `/pages/<id>/`)를, 티켓 URL 이면 티켓을 첫 항목으로 두고, 등록된 본문에서 연결된 것(티켓의 상위 이슈 1단계, Figma 메타데이터, 캡처 대상 스크린샷, 같은 사이트의 관련 문서)이 계획에 새로 생긴다. 상한과 호스트·도구 허용 목록은 `rules/collect.yaml` 이 정한다.
+- `hew init --repo` 가 있으면 코어가 직접 `git rev-parse <base 또는 HEAD>` 로 SHA 를 얻어 `code` 원천을 등록한다(사례가 base 를 정했고 `--base` 가 없으면 사례의 값. git 이 실패하면 경고만 내고 등록하지 않는다). 계획에는 `code` 가 없을 때 "대상 저장소가 지정되지 않음" 이 막힌 일로 나온다.
+- `hew init --case`(replay) 는 사례 파일(§11.1 형식과 옛 형식 `prd_version`·`known_at`·`blocked`)을 읽어 `run.json` 의 `case_info`(`story`, `known_at`, `prd_version`, `block.jira_keys·pr_numbers·heka_ids`)에 싣고 `known_at` 은 `run.known_at` 에도 넣는다. 계획은 `prd_version` 이 있으면 그 버전만 가져오라고 적는다.
+- `collector` 가 계획대로 도구를 불러 가져온다. 도구 결과는 모델이 옮겨 적지 않는다. 수집 세션의 PostToolUse 훅(`hooks/record.mjs`)이 도구 결과를 원문 그대로 `work/collector-<n>/calls/<번호>.payload` 와 `index.jsonl`(번호, 도구, 입력, 크기, 해시, 큰 결과 여부)에 받아 적는다. 응답이 "결과가 커서 파일로 저장했다"는 안내문이면 그 파일의 내용을 받아 적는다. [사실: 2026-11-14 Claude Code 2.1.323 무인 세션에서 MCP 도구의 `tool_response` 는 문자열이고 큰 결과는 안내문으로 바뀐다]
+- 등록: `hew source calls` 가 가장 최근 수집 작업 폴더의 호출 표(이미 등록됐는지 포함)를 보여 주고, `hew source add … --from-call <번호>` 가 그 payload 를 바이트 그대로 원천 파일로 복사한다(`--file` 과 둘 중 하나. 확장자는 JSON 으로 읽히면 `.json`, 아니면 `.md`. manifest 의 `meta` 에 `call`·`tool`·`tool_use_id`). Confluence 응답(`content.nodes[0].body`)과 Jira 응답(`fields.description`·`fields.summary`·`renderedFields.description`·최상위 `description`)은 원문 단위 추출이 그대로 받고, 제목·버전이 응답에 있으면 manifest 에서 비어 있을 때 채운다.
+- 실패: `hew source fail --item <계획 항목 id> --reason` 가 `sources/failures.jsonl` 에 덧붙인다. 같은 항목이 2회 실패하면 계획에서 빠지고 `failed` 에 실린다.
+- 완료: `hew source done` 은 필수 항목(입력에 따른 `prd` 또는 `ticket`, 그리고 `code`)이 없거나, PRD·티켓에 Figma 노드 링크가 있는데 `figma_meta` 가 하나도 없고 시도한 기록도 없거나, 계획에 아직 가져올 항목이 남아 있으면(`skip`·`failed` 제외) 종료 3 과 남은 항목 목록을 낸다. 필수가 아닌 항목의 2회 실패와 노드 지정 없는 Figma 링크의 건너뜀은 경고와 함께 통과시키고 `run.json` 의 `collect_warnings` 에 남긴다(manifest 에는 쓰지 않는다).
+- 수집 세션은 실행용 설정에 PreToolUse(`hooks/guard.mjs` 의 수집 프로필: `HEW_GUARD_PROFILE=collector`)와 PostToolUse(`hooks/record.mjs`, 매처 `mcp__.*`)를 함께 건다. 수집 프로필은 `ToolSearch`, `rules/collect.yaml` 의 `mcp_allow` 에 전체 일치하는 MCP 읽기 도구, 형식이 고정된 `curl`(`curl -sS -L -o <쓰기 뿌리 안 경로> https://<허용 호스트>/…`), `hew source plan|calls|add|fail|done|list|request` 를 추가로 허용한다. 사례의 차단 Jira 키(`HEW_GUARD_BLOCK`)가 MCP 입력에 단어 경계로 들어 있으면 거부하고, replay·shadow 에서는 `executeRead` 로 검색(`jql`·`cql`)을 하지 못하게 지정한 문서·버전 조회(`getConfluenceContentVersion`, `listConfluenceContentVersions`, `getConfluencePage` 류)만 허용한다.
 
 | 원천 | 가져오는 것 | 필수 |
 |---|---|---|
@@ -677,7 +682,7 @@ PR 묶음(`prs[]`): `id`, `title`, `ticket_ids[]`, `base`(`develop` 또는 앞�
 | `hew replay prepare\|answer\|judge`, `hew eval inject` | §11 | — |
 
 - 패킷은 역할이 읽어야 할 파일 경로, 이번 일의 범위(처음인지, 반송인지, 답 반영인지), 따를 규칙 id, 제출 방법만 담는다. 앞 단계 에이전트의 추론이나 대화는 담지 않는다.
-- 따를 규칙의 본문은 코어가 패킷에 싣는다. [가정] `rules/heka.<역할>.yaml` 에 역할별 규칙 id 를 두고(출발점은 설계 §16), 코어가 heka 명령줄 도구(`node ~/heka/bin/heka.js expand <id>`)로 제목과 "적용" 절을 읽어 넣는다. `replay` 에서는 `--known-at` 으로 사례 시점 이후의 노트를 뺀다. [사실: 옛 hew 의 기준선 주입 훅이 이 방식으로 동작했다]
+- 따를 규칙의 본문은 코어가 패킷에 싣는다. [가정] `rules/heka.<역할>.yaml` 에 역할별 규칙 id 를 두고(출발점은 설계 §16), 코어가 heka 명령줄 도구(`node ~/heka/bin/heka.js expand <id>`)로 제목과 "적용" 절을 읽어 넣는다. 시점으로 거르지 않고 사례의 차단 heka id 만 뺀다(§11.2). [사실: 옛 hew 의 기준선 주입 훅이 이 방식으로 동작했다]
 
 ---
 
@@ -725,7 +730,7 @@ role: dev                        # dev(프롬프트를 고치며 본 사례) | h
 |---|---|
 | 코드 | 대상 저장소를 base SHA 로 꺼내 이력이 없는 단일 커밋 사본으로 만든다. 에이전트는 이 사본만 읽는다 |
 | PRD·티켓 | 수집 단계가 사례의 버전만 가져온다. 수집 단계 말고는 Atlassian 도구가 없다 |
-| heka | 에이전트에 heka 도구를 주지 않는다. 규칙 본문은 코어가 사례 시점(`--known-at`)으로 읽어 패킷에 싣고, 차단 id·범위의 노트는 뺀다 |
+| heka | 에이전트에 heka 도구를 주지 않는다. 규칙 본문은 코어가 패킷에 싣는다. 역할별 규칙 목록은 일하는 방법이라 시점으로 거르지 않고 항상 싣고, 사례의 차단 id(`case_info.block.heka_ids`)의 노트만 뺀다 |
 | 세션에 자동으로 붙는 heka 주입 | 역할 세션을 사용자 설정 없이 띄우므로(§1.4) 붙지 않는다. 수집 세션에는 붙지만 수집은 정해진 원천만 가져온다 |
 | 과거 세션 기록, 메모리 | 읽기 경로를 실행 폴더와 저장소 사본으로 제한하는 훅으로 막는다 |
 | 채점표 | 실행 폴더 밖에 두고 위 읽기 제한으로 막는다 |

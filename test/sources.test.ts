@@ -7,7 +7,7 @@ import { HewError } from "../src/core/errors.js";
 import { loadManifest } from "../src/core/manifest.js";
 import { runPaths } from "../src/core/paths.js";
 import { loadRun } from "../src/core/run.js";
-import { addSource, doneSources, listSources, requestSource } from "../src/core/sources.js";
+import { addSource, doneSources, failSource, listSources, requestSource } from "../src/core/sources.js";
 import { writeUnits } from "../src/core/units/index.js";
 import { FIGMA_META_JSON, PRD_MD, writeFixture } from "./source-fixtures.js";
 import { makeRun, useTempRunsDir } from "./helpers.js";
@@ -156,7 +156,15 @@ describe("source done", () => {
     } catch (e) {
       expect((e as HewError).issues.map((i) => i.ref)).toEqual(["figma_meta"]);
     }
-    addSource({ runDir: dir, kind: "figma_meta", ref: "FigmaFileKeyExample001", node: "1:1", file: writeFixture(dir, "in/m.json", FIGMA_META_JSON) });
+    addSource({ runDir: dir, kind: "figma_meta", ref: "FigmaFileKeyExample001:1-92", node: "1:92", file: writeFixture(dir, "in/m.json", FIGMA_META_JSON) });
+    try {
+      doneSources(dir);
+      expect.unreachable();
+    } catch (e) {
+      expect((e as HewError).issues.map((i) => i.ref)).toEqual(["figma_shot:FigmaFileKeyExample001:4-1", "figma_shot:FigmaFileKeyExample001:4-3"]);
+    }
+    addSource({ runDir: dir, kind: "figma_shot", ref: "FigmaFileKeyExample001", node: "4:1", file: writeFixture(dir, "in/s1.png", "a") });
+    addSource({ runDir: dir, kind: "figma_shot", ref: "FigmaFileKeyExample001", node: "4:3", file: writeFixture(dir, "in/s3.png", "b") });
     expect(doneSources(dir).state).toBe("collected");
   });
 
@@ -188,8 +196,9 @@ describe("source done", () => {
   it("Figma 가 있으면 inventory 와 figma 단위, 스크린샷 image 가 생긴다", () => {
     const { dir } = makeRun();
     addPrdAndCode(dir);
-    addSource({ runDir: dir, kind: "figma_meta", ref: "FigmaFileKeyExample001", file: writeFixture(dir, "in/m.json", FIGMA_META_JSON) });
+    addSource({ runDir: dir, kind: "figma_meta", ref: "FigmaFileKeyExample001:1-92", node: "1:92", file: writeFixture(dir, "in/m.json", FIGMA_META_JSON) });
     const shot = addSource({ runDir: dir, kind: "figma_shot", ref: "FigmaFileKeyExample001", node: "4:1", file: writeFixture(dir, "in/s.png", "png") });
+    for (let i = 0; i < 2; i += 1) failSource({ runDir: dir, item: "figma_shot:FigmaFileKeyExample001:4-3", reason: "호출 한도" });
     const result = doneSources(dir);
     expect(result.screens).toBe(6);
     const inventory = JSON.parse(readFileSync(runPaths(dir).inventory, "utf8"));

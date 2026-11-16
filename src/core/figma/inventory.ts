@@ -21,6 +21,8 @@ export interface InventoryFrame {
   box?: Box;
   section?: string;
   pair?: string;
+  /** 같은 부모에 AS-IS/TO-BE 라벨 노드가 라벨 규칙의 위치(|dx|≤2, 40≤dy≤120)에 있으면 true. */
+  labeled?: boolean;
   is_desc: boolean;
   /** 설명 카드일 때 카드 아래 텍스트 노드 이름을 줄바꿈으로 이은 것. */
   text?: string;
@@ -127,7 +129,6 @@ function assignRolesAndPairs(frames: { node: FigmaNode; frame: InventoryFrame }[
   for (const label of labels) {
     if (label.hidden || !hasBox(label)) continue;
     const role = roleFromLabel(label);
-    if (role === undefined) continue;
     let best: { frame: InventoryFrame; dy: number } | undefined;
     for (const { node, frame } of frames) {
       if (frame.is_desc || node.parent !== label.parent || !hasBox(node)) continue;
@@ -135,7 +136,9 @@ function assignRolesAndPairs(frames: { node: FigmaNode; frame: InventoryFrame }[
       if (Math.abs(node.x - label.x) > LABEL_DX_TOLERANCE || dy < LABEL_DY_MIN || dy > LABEL_DY_MAX) continue;
       if (best === undefined || Math.abs(dy - 80) < Math.abs(best.dy - 80)) best = { frame, dy };
     }
-    if (best !== undefined && best.frame.role === undefined) best.frame.role = role;
+    if (best === undefined) continue;
+    best.frame.labeled = true;
+    if (role !== undefined && best.frame.role === undefined) best.frame.role = role;
   }
   const paired = new Set<string>();
   for (const a of frames) {
@@ -168,6 +171,7 @@ export function framesFromNodes(nodes: FigmaNode[]): InventoryFrame[] {
       name: node.name,
       type: node.tag,
       platform: platformOf(node.name),
+      labeled: false,
       is_desc: isDesc,
     };
     if (hasBox(node)) frame.box = { x: node.x, y: node.y, w: node.w, h: node.h };

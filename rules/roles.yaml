@@ -75,5 +75,7 @@ roles:
     isolated: false
     allowed_tools: [Read, Bash, ToolSearch]
     timeout_minutes: 45
-    heka: []
+    heka:
+      - figma-mcp-read-procedure
+      - confluence-page-version-body-via-atlassian-mcp
     refs: []
